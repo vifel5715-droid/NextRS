@@ -513,9 +513,10 @@ export const useStaffRequests = () => {
         setRequestDetails(prev => { const next = new Map(prev); next.delete(key); return next; });
         setExpandedRows(prev => { const next = new Set(prev); next.delete(key); return next; });
         loadRequests(true);
-      } catch {
-        log.error("Failed to approve request #" + row.id);
-        alert('Failed to approve request');
+      } catch (error: unknown) {
+        const reason = getErrorMessage(error, 'Unable to approve request');
+        log.error("Failed to approve request #" + row.id, reason);
+        alert('Failed to approve request: ' + reason);
       }
     } else if (action === 'reject') {
       log.info("Opening reject modal for request #" + row.id);
@@ -540,8 +541,10 @@ export const useStaffRequests = () => {
       setRejectRequest(null);
       setRejectComment('');
       loadRequests(true);
-    } catch {
-      alert('Failed to decline request');
+    } catch (error: unknown) {
+      const reason = getErrorMessage(error, 'Unable to decline request');
+      log.error("Failed to decline request #" + rejectRequest.id, reason);
+      alert('Failed to decline request: ' + reason);
     }
   };
 

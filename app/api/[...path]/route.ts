@@ -13,25 +13,26 @@ const forwardedRequestHeaders = [
   "x-csrf-token",
 ];
 
-async function forwardToLegacyApi(request: Request, context: RouteContext): Promise<Response> {
-  const legacyOrigin = process.env.LEGACY_API_ORIGIN;
-  if (!legacyOrigin) {
+async function forwardToConfiguredApi(request: Request, context: RouteContext): Promise<Response> {
+  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL;
+  if (!apiBaseUrl) {
     return NextResponse.json(
-      { error: "This API endpoint has not yet been migrated to Next.js." },
+      { error: "NEXT_PUBLIC_API_BASE_URL is not configured." },
       { status: 501 }
     );
   }
 
   let bodyTooLarge = false;
   try {
-    const legacyUrl = new URL(legacyOrigin);
-    if (legacyUrl.protocol !== "http:" && legacyUrl.protocol !== "https:") {
-      throw new Error("LEGACY_API_ORIGIN must use HTTP or HTTPS.");
+    const apiUrl = new URL(apiBaseUrl);
+    if (apiUrl.protocol !== "http:" && apiUrl.protocol !== "https:") {
+      throw new Error("NEXT_PUBLIC_API_BASE_URL must use HTTP or HTTPS.");
     }
     const { path } = await context.params;
+    const basePath = apiUrl.pathname.replace(/\/api\/?$/, "").replace(/\/$/, "");
     const target = new URL(
-      `/api/${path.map(encodeURIComponent).join("/")}${new URL(request.url).search}`,
-      legacyUrl
+      `${basePath}/api/${path.map(encodeURIComponent).join("/")}${new URL(request.url).search}`,
+      apiUrl.origin
     );
     const headers = new Headers();
     for (const name of forwardedRequestHeaders) {
@@ -90,10 +91,10 @@ async function forwardToLegacyApi(request: Request, context: RouteContext): Prom
   }
 }
 
-export const GET = forwardToLegacyApi;
-export const HEAD = forwardToLegacyApi;
-export const POST = forwardToLegacyApi;
-export const PUT = forwardToLegacyApi;
-export const PATCH = forwardToLegacyApi;
-export const DELETE = forwardToLegacyApi;
-export const OPTIONS = forwardToLegacyApi;
+export const GET = forwardToConfiguredApi;
+export const HEAD = forwardToConfiguredApi;
+export const POST = forwardToConfiguredApi;
+export const PUT = forwardToConfiguredApi;
+export const PATCH = forwardToConfiguredApi;
+export const DELETE = forwardToConfiguredApi;
+export const OPTIONS = forwardToConfiguredApi;

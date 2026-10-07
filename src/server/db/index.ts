@@ -2,6 +2,7 @@ import "server-only";
 
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
+import { env } from "../../config/env.js";
 import * as schema from "./schema";
 
 const globalPools = globalThis as typeof globalThis & { requestSystemPgPool?: Pool };
@@ -9,12 +10,7 @@ const globalPools = globalThis as typeof globalThis & { requestSystemPgPool?: Po
 function getPool(): Pool {
   if (globalPools.requestSystemPgPool) return globalPools.requestSystemPgPool;
 
-  const connectionString = process.env.DATABASE_URL;
-  if (!connectionString) {
-    throw new Error("DATABASE_URL is required by the Next.js server.");
-  }
-
-  const pool = new Pool({ connectionString });
+  const pool = new Pool({ connectionString: env.DATABASE_URL });
   pool.on("error", (error) => {
     console.error("Unexpected error on an idle PostgreSQL client:", error);
   });

@@ -37,7 +37,7 @@ const Navbar: React.FC<NavbarProps> = ({ onMenuToggle }) => {
       </button>
 
       <div className="navbar-brand">
-        <div className="navbar-brand-icon"><img src={stpsLogo} alt="STPL Logo" className={styles.logoImage} /></div>
+        <div className="navbar-brand-icon"><img src={stpsLogo.src} alt="STPL Logo" className={styles.logoImage} /></div>
         <span>Request System</span>
       </div>
 

@@ -659,9 +659,10 @@ export const useRequestManagement = () => {
         setRequestDetails(prev => { const next = new Map(prev); next.delete(approveKey); return next; });
         setExpandedRows(prev => { const next = new Set(prev); next.delete(approveKey); return next; });
         reloadCurrentTab();
-      } catch (error) {
-        log.error("Failed to approve (supervisor) request #" + row.id, error);
-        alert('Failed to approve request');
+      } catch (error: unknown) {
+        const reason = getErrorMessage(error, 'Unable to approve request');
+        log.error("Failed to approve (supervisor) request #" + row.id, reason);
+        alert('Failed to approve request: ' + reason);
       }
     } else {
       const comment = window.prompt('Enter reason for declining:');
@@ -673,9 +674,10 @@ export const useRequestManagement = () => {
         setRequestDetails(prev => { const next = new Map(prev); next.delete(rejectKey); return next; });
         setExpandedRows(prev => { const next = new Set(prev); next.delete(rejectKey); return next; });
         reloadCurrentTab();
-      } catch (error) {
-        log.error("Failed to decline (supervisor) request #" + row.id, error);
-        alert('Failed to decline request');
+      } catch (error: unknown) {
+        const reason = getErrorMessage(error, 'Unable to decline request');
+        log.error("Failed to decline (supervisor) request #" + row.id, reason);
+        alert('Failed to decline request: ' + reason);
       }
     }
   };

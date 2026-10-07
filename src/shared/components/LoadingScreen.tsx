@@ -12,7 +12,7 @@ const LoadingScreen: React.FC<LoadingScreenProps> = ({ label = "Loading", fullSc
   <div className={`${styles.wrap} ${fullScreen ? styles.fullScreen : ""}`} role="status" aria-live="polite">
     <div className={styles.spinnerBox}>
       <div className={styles.ring} />
-      <img src={stpsLogo} alt="" className={styles.logo} />
+      <img src={stpsLogo.src} alt="" className={styles.logo} />
     </div>
     <span className={styles.label}>{label}</span>
   </div>

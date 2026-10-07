@@ -15,12 +15,10 @@ npm run dev
 ```
 
 Set `DATABASE_URL`, `JWT_SECRET`, and `JWT_REFRESH_SECRET` in `.env.local`.
-Until API routes and realtime are migrated, keep the existing Express backend
-running and set `LEGACY_API_ORIGIN` and `NEXT_PUBLIC_SOCKET_URL` to its origin.
-The Next.js API catch-all forwards existing HTTP API calls to that backend;
-it returns an explicit 501 for API calls when no legacy origin is configured.
-Socket.IO uses a direct connection because Next.js Route Handlers do not proxy
-WebSocket upgrades.
+Point `NEXT_PUBLIC_API_BASE_URL` directly at your backend origin, for example
+`https://your-backend.up.railway.app`. The frontend API client and Socket.IO
+client will both use that value; no legacy proxy or extra socket env vars are
+needed.
 
 The Drizzle schema and a reusable server-only PostgreSQL pool are in
 `src/server/db`. The health endpoint is already served by Next.js. The rest of
