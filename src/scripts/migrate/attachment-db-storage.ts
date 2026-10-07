@@ -11,10 +11,13 @@
  *    migration, not made worse by it.
  */
 import { Pool } from "pg";
-import path from "path";
+import path from "node:path";
 import fs from "fs/promises";
 import { env } from "../../config/env.js";
-import { UPLOADS_DIR } from "../../middleware/upload.js";
+
+const UPLOADS_DIR = env.LEGACY_UPLOADS_DIR
+  ? path.resolve(env.LEGACY_UPLOADS_DIR)
+  : path.resolve(process.cwd(), "../../server/uploads");
 
 async function main() {
   const pool = new Pool({ connectionString: env.DATABASE_URL });

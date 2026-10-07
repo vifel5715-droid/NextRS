@@ -27,6 +27,40 @@ The Drizzle schema and a reusable server-only PostgreSQL pool are in
 the API, auth/security middleware, and Socket.IO server remain migration work;
 this app is not a replacement for the existing backend deployment yet.
 
+## Database setup and migrations
+
+The PostgreSQL schema, bootstrap scripts, seed data, and existing one-off
+migrations are available here:
+
+- Schema and idempotent create-table SQL: `src/server/db/schema.ts` and
+  `src/database/tables.ts`
+- Database initialization and demo-user/role seeding: `src/scripts/init-db.ts`
+- Existing schema/data migration scripts: `src/scripts/migrate/`
+- Drizzle Kit config: `drizzle.config.ts`
+
+Put the PostgreSQL `DATABASE_URL` in `.env.local` (or provide it in the shell
+environment), then run commands from this directory:
+
+```powershell
+npm run init-db
+npm run migrate:add-roles
+npm run view-db
+```
+
+`init-db` creates missing tables/indexes and seeds built-in roles,
+departments, and demo users. It does not run every historical migration in
+sequence. For an existing database, run only the specific migration commands
+needed for that database's current schema, in the order established by the
+original server deployment history. The individual `migrate:*` command names
+from the former backend are retained in `package.json`.
+
+**Back up the database first.** Some retained maintenance commands are
+destructive: `migrate:replace-item-catalog-2026-09` truncates and replaces the
+item catalog; `drop-tables` removes tables; `clear-requests` deletes request
+data. Do not run these against production unless that operation is intended.
+The optional `INIT_DB_DEMO_PASSWORD` and `ADMIN_RESET_PASSWORD` variables are
+for database scripts only and must not use a `NEXT_PUBLIC_` prefix.
+
 ## Build and run
 
 ```sh
