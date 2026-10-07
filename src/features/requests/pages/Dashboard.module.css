@@ -1,0 +1,564 @@
+.loadingOverlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 9999;
+}
+
+.loadingCard {
+  background-color: white;
+  padding: 20px;
+  border-radius: 8px;
+  text-align: center;
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.searchContainer {
+  width: 350px;
+}
+
+.actionButton {
+  padding: 8px 16px;
+  font-weight: 500;
+  border-radius: 6px;
+}
+
+.errorBanner {
+  border-radius: 6px;
+  padding: 8px 12px;
+  font-size: 14px;
+  max-width: 500px;
+}
+
+.errorBannerWarning {
+  background-color: #fff3cd;
+  border-color: #ffeaa7;
+  color: #856404;
+}
+
+.errorBannerDanger {
+  background-color: #f8d7da;
+  border-color: #f5c6cb;
+  color: #721c24;
+}
+
+.tabButton {
+  padding: 6px 24px;
+  border-radius: 4px 4px 0 0;
+  font-weight: 600;
+  transition: all 0.2s;
+  border: none;
+  cursor: pointer;
+  background: transparent;
+}
+
+.tabButtonActive {
+  background-color: var(--color-primary-100, #e8f0fe);
+  color: var(--color-primary-700, #1a56db);
+  border-bottom: 3px solid var(--color-primary-600, #1c64f2);
+}
+
+.tabButtonInactive {
+  color: #6b7280;
+  border-bottom: 3px solid transparent;
+}
+
+.tabButtonInactive:hover {
+  color: #111827;
+  background-color: #f3f4f6;
+}
+
+.itemInputWidth {
+  width: 220px;
+  min-width: 220px;
+}
+
+.quantityInput {
+  width: 75px;
+  min-width: 75px;
+}
+
+.uomInput {
+  width: 75px;
+  min-width: 75px;
+}
+
+.remarksInput {
+  width: 150px;
+  min-width: 150px;
+}
+
+.machineCodeInput {
+  width: 140px;
+  min-width: 140px;
+}
+
+.serviceDescriptionTextarea {
+  width: 100%;
+  min-width: 400px;
+}
+
+/* Request list "frame": one soft blue-shadowed card holding the whole
+   list — header tinted a light blue-grey, then rows flowing straight
+   through it with a faint zebra stripe and hairline dividers, no vertical
+   column rules. The frame (not the header or individual rows) owns the
+   outer border/radius/shadow so header + every row read as one continuous
+   surface instead of separate stacked cards. */
+.requestListFrame {
+  border: 1px solid #c7d2e0;
+  border-radius: 14px;
+  overflow: hidden;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(30, 41, 59, 0.04), 0 18px 34px -20px rgba(37, 99, 235, 0.38);
+
+}
+
+.requestListHeader {
+  display: grid;
+  grid-template-columns: 40px 1.5fr 1fr 1fr 1fr 1.5fr 1fr;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 11px;
+  color: #33415c;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  background: #eef1f8;
+  border-bottom: 1px solid #c7d2e0;
+
+}
+
+.requestCard {
+  background: #fff;
+}
+
+.requestCard:nth-child(even) {
+  background: #f6f8fc;
+}
+
+.requestCard:not(:last-child) {
+  border-bottom: 1px solid #edf0f6;
+}
+
+.requestCardRow {
+  display: grid;
+  grid-template-columns: 40px 1.5fr 1fr 1fr 1fr 1.5fr 1fr;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.serialLink {
+  color: #3452d9;
+  font-weight: 600;
+}
+
+.statusText {
+  font-weight: 500;
+  font-size: 0.85rem;
+}
+
+.statusText.pending { color: #6b7280; }
+.statusText.approved { color: #166534; }
+.statusText.rejected { color: #dc2626; }
+.statusText.in-progress { color: #2563eb; }
+.statusText.held { color: #b91c1c; }
+
+@media (max-width: 575px) {
+  .requestListHeader {
+    display: none;
+  }
+
+  .requestCardRow {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+    padding: 10px 12px 10px 36px;
+    position: relative;
+  }
+
+  .requestCardRow > div:nth-child(1) {
+    position: absolute;
+    left: 12px;
+    top: 12px;
+  }
+
+  .requestCardRow > div:nth-child(3),
+  .requestCardRow > div:nth-child(4),
+  .requestCardRow > div:nth-child(5),
+  .requestCardRow > div:nth-child(6) {
+    font-size: 12px;
+    color: #6c757d !important;
+  }
+
+  .requestCardRow > div[data-label]::before {
+    content: attr(data-label) ": ";
+    font-size: 10px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+
+  .searchContainer {
+    width: 100%;
+    margin-right: 0 !important;
+  }
+}
+
+.requestCardRow:hover {
+  background-color: #f8f9fa;
+}
+
+/* Urgent Request panels (Staff/Supervisor/Custodian/Purchaser dashboards) —
+   same grid-row pattern as requestListHeader/requestCardRow above, but with
+   6 columns instead of 7 (no "Created By" column) since these lists show
+   Requested By as its own line beneath the summary row instead. Shared by
+   Staff/Supervisor/Custodian/Purchaser Dashboards' Urgent Requests tab. */
+.urgentListHeader {
+  display: grid;
+  grid-template-columns: 40px 1.5fr 1.2fr 1fr 1.8fr 1fr;
+  padding: 12px 16px;
+  font-weight: 700;
+  font-size: 11px;
+  color: #33415c;
+  text-transform: uppercase;
+  letter-spacing: 0.6px;
+  background: #eef1f8;
+  border-bottom: 1px solid #c7d2e0;
+}
+
+.urgentListRow {
+  display: grid;
+  grid-template-columns: 40px 1.5fr 1.2fr 1fr 1.8fr 1fr;
+  align-items: center;
+  padding: 12px 16px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+/* Purchaser Dashboard only — adds a Remarks column between Purpose and
+   Noted By. A separate modifier (composed alongside urgentListHeader/
+   urgentListRow above) rather than changing their shared grid-template-
+   columns, so Staff/Supervisor/Custodian's Urgent Requests tab (still
+   6 columns) isn't affected. */
+.urgentListHeaderRemarks,
+.urgentListRowRemarks {
+  grid-template-columns: 40px 1.5fr 1.2fr 1fr 1.6fr 1.4fr 1fr 1fr;
+}
+
+/* Reimbursement Request panels (Staff/Supervisor/Purchaser/AP Officer
+   dashboards) — adds a Total Amount column between Supplier and Status.
+   Same reasoning as urgentListHeaderRemarks above: a separate modifier so
+   the plain 6-column Urgent Requests tab isn't affected. */
+.urgentListHeaderAmount,
+.urgentListRowAmount {
+  grid-template-columns: 40px 1.5fr 1.2fr 1fr 1.6fr 1fr 1fr;
+}
+
+.urgentListRow:hover {
+  background-color: #f8f9fa;
+}
+
+.urgentListRowExpanded {
+  background-color: #f0f4ff;
+  border-bottom: 1px solid #c7d2e0;
+}
+
+@media (max-width: 575px) {
+  .urgentListHeader {
+    display: none;
+  }
+
+  .urgentListRow {
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+  }
+
+  .urgentListRow > div[data-label]::before {
+    content: attr(data-label) ": ";
+    font-size: 10px;
+    font-weight: 600;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+  }
+}
+
+.requestCardRowExpanded {
+  background-color: #f0f4ff;
+  border-bottom: 1px solid #c7d2e0;
+}
+
+.requestCardBody {
+  border-top: 1px solid #dee2e6;
+  background: #fff;
+}
+
+.expandWrapper {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.25s ease;
+}
+
+.expandWrapperOpen {
+  grid-template-rows: 1fr;
+}
+
+.expandInner {
+  overflow: hidden;
+}
+
+.serviceCell {
+  padding: 12px;
+  border-right: 1px solid #e0e0e6;
+  color: #212529;
+}
+
+.serviceCellLast {
+  padding: 12px;
+  color: #212529;
+}
+
+/* Bold rules throughout the items table, including its nested detail and
+   issuance tables.
+   Two things make this CSS rather than inline styles: the table uses
+   border-collapse: separate, where borders set on <tr> are ignored by the
+   browser (they have to live on the cells), and every cell carries an inline
+   `border: none` that only !important can override. */
+@media (min-width: 768px) {
+  .itemsTable,
+  .itemsTable table {
+    border-width: 2px !important;
+    border-color: #adb5bd !important;
+  }
+
+  /* Outer table — direct children only, so nested tables are handled below. */
+  .itemsTable > thead > tr > th,
+  .itemsTable > tbody > tr > td {
+    border-bottom: 2px solid #adb5bd !important;
+  }
+
+  .itemsTable > tbody > tr:last-child > td {
+    border-bottom: none !important;
+  }
+
+  /* Nested tables: the Details panel and the issuance history. */
+  .itemsTable table th,
+  .itemsTable table td {
+    border-bottom: 2px solid #adb5bd !important;
+  }
+
+  .itemsTable table tr:last-child > td {
+    border-bottom: none !important;
+  }
+}
+
+/* Items table responsive — matches the modal's md breakpoint (768px): below
+   it, each row becomes a stacked card of labeled fields instead of a table
+   row that would otherwise need horizontal scrolling to reach every column. */
+@media (max-width: 767.98px) {
+  .itemsTable,
+  .itemsTable tbody,
+  .itemsTable tr {
+    display: block;
+    width: 100%;
+  }
+
+  .itemsTable thead {
+    display: none;
+  }
+
+  .itemsTable tr {
+    border: 1px solid #dee2e6 !important;
+    border-radius: 8px;
+    margin-bottom: 10px;
+    padding: 4px 0;
+    background: #fff !important;
+  }
+
+  .itemsTable td {
+    display: flex !important;
+    align-items: flex-start;
+    gap: 10px;
+    padding: 7px 12px !important;
+    border: none !important;
+    border-bottom: 1px solid #f0f0f0 !important;
+    width: 100%;
+    box-sizing: border-box;
+  }
+
+  .itemsTable td:last-child {
+    border-bottom: none !important;
+  }
+
+  .itemsTable td[data-label]::before {
+    content: attr(data-label) ":";
+    font-size: 10px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    min-width: 72px;
+    padding-top: 4px;
+    flex-shrink: 0;
+  }
+
+  .itemsTable td > div {
+    width: 100% !important;
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+
+  /* Descendant (not just direct-child) selectors — SearchableCombobox wraps
+     its <input> in its own div, so the item name and machine code cells nest
+     the real input one level deeper than a plain <select>/<input> cell does.
+     Without reaching through that wrapper, the input kept its desktop fixed
+     width (itemInputWidth/machineCodeInput) and overflowed the card. */
+  .itemsTable td select,
+  .itemsTable td input,
+  .itemsTable td textarea {
+    width: 100% !important;
+    min-width: 0 !important;
+    flex: 1 1 auto;
+  }
+}
+
+/* Item request cards — the redesigned Items list on CustodianDashboard.tsx's
+   expanded request view. Each item is its own bordered/shadowed card on a
+   light-grey backdrop, and the PR/Delivery "Details" block sits in a
+   full-width strip below the row's fields instead of being squeezed into
+   the narrowest column of a dense table. */
+.itemCardsPanel {
+  background: #f8fafc;
+  border-radius: 12px;
+  padding: 20px;
+}
+
+.itemCardsHeader {
+  display: grid;
+  grid-template-columns: 32px 28px minmax(200px, 1.6fr) 90px 90px 110px 130px 70px 130px 190px 110px;
+  gap: 12px;
+  padding: 0 16px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: #6c757d;
+}
+
+.itemCard {
+  background: #fff;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+  padding: 16px;
+  margin-bottom: 14px;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.itemCard:last-child {
+  margin-bottom: 0;
+}
+
+.itemCardSelected {
+  border-color: #93c5fd;
+  background: #f0f7ff;
+}
+
+.itemCardRow {
+  display: grid;
+  grid-template-columns: 32px 28px minmax(200px, 1.6fr) 90px 90px 110px 130px 70px 130px 190px 110px;
+  gap: 12px;
+  align-items: center;
+}
+
+.itemCardDetails {
+  margin-top: 16px;
+  padding-top: 16px;
+  border-top: 1px solid #eef1f4;
+}
+
+@media (max-width: 767.98px) {
+  .itemCardsHeader {
+    display: none;
+  }
+
+  .itemCardRow {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 10px;
+  }
+
+  .itemCardRow > div[data-label]::before {
+    content: attr(data-label) ":";
+    display: block;
+    font-size: 10px;
+    font-weight: 700;
+    color: #9ca3af;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 3px;
+  }
+
+  .itemCardRow > div > select,
+  .itemCardRow > div > input,
+  .itemCardRow > div > textarea,
+  .itemCardRow > div > div {
+    width: 100%;
+  }
+}
+
+.attachmentRemoveButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 0.85rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.attachmentRemoveButton:hover {
+  background: #fecaca;
+}
+
+.storageBarTrack {
+  width: 100%;
+  max-width: 220px;
+  height: 5px;
+  border-radius: 3px;
+  background: #e5e7eb;
+  overflow: hidden;
+  margin-top: 8px;
+}
+
+.storageBarFill {
+  height: 100%;
+  border-radius: 3px;
+  background: #3b82f6;
+  transition: width 0.3s ease;
+}
+
+.storageBarFillWarn {
+  background: #f59e0b;
+}
+
+.storageBarFillDanger {
+  background: #ef4444;
+}

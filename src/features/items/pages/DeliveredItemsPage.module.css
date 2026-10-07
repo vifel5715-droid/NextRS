@@ -1,0 +1,17 @@
+.statusBadge {
+  border-radius: 6px;
+  padding: 3px 10px;
+  font-weight: 600;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.statusBadgeDelivered {
+  background: #d1fae5;
+  color: #065f46;
+}
+
+.statusBadgePartial {
+  background: #fef3c7;
+  color: #92400e;
+}

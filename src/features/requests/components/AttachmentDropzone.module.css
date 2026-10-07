@@ -1,0 +1,147 @@
+/* This project doesn't ship Bootstrap's CSS (its "btn"/"form-control"/etc.
+   classes are a hand-rolled lookalike in styles/app.css), so the real
+   .visually-hidden utility isn't available — using that class name here would
+   leave the native file input fully visible instead of hidden. */
+.hiddenInput {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.dropzone {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  max-width: 320px;
+  padding: 22px 16px;
+  border: 2px dashed #c7d2fe;
+  border-radius: 12px;
+  background: #f8f9ff;
+  text-align: center;
+  cursor: pointer;
+  transition: background-color 0.15s, border-color 0.15s;
+}
+
+.dropzone:hover,
+.dropzoneActive {
+  background: #eef1ff;
+  border-color: #818cf8;
+}
+
+.dropzoneCompact {
+  padding: 14px 12px;
+  gap: 4px;
+}
+
+.dropzoneIcon {
+  font-size: 1.8rem;
+  color: #6366f1;
+  line-height: 1;
+}
+
+.dropzoneCompact .dropzoneIcon {
+  font-size: 1.3rem;
+}
+
+.dropzoneText {
+  font-size: 0.85rem;
+  color: #4b5563;
+  font-weight: 500;
+}
+
+.dropzoneCompact .dropzoneText {
+  font-size: 0.75rem;
+}
+
+.dropzoneOr {
+  font-size: 0.7rem;
+  color: #9ca3af;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.browseButton {
+  margin-top: 2px;
+  padding: 6px 20px;
+  border: none;
+  border-radius: 999px;
+  background: #6366f1;
+  color: #fff;
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.browseButton:hover {
+  background: #4f46e5;
+}
+
+.dropzoneCompact .browseButton {
+  padding: 4px 14px;
+  font-size: 0.75rem;
+}
+
+.dropzoneError {
+  margin-top: 6px;
+  font-size: 0.75rem;
+  color: #b91c1c;
+  max-width: 320px;
+}
+
+.fileBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  padding: 5px 8px 5px 12px;
+  border-radius: 999px;
+  background: #eef1ff;
+  border: 1px solid #c7d2fe;
+  color: #3730a3;
+  font-size: 0.8rem;
+  font-weight: 500;
+  max-width: 100%;
+}
+
+.fileBadgeName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fileBadgeSize {
+  color: #6366f1;
+  font-weight: 400;
+  flex-shrink: 0;
+}
+
+.fileBadgeRemove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: #c7d2fe;
+  color: #3730a3;
+  font-size: 0.7rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.fileBadgeRemove:hover {
+  background: #a5b4fc;
+}

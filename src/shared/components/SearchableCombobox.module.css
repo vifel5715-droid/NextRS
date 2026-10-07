@@ -1,0 +1,122 @@
+.wrapper {
+  position: relative;
+}
+
+.dropdown {
+  /* Positioned inline (position: fixed + top/left/width) by SearchableCombobox
+     itself, computed from the input's viewport rect — see its render for why
+     (a table row's .table-responsive ancestor clips a plain absolute child). */
+  z-index: 1055;
+  max-height: 200px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+}
+
+.optionRow {
+  display: flex;
+  align-items: stretch;
+  border-bottom: 1px solid #f1f3f5;
+}
+
+.optionRow:last-child {
+  border-bottom: none;
+}
+
+.optionRow:hover {
+  background: #eff6ff;
+}
+
+.option {
+  flex: 1;
+  min-width: 0;
+  display: block;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: #212529;
+  background: transparent;
+  border: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.optionDescription {
+  display: block;
+  margin-top: 1px;
+  font-size: 0.7rem;
+  color: #6b7280;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.option:focus {
+  outline: none;
+  background: #eff6ff;
+}
+
+.addNew {
+  width: 100%;
+  display: block;
+  text-align: left;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  color: #2563eb;
+  font-weight: 600;
+  background: transparent;
+  border: none;
+  border-top: 1px solid #f1f3f5;
+}
+
+.addNew:hover,
+.addNew:focus {
+  background: #eff6ff;
+  outline: none;
+}
+
+.rowIcon {
+  flex-shrink: 0;
+  width: 26px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.75rem;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-left: 1px solid #f1f3f5;
+}
+
+.rowIcon:hover,
+.rowIcon:focus {
+  background: #e5edff;
+  color: #2563eb;
+  outline: none;
+}
+
+.rowIconDanger:hover,
+.rowIconDanger:focus {
+  background: #fee2e2;
+  color: #dc2626;
+}
+
+.editInput {
+  flex: 1;
+  min-width: 0;
+  padding: 4px 8px;
+  font-size: 0.8rem;
+  border: 1px solid #93c5fd;
+  border-radius: 4px;
+  margin: 3px 4px;
+}
+
+.editInput:focus {
+  outline: none;
+  border-color: #2563eb;
+}
