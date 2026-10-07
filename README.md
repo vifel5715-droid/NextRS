@@ -38,8 +38,11 @@ migrations are available here:
 - Existing schema/data migration scripts: `src/scripts/migrate/`
 - Drizzle Kit config: `drizzle.config.ts`
 
-Put the PostgreSQL `DATABASE_URL` in `.env.local` (or provide it in the shell
-environment), then run commands from this directory:
+Set `DATABASE_URL` in `.env.local` (or provide it in the shell environment) as
+a PostgreSQL URL, such as
+`postgresql://postgres:<URL-encoded-password>@localhost:5432/RS_DB?connect_timeout=10`.
+Percent-encode reserved characters in the username or password. Then run
+commands from this directory:
 
 ```powershell
 npm run init-db
