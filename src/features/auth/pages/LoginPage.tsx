@@ -1,7 +1,7 @@
 import React, { useState } from "react";
 import { useLogin } from "../hooks/useLogin";
 import LoadingScreen from "@shared/components/LoadingScreen";
-import logo from '../../../assets/PRT_LOGO.svg';
+import logo from '../../../assets/stples.svg';
 import brandIcon from '../../../assets/stples.svg';
 
 const UserIcon: React.FC = () => (

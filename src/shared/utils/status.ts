@@ -56,6 +56,7 @@ export const getStatusBadgeClass = (status?: string): string => {
     case 'approved':
     case 'completed':
     case 'delivered':
+    case 'closed':
       return 'approved';
 
     case 'rejected':
@@ -63,6 +64,9 @@ export const getStatusBadgeClass = (status?: string): string => {
 
     case 'in_progress':
       return 'in-progress';
+
+    case 'not_required':
+      return 'pending';
 
     // Passed straight through by getCompositeStatus's `held` class — kept as
     // its own case (rather than falling into the 'pending' default) so a
@@ -223,13 +227,11 @@ export const getCompositeStatus = (
     };
   }
 
-  if (managerStatus === 'rejected' || approverRole === 'manager') {
-    if (managerStatus === 'rejected') {
-      return {
-        text: 'Declined (Manager)',
-        class: 'rejected',
-      };
-    }
+  if (managerStatus === 'rejected') {
+    return {
+      text: 'Declined (Manager)',
+      class: 'rejected',
+    };
   }
 
   if (supervisorStatus === 'rejected') {
@@ -310,6 +312,34 @@ export const getCompositeStatus = (
     return {
       text: 'Pending',
       class: 'pending',
+    };
+  }
+
+  if (status === 'rejected') {
+    return {
+      text: 'Declined',
+      class: 'rejected',
+    };
+  }
+
+  if (status === 'approved') {
+    return {
+      text: 'Approved',
+      class: 'approved',
+    };
+  }
+
+  if (status === 'not_required') {
+    return {
+      text: 'Not Required',
+      class: 'pending',
+    };
+  }
+
+  if (status === 'closed') {
+    return {
+      text: 'Closed',
+      class: 'approved',
     };
   }
 
