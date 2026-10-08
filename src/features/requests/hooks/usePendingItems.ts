@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { itemRequestAPI } from "../../../services/api";
 import type { PendingItem } from "../../../services/api";
+import { getPendingItemsAction } from "@server/actions/pending-items";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { debounce } from "@shared/utils/debounce";
 
@@ -17,8 +17,7 @@ export const usePendingItems = (role: string | undefined, isAuthenticated = true
   const fetchItems = useCallback(async () => {
     if (!active) return;
     try {
-      const res = await itemRequestAPI.getPendingItems();
-      setItems(res.data);
+      setItems(await getPendingItemsAction());
     } catch {
       // silently ignore — sidebar badge is non-critical
     }
@@ -30,9 +29,9 @@ export const usePendingItems = (role: string | undefined, isAuthenticated = true
     const runFetch = async () => {
       if (!active) return;
       try {
-        const res = await itemRequestAPI.getPendingItems();
+        const pendingItems = await getPendingItemsAction();
         if (!cancelled) {
-          setItems(res.data);
+          setItems(pendingItems);
         }
       } catch {
         // silently ignore — sidebar badge is non-critical
