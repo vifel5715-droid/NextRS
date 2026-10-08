@@ -327,7 +327,6 @@ export const serviceRequestAPI = {
   create: (data: RequestPayload) => api.post("/service-request", data),
   getById: (id: number) => api.get(`/service-request/${id}`),
   update: (id: number, data: RequestPayload) => api.put(`/service-request/${id}`, data),
-  getPendingServices: () => api.get<PendingService[]>("/service-request/pending-services"),
   getPendingCount: (params?: { startDate?: string; endDate?: string }) =>
     api.get<{ count: number }>("/service-request/pending-count", { params }),
   deleteItem: (id: number, reason: string) => api.delete(`/service-request/service-item/${id}`, { data: { reason } }),

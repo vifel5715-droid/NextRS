@@ -26,7 +26,8 @@ and a signed HTTP-only session cookie. Item-catalog and option-list reads,
 item/service and urgent/reimbursement request lists, dashboard counts,
 admin user/role lists, outed items, and adjustment/deletion history also use
 authenticated Server Actions. Pending purchase-item counts also use an
-authenticated Server Action. Most request, admin, and inventory mutations
+authenticated Server Action; pending-service lists now use the same
+authenticated request-list Server Action. Most request, admin, and inventory mutations
 and some detail reads still use REST clients and are not migrated yet; those
 API routes return HTTP 501 until implemented as Server Actions. The client
 does not attempt a Socket.IO connection because no realtime server is

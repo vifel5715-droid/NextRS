@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { serviceRequestAPI } from "../../../services/api";
 import type { PendingService } from "../../../services/api";
+import { getPendingServicesAction } from "@server/actions/pending-services";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { debounce } from "@shared/utils/debounce";
 
@@ -19,8 +19,7 @@ export const usePendingServices = (role: string | undefined, isAuthenticated = t
   const fetchServices = useCallback(async () => {
     if (!active) return;
     try {
-      const res = await serviceRequestAPI.getPendingServices();
-      setServices(res.data);
+      setServices(await getPendingServicesAction());
     } catch {
       // silently ignore — sidebar badge is non-critical
     }
@@ -32,9 +31,9 @@ export const usePendingServices = (role: string | undefined, isAuthenticated = t
     const runFetch = async () => {
       if (!active) return;
       try {
-        const res = await serviceRequestAPI.getPendingServices();
+        const pendingServices = await getPendingServicesAction();
         if (!cancelled) {
-          setServices(res.data);
+          setServices(pendingServices);
         }
       } catch {
         // silently ignore — sidebar badge is non-critical
