@@ -6,6 +6,7 @@
     "dev": "next dev --hostname 0.0.0.0",
     "build": "next build",
     "start": "next start --hostname 0.0.0.0",
+    "db:setup": "tsx src/scripts/setup-db.ts",
     "init-db": "tsx src/scripts/init-db.ts",
     "view-db": "tsx src/scripts/view-db.ts",
     "test-login": "tsx src/scripts/test-login.ts",
@@ -24,12 +25,12 @@
     "migrate:fix-adjustment-log-department": "tsx src/scripts/migrate/fix-adjustment-log-department.ts",
     "migrate:backfill-adjustment-serial": "tsx src/scripts/migrate/backfill-adjustment-serial.ts",
     "migrate:add-item-catalog": "tsx src/scripts/migrate/add-item-catalog.ts",
+    "migrate:merge-item-catalog-2026-09": "tsx src/scripts/migrate/merge-item-catalog-2026-09.ts",
     "migrate:add-option-lists": "tsx src/scripts/migrate/add-option-lists.ts",
     "migrate:add-machine-codes": "tsx src/scripts/migrate/add-machine-code-options.ts",
     "migrate:add-fk": "tsx src/scripts/migrate/add-fk-constraints.ts",
     "migrate:attachment-storage": "tsx src/scripts/migrate/attachment-db-storage.ts",
     "migrate:backfill-service-status": "tsx src/scripts/migrate/backfill-service-status.ts",
-    "migrate:import-item-catalog-2026-08": "tsx src/scripts/migrate/import-item-catalog-2026-08.ts",
     "migrate:add-roles": "tsx src/scripts/migrate/add-roles.ts",
     "migrate:add-departments": "tsx src/scripts/migrate/add-department-options.ts",
     "migrate:fix-admin-create-request": "tsx src/scripts/migrate/fix-admin-create-request-permission.ts",
@@ -71,6 +72,7 @@
     "react-dom": "^19.2.4",
     "server-only": "^0.0.1",
     "socket.io-client": "^4.8.3",
+    "tsx": "^4.22.4",
     "zod": "^3.22.4",
     "xlsx": "^0.18.5"
   },
@@ -80,7 +82,6 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "drizzle-kit": "^0.31.10",
-    "tsx": "^4.22.4",
     "typescript": "~6.0.2"
   }
 }

@@ -54,14 +54,11 @@ async function main() {
 
     const demoPassword = process.env.INIT_DB_DEMO_PASSWORD;
     const defaultUsers = [
-      { name: "BERCILLA, KRIZLE", email: "krizle", role: "staff", department: "ENGG" },
-      { name: "SECRETARY DEMO", email: "secretary", role: "secretary", department: "ENGG" },
-      { name: "LACTAOTAO, ARMAN", email: "arman", role: "supervisor", department: "ENGG" },
-      { name: "ALIDO, JESS", email: "jess", role: "manager", department: "ENGG" },
+      { name: "JOEL", email: "joel", role: "staff", department: "HR" },
+      { name: "MYRNA", email: "myrna", role: "supervisor", department: "HR" },
+      { name: "ROB", email: "rob", role: "manager", department: "HR" },
       { name: "MARQUEZ, PETER PAUL", email: "paul", role: "custodian", department: "ACCTG" },
-      { name: "DIRECTOR DEMO", email: "director", role: "director", department: "ACCTG" },
-      { name: "PURCHASER DEMO", email: "purchaser", role: "purchaser", department: "ACCTG" },
-      { name: "AP OFFICER DEMO", email: "ap_officer", role: "ap_officer", department: "ACCTG" },
+      { name: "GABRIEL", email: "gabriel", role: "director", department: "ACCTG" },
       { name: "ADMIN", email: "admin", role: "admin", department: "ACCTG" },
     ].map((user) => ({ ...user, password: demoPassword || randomBytes(6).toString("base64url") }));
 

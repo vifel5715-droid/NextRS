@@ -47,20 +47,43 @@ Set `DATABASE_URL` in `.env.local` (or provide it in the shell environment) as
 a PostgreSQL URL, such as
 `postgresql://postgres:<URL-encoded-password>@localhost:5432/RS_DB?connect_timeout=10`.
 Percent-encode reserved characters in the username or password. Then run
-commands from this directory:
+this command from the project directory to create the current tables, apply
+the tracked schema upgrades, seed built-in roles and options, merge missing
+catalog items, and finish indexes and demo-user setup:
 
 ```powershell
-npm run init-db
-npm run migrate:add-roles
-npm run view-db
+npm run db:setup
 ```
 
-`init-db` creates missing tables/indexes and seeds built-in roles,
-departments, and demo users. It does not run every historical migration in
-sequence. For an existing database, run only the specific migration commands
-needed for that database's current schema, in the order established by the
-original server deployment history. The individual `migrate:*` command names
-from the former backend are retained in `package.json`.
+Before running this against Railway or any production database, take a
+database backup and set `INIT_DB_DEMO_PASSWORD` to a strong, unique password.
+The seeded demo accounts share that password; existing accounts are never
+reset. The setup command records completed migration steps in
+`nextjs_schema_migrations` and stops on the first error. It is safe to rerun
+the curated sequence, but a failed step must be corrected before retrying.
+
+The command deliberately does not run operations that can discard data or
+rewrite administrator choices: catalog replacement, legacy attachment-file
+migration, service-field drops, adjustment-department rewrites, and
+admin-permission backfills remain manual. Legacy serial normalization and
+adjustment-serial generation are also left as targeted operations because
+they rewrite historical identifiers and need duplicate/sequence checks. The
+missing historical `migrate:import-item-catalog-2026-08` target was removed;
+the setup command uses an additive catalog merge instead, preserving
+existing item records.
+Unique-index or foreign-key creation can still stop if legacy data contains
+duplicates or orphan rows; resolve those explicitly rather than deleting
+production data automatically.
+
+This command prepares the database only. It does not implement the remaining
+unmigrated REST endpoints, which still return HTTP 501 until converted to
+Server Actions.
+
+The individual maintenance commands are retained for reviewed, targeted
+operations. Do not use `migrate:replace-item-catalog-2026-09`, `drop-tables`,
+or `clear-requests` unless the corresponding data loss is explicitly
+intended. `npm run init-db` remains available for standalone table/index and
+seed initialization.
 
 **Back up the database first.** Some retained maintenance commands are
 destructive: `migrate:replace-item-catalog-2026-09` truncates and replaces the
