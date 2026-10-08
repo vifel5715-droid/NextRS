@@ -4,6 +4,7 @@ import { useSearchParams } from '@shared/next-router';
 import { useAuth } from "@app/providers/AuthProvider";
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from '../../../services/api';
 import { getStaffRequestsAction } from "@server/actions/staff-requests";
+import { createItemRequestAction } from "@server/actions/create-item-request";
 import { fetchWithRetry } from '@shared/utils/fetchWithRetry';
 import { createLogger } from '@shared/utils/logger';
 import { makeRequestKey } from "@shared/utils/requestKey";
@@ -402,7 +403,7 @@ export const useStaffRequests = () => {
       if (attachment) formData.append('attachment', attachment);
 
       if (attachment) setItemAttachmentUploadProgress(0);
-      await itemRequestAPI.create(formData, attachment ? setItemAttachmentUploadProgress : undefined);
+      await createItemRequestAction(formData);
       log.info("Item request created successfully");
       setShowItemModal(false);
       setItemTableData([{ item_name: '', quantity: 1, uom: '', remarks: '' }]);

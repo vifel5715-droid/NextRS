@@ -780,12 +780,9 @@ const StaffDashboard: React.FC = () => {
           <SelectedFileChip file={attachmentFile} onRemove={() => setAttachmentFile(null)} />
         )}
         {itemAttachmentUploadProgress !== null && (
-          <div style={{ maxWidth: "220px" }} className="mt-1">
-            <div className={styles.storageBarTrack}>
-              <div className={styles.storageBarFill} style={{ width: `${itemAttachmentUploadProgress}%` }} />
-            </div>
+          <div className="mt-1">
             <div className="text-muted" style={{ fontSize: "0.68rem" }}>
-              Uploading… {itemAttachmentUploadProgress}%
+              Uploading PDF…
             </div>
           </div>
         )}

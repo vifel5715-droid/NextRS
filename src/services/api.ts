@@ -274,11 +274,6 @@ const toUploadProgressConfig = (onUploadProgress?: UploadProgressHandler) =>
     : undefined;
 
 export const itemRequestAPI = {
-  create: (data: RequestPayload | FormData, onUploadProgress?: UploadProgressHandler) =>
-    api.post("/item-request", data, {
-      ...(data instanceof FormData ? { headers: { "Content-Type": undefined } } : {}),
-      ...toUploadProgressConfig(onUploadProgress),
-    }),
   getById: (id: number) => api.get(`/item-request/${id}`),
   update: (id: number, data: RequestPayload) => api.put(`/item-request/${id}`, data),
   delete: (id: number, reason: string) => api.delete(`/item-request/${id}`, { data: { reason } }),

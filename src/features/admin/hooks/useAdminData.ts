@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useSearchParams, useLocation } from '@shared/next-router';
 import { itemRequestAPI, serviceRequestAPI, rolesAPI } from '../../../services/api';
 import { saveAdminUserAction } from '@server/actions/admin-users';
+import { createItemRequestAction } from '@server/actions/create-item-request';
 import { getAdminRolesAction, getAdminUsersAction } from '@server/actions/admin-read';
 import { fetchWithSimpleRetry } from '@shared/utils/fetchWithRetry';
 import { useRequestManagement } from '@features/requests/hooks/useRequestManagement';
@@ -29,7 +30,6 @@ export const useAdminData = () => {
     { item_name: '', quantity: 1, uom: '', remarks: '' },
   ]);
   const [createItemAttachment, setCreateItemAttachment] = useState<File | null>(null);
-  const [createItemAttachmentUploadProgress, setCreateItemAttachmentUploadProgress] = useState<number | null>(null);
   const [createServiceFormData, setCreateServiceFormData] = useState<ServiceFormData>({
     department: '', requested_by: '', purpose: '', remarks: '',
   });
@@ -305,8 +305,7 @@ export const useAdminData = () => {
       formData.append('items', JSON.stringify(items));
       if (createItemAttachment) formData.append('attachment', createItemAttachment);
 
-      if (createItemAttachment) setCreateItemAttachmentUploadProgress(0);
-      await itemRequestAPI.create(formData, createItemAttachment ? setCreateItemAttachmentUploadProgress : undefined);
+      await createItemRequestAction(formData);
       log.info("Item request created successfully (admin)");
       setShowCreateItemModal(false);
       requestManagement.loadItemRequests();
@@ -314,8 +313,6 @@ export const useAdminData = () => {
       const reason = getErrorMessage(error);
       log.error("Failed to create item request (admin):", reason);
       alert('Error submitting request: ' + reason);
-    } finally {
-      setCreateItemAttachmentUploadProgress(null);
     }
   };
 
@@ -522,7 +519,6 @@ export const useAdminData = () => {
     createItemTableData,
     createItemAttachment,
     setCreateItemAttachment,
-    createItemAttachmentUploadProgress,
     createServiceFormData,
     setCreateServiceFormData,
     createServiceTableData,
