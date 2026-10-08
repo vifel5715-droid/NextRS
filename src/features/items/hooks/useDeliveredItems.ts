@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { itemRequestAPI } from "../../../services/api";
 import type { DeliveredItem } from "../../../services/api";
+import { getDeliveredItemsAction } from "@server/actions/delivered-items";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { debounce } from "@shared/utils/debounce";
 
@@ -16,10 +16,9 @@ export const useDeliveredItems = (enabled = true) => {
     }
 
     try {
-      const res = await itemRequestAPI.getDeliveredItems();
-      setItems(res.data);
-    } catch {
-      // silently ignore
+      setItems(await getDeliveredItemsAction());
+    } catch (error) {
+      console.error("Failed to load delivered items:", error);
     } finally {
       setLoading(false);
     }
@@ -32,7 +31,7 @@ export const useDeliveredItems = (enabled = true) => {
       return;
     }
 
-    fetchItems();
+    void fetchItems();
   }, [enabled, fetchItems]);
 
   const debouncedFetch = useRef(debounce(fetchItems, 400));

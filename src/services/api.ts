@@ -282,7 +282,6 @@ export const itemRequestAPI = {
     api.get<{ count: number }>("/item-request/pending-count", { params }),
   getPendingItems: () => api.get<PendingItem[]>("/item-request/pending-items"),
   getPurchasePaymentItems: () => api.get<PurchasePaymentItem[]>("/item-request/purchase-payment-items"),
-  getDeliveredItems: () => api.get<DeliveredItem[]>("/item-request/delivered-items"),
   // "Urgent Item From IRS" page — classifies one URGENT item Purchase Order
   // vs Payment Request; amount required for Payment Request.
   setItemPurchasingTransaction: (id: number, data: { purchasing_transaction: "purchase_order" | "payment_request"; amount?: number }) =>
