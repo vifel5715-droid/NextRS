@@ -1,6 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from '@shared/next-router';
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from '../../../services/api';
+import { getRequestListsAction } from "@server/actions/request-lists";
 import { fetchWithSimpleRetry } from '@shared/utils/fetchWithRetry';
 import { diffItemRow } from '@features/adjustments/utils/adjustmentSlip';
 import { createLogger } from '@shared/utils/logger';
@@ -119,10 +120,10 @@ export const useRequestManagement = () => {
   const loadItemRequests = useCallback(async () => {
     log.info("Loading item requests");
     try {
-      const res = await fetchWithSimpleRetry(() => itemRequestAPI.getAll({}));
+      const res = await getRequestListsAction();
       // Fully-served requests live on the Complete Requests page instead —
       // see useCompleteRequestsManagement.ts — so they are dropped here rather than shown twice.
-      const data = (res.data as ItemRequest[]).filter((r) => !r.all_items_served);
+      const data = res.itemRequests.filter((r) => !r.all_items_served);
       log.info("Item requests loaded:", data.length, "records");
       setItemRequests(data);
     } catch (error) {
@@ -134,10 +135,10 @@ export const useRequestManagement = () => {
   const loadServiceRequests = useCallback(async () => {
     log.info("Loading service requests");
     try {
-      const res = await fetchWithSimpleRetry(() => serviceRequestAPI.getAll({}));
+      const res = await getRequestListsAction();
       // Finished PRs live on the Complete Requests page instead — see
       // useCompleteRequestsManagement.ts — so they are dropped here rather than shown twice.
-      const data = (res.data as ServiceRequest[]).filter((r) => r.pr_status !== "finish");
+      const data = res.serviceRequests.filter((r) => r.pr_status !== "finish");
       log.info("Service requests loaded:", data.length, "records");
       setServiceRequests(data);
     } catch (error) {

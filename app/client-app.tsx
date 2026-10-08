@@ -9,7 +9,6 @@ import { DeliveredItemsProvider } from "@app/providers/DeliveredItemsProvider";
 import { OutedItemsProvider } from "@app/providers/OutedItemsProvider";
 import { PendingItemsProvider } from "@app/providers/PendingItemsProvider";
 import { PendingServicesProvider } from "@app/providers/PendingServicesProvider";
-import { useSocketConnection } from "@shared/hooks/useSocketConnection";
 import LoadingScreen from "@shared/components/LoadingScreen";
 import type { User } from "@shared/types";
 
@@ -68,7 +67,6 @@ const routes: Record<string, { component: PageComponent; permission?: string }> 
 };
 
 function SocketBridge() {
-  useSocketConnection();
   return null;
 }
 

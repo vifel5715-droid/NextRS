@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from '@shared/next-router';
 import { useAuth } from "@app/providers/AuthProvider";
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from '../../../services/api';
+import { getRequestListsAction } from "@server/actions/request-lists";
 import { sanitizeUserInput } from '@shared/utils/sanitize';
 import { createLogger } from '@shared/utils/logger';
 import { makeRequestKey } from "@shared/utils/requestKey";
@@ -85,12 +86,8 @@ export const useSupervisorRequests = () => {
 
     try {
       isFetching.current = true;
-      const [itemRes, serviceRes] = await Promise.all([
-        itemRequestAPI.getAll(),
-        serviceRequestAPI.getAll(),
-      ]);
-      const result = { itemRequests: itemRes.data, serviceRequests: serviceRes.data };
-      log.info("Pending requests fetched — items:", itemRes.data.length, "services:", serviceRes.data.length);
+      const result = await getRequestListsAction();
+      log.info("Pending requests fetched — items:", result.itemRequests.length, "services:", result.serviceRequests.length);
       requestCache.current.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;
     } catch (error: unknown) {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { itemRequestAPI, serviceRequestAPI, deletionLogAPI, itemCatalogAPI } from "../../../services/api";
-import type { ItemRequest, ServiceRequest } from "@shared/types";
+import { getItemCatalogCountAction } from "@server/actions/dashboard-read";
+import { getDashboardRequestCountsAction } from "@server/actions/request-lists";
+import { getDeletionLogAction } from "@server/actions/history-reads";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { useDateRangeContext } from "@app/providers/DateRangeProvider";
 import { filterByDateRange } from "@shared/utils/dateRange";
@@ -33,33 +34,18 @@ export const useDashboardSummary = (canSeeDeleted = true) => {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const [itemRes, serviceRes, deletedRes, catalogCountRes] = await Promise.all([
-        itemRequestAPI.getAll({}),
-        serviceRequestAPI.getAll({}),
-        canSeeDeleted ? deletionLogAPI.getAll() : Promise.resolve({ data: [] as Awaited<ReturnType<typeof deletionLogAPI.getAll>>["data"] }),
-        // Count-only endpoint — the catalog itself can run well past a
-        // megabyte, and the sidebar badge only ever needs its length.
-        itemCatalogAPI.getCount({ startDate: startDate || undefined, endDate: endDate || undefined }),
+      const startAt = startDate ? new Date(`${startDate}T00:00:00`).toISOString() : undefined;
+      const endAt = endDate ? new Date(`${endDate}T23:59:59.999`).toISOString() : undefined;
+      const [requestCounts, deletedEntries, catalogCount] = await Promise.all([
+        getDashboardRequestCountsAction(startAt, endAt),
+        canSeeDeleted ? getDeletionLogAction() : Promise.resolve([]),
+        getItemCatalogCountAction(startAt, endAt),
       ]);
-      const itemRequests = filterByDateRange(itemRes.data as ItemRequest[], startDate, endDate, "created_at");
-      const serviceRequests = filterByDateRange(serviceRes.data as ServiceRequest[], startDate, endDate, "created_at");
-      const deletedEntries = filterByDateRange(deletedRes.data, startDate, endDate, "deleted_at");
-
-      setCompleteRequestsCount(
-        itemRequests.filter((r) => r.all_items_served).length +
-        serviceRequests.filter((r) => r.pr_status === "finish").length
-      );
-      setHeldItemsCount(itemRequests.filter((r) => !r.all_items_served && r.has_held_item).length);
-      setDeletedCount(deletedEntries.length);
-      setItemListCount(catalogCountRes.data.count);
-      // Same exclusions useRequestManagement.ts's loadItemRequests/
-      // loadServiceRequests apply — a fully-served item or a finished-PR
-      // service moves to the Complete Requests page instead, so counting
-      // them here too double-counted them into this total.
-      setTotalRequestsCount(
-        itemRequests.filter((r) => !r.all_items_served).length +
-        serviceRequests.filter((r) => r.pr_status !== "finish").length
-      );
+      setCompleteRequestsCount(requestCounts.completeRequestsCount);
+      setHeldItemsCount(requestCounts.heldItemsCount);
+      setDeletedCount(filterByDateRange(deletedEntries, startDate, endDate, "deleted_at").length);
+      setItemListCount(catalogCount);
+      setTotalRequestsCount(requestCounts.totalRequestsCount);
     } catch {
       // silently ignore — dashboard summary is non-critical
     } finally {

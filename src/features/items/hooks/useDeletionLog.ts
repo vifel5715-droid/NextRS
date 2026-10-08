@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
-import { deletionLogAPI } from "../../../services/api";
-import type { DeletionLogEntry } from "../../../services/api";
+import { getDeletionLogAction } from "@server/actions/history-reads";
+import { deletionLogAPI } from "@services/api";
+import type { DeletionLogEntry } from "@services/api";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { getErrorMessage } from "@shared/utils/errorMessage";
 
@@ -10,8 +11,7 @@ export const useDeletionLog = () => {
 
   const fetchEntries = useCallback(async () => {
     try {
-      const res = await deletionLogAPI.getAll();
-      setEntries(res.data);
+      setEntries(await getDeletionLogAction());
     } catch {
       // silently ignore
     } finally {

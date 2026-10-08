@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { adjustmentLogAPI } from "../../../services/api";
-import type { AdjustmentLogEntry } from "../../../services/api";
+import { getAdjustmentLogAction } from "@server/actions/history-reads";
+import type { AdjustmentLogEntry } from "@services/api";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { useDateRangeContext } from "@app/providers/DateRangeProvider";
 import { filterByDateRange } from "@shared/utils/dateRange";
@@ -18,8 +18,7 @@ export const useAdjustmentLog = (enabled = true) => {
     }
 
     try {
-      const res = await adjustmentLogAPI.getAll();
-      setRawEntries(res.data);
+      setRawEntries(await getAdjustmentLogAction());
     } catch {
       // silently ignore
     } finally {

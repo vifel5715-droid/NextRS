@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from "../../../services/api";
+import { getRequestListsAction } from "@server/actions/request-lists";
 import type { ItemRequest, ServiceRequest, RequestDetail, ItemRow, ServiceRow, RequestTab, FieldValue } from "@shared/types";
 import { useRequestsChanged, type RequestChangedPayload } from "@shared/hooks/useRequestsChanged";
 import { upsertById, removeById } from "@shared/utils/reconcileRequests";
@@ -72,8 +73,8 @@ export const useCompleteRequestsManagement = () => {
   const loadItemRequests = useCallback(async () => {
     log.info("Loading complete item requests");
     try {
-      const res = await itemRequestAPI.getAll({});
-      const data = (res.data as ItemRequest[]).filter((r) => r.all_items_served);
+      const res = await getRequestListsAction();
+      const data = res.itemRequests.filter((r) => r.all_items_served);
       log.info("Complete item requests loaded:", data.length, "records");
       setItemRequests(data);
     } catch (error) {
@@ -84,8 +85,8 @@ export const useCompleteRequestsManagement = () => {
   const loadServiceRequests = useCallback(async () => {
     log.info("Loading complete service requests");
     try {
-      const res = await serviceRequestAPI.getAll({});
-      const data = (res.data as ServiceRequest[]).filter((r) => r.pr_status === "finish");
+      const res = await getRequestListsAction();
+      const data = res.serviceRequests.filter((r) => r.pr_status === "finish");
       log.info("Complete service requests loaded:", data.length, "records");
       setServiceRequests(data);
     } catch (error) {

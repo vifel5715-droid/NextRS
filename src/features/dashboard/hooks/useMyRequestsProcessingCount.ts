@@ -1,9 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { itemRequestAPI, serviceRequestAPI } from "../../../services/api";
+import { getMyRequestListsAction } from "@server/actions/request-lists";
 import { getCompositeStatus } from "@shared/utils/status";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { debounce } from "@shared/utils/debounce";
 import { filterByDateRange } from "@shared/utils/dateRange";
+import type { ItemRequest, ServiceRequest } from "@shared/types";
 
 // Polling stays as a fallback in case a socket event is missed (e.g. a brief
 // disconnect); realtime updates via useRequestsChanged handle the common case.
@@ -17,11 +18,11 @@ const POLL_INTERVAL_MS = 30_000;
  * request with all_items_served, or a service request with pr_status
  * "finish" (shown there as "SERVICE FINISHED"). Rejected is terminal too.
  */
-const isProcessing = (row: Record<string, unknown>) => {
-  const composite = getCompositeStatus(row);
+const isProcessing = (row: ItemRequest | ServiceRequest) => {
+  const composite = getCompositeStatus({ ...row });
   if (composite.class === "rejected") return false;
   if (row.all_items_served) return false;
-  if (row.pr_status === "finish") return false;
+  if ("pr_status" in row && row.pr_status === "finish") return false;
   return true;
 };
 
@@ -43,19 +44,16 @@ export const useMyRequestsProcessingCount = (
   const targetRoles = ["staff", "secretary", "supervisor", "manager", "admin"];
   const active = !!role && targetRoles.includes(role.toLowerCase()) && !!name;
 
-  const countProcessing = (rows: Record<string, unknown>[]) =>
+  const countProcessing = (rows: Array<ItemRequest | ServiceRequest>) =>
     filterByDateRange(rows, startDate, endDate, "created_at").filter(isProcessing).length;
 
   const fetchCount = useCallback(async () => {
     if (!active) return;
     try {
-      const [items, services] = await Promise.all([
-        itemRequestAPI.getAll({ department, requested_by: name }),
-        serviceRequestAPI.getAll({ department, requested_by: name }),
-      ]);
+      const { itemRequests, serviceRequests } = await getMyRequestListsAction();
       setCount(
-        countProcessing(items.data as Record<string, unknown>[]) +
-        countProcessing(services.data as Record<string, unknown>[])
+        countProcessing(itemRequests) +
+        countProcessing(serviceRequests)
       );
     } catch {
       // silently ignore — sidebar badge is non-critical
@@ -69,14 +67,11 @@ export const useMyRequestsProcessingCount = (
     const runFetch = async () => {
       if (!active) return;
       try {
-        const [items, services] = await Promise.all([
-          itemRequestAPI.getAll({ department, requested_by: name }),
-          serviceRequestAPI.getAll({ department, requested_by: name }),
-        ]);
+        const { itemRequests, serviceRequests } = await getMyRequestListsAction();
         if (!cancelled) {
           setCount(
-            countProcessing(items.data as Record<string, unknown>[]) +
-            countProcessing(services.data as Record<string, unknown>[])
+            countProcessing(itemRequests) +
+            countProcessing(serviceRequests)
           );
         }
       } catch {

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useSearchParams, useLocation } from '@shared/next-router';
 import { userAPI, itemRequestAPI, serviceRequestAPI, rolesAPI } from '../../../services/api';
+import { getAdminRolesAction, getAdminUsersAction } from '@server/actions/admin-read';
 import { fetchWithSimpleRetry } from '@shared/utils/fetchWithRetry';
 import { useRequestManagement } from '@features/requests/hooks/useRequestManagement';
 import { useAuth } from "@app/providers/AuthProvider";
@@ -68,9 +69,9 @@ export const useAdminData = () => {
   const loadRoles = useCallback(async () => {
     log.info("Loading roles");
     try {
-      const res = await fetchWithSimpleRetry(() => rolesAPI.getAll());
-      log.info("Roles loaded:", res.data.length, "records");
-      setRoles(res.data);
+      const roles = await getAdminRolesAction();
+      log.info("Roles loaded:", roles.length, "records");
+      setRoles(roles);
     } catch (error) {
       log.error("Failed to load roles:", error);
       console.error('Error loading roles:', error);
@@ -134,9 +135,9 @@ export const useAdminData = () => {
   const loadUsers = useCallback(async () => {
     log.info("Loading users");
     try {
-      const res = await fetchWithSimpleRetry(() => userAPI.getAll());
-      log.info("Users loaded:", res.data.length, "records");
-      setUsers(res.data);
+      const users = await getAdminUsersAction();
+      log.info("Users loaded:", users.length, "records");
+      setUsers(users);
     } catch (error) {
       log.error("Failed to load users:", error);
       console.error('Error loading users:', error);

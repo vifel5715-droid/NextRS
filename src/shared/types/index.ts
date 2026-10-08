@@ -97,6 +97,11 @@ export interface ItemRow {
   quantity_out?: number;
   /** Server-computed: how much is still to be released. */
   qty_balance?: number;
+  /** Custodian routing information for urgent item purchases. */
+  purchasing_transaction?: string | null;
+  amount?: string | null;
+  is_inventoriable?: boolean;
+  catalog_item_name?: string | null;
   /** Transient (client-only): quantity being delivered in this save. */
   quantity_delivered_now?: number;
   /** Transient (client-only): quantity being released in this save. */

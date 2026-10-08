@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { itemRequestAPI } from "../../../services/api";
-import type { OutedItem } from "../../../services/api";
+import { getOutedItemsAction } from "@server/actions/history-reads";
+import type { OutedItem } from "@services/api";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { debounce } from "@shared/utils/debounce";
 
@@ -16,8 +16,7 @@ export const useOutedItems = (enabled = true) => {
     }
 
     try {
-      const res = await itemRequestAPI.getOutedItems();
-      setItems(res.data);
+      setItems(await getOutedItemsAction());
     } catch {
       // silently ignore
     } finally {

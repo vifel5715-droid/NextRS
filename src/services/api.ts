@@ -1,5 +1,4 @@
 import axios from "axios";
-import type { AxiosResponse } from "axios";
 import type { ItemCatalogEntry, OptionListEntry, ApprovalLevel, RoleWithPermissions, RolePermissionGrant, UrgentRequest, UrgentRequestItem, PaymentRequestForm, ItemPaymentRequestForm, SubmittedPaymentRequest, ReimbursementRequest, ReimbursementRequestItem, PettyCashTransaction } from "@shared/types";
 
 const API_BASE_URL = "/api";
@@ -11,14 +10,6 @@ const API_BASE_URL = "/api";
  * anyway — a narrower type here would be fiction, not safety.
  */
 export type RequestPayload = Record<string, unknown>;
-
-/** Query-string filters accepted by the list endpoints. */
-export interface RequestListParams {
-  department?: string;
-  status?: string;
-  serial?: string;
-  requested_by?: string;
-}
 
 export type UserPayload = Record<string, unknown>;
 
@@ -177,35 +168,6 @@ const MUTATING_METHODS = ["post", "put", "patch", "delete"];
 const isMutating = (method?: string) =>
   !!method && MUTATING_METHODS.includes(method.toLowerCase());
 
-/**
- * Request deduplication for concurrent identical GET list calls — same
- * generalized by URL+params. The Sidebar's
- * dashboard-summary badge counts and a page's own data hook (e.g. the
- * Custodian Dashboard's useRequestManagement) independently call
- * itemRequestAPI.getAll({})/serviceRequestAPI.getAll({}) on the same page
- * load; without this they fire two identical network requests for the exact
- * same data. Only dedupes requests that overlap in time — the map entry is
- * cleared as soon as the request settles, so a later call always fires a
- * fresh request rather than ever returning stale data.
- */
-const inFlightGets = new Map<string, Promise<AxiosResponse>>();
-
-function dedupedGet(url: string, params?: object) {
-  const key = `${url}?${JSON.stringify(params ?? {})}`;
-  const existing = inFlightGets.get(key);
-  if (existing) {
-    return existing;
-  }
-
-  const request = api.get(url, { params });
-  inFlightGets.set(key, request);
-  request.finally(() => {
-    inFlightGets.delete(key);
-  }).catch(() => {});
-
-  return request;
-}
-
 const api = axios.create({
   baseURL: API_BASE_URL,
   headers: {
@@ -317,7 +279,6 @@ export const itemRequestAPI = {
       ...(data instanceof FormData ? { headers: { "Content-Type": undefined } } : {}),
       ...toUploadProgressConfig(onUploadProgress),
     }),
-  getAll: (params?: RequestListParams) => dedupedGet("/item-request", params),
   getById: (id: number) => api.get(`/item-request/${id}`),
   update: (id: number, data: RequestPayload) => api.put(`/item-request/${id}`, data),
   delete: (id: number, reason: string) => api.delete(`/item-request/${id}`, { data: { reason } }),
@@ -327,7 +288,6 @@ export const itemRequestAPI = {
   getPendingItems: () => api.get<PendingItem[]>("/item-request/pending-items"),
   getPurchasePaymentItems: () => api.get<PurchasePaymentItem[]>("/item-request/purchase-payment-items"),
   getDeliveredItems: () => api.get<DeliveredItem[]>("/item-request/delivered-items"),
-  getOutedItems: () => api.get<OutedItem[]>("/item-request/outed-items"),
   // "Urgent Item From IRS" page — classifies one URGENT item Purchase Order
   // vs Payment Request; amount required for Payment Request.
   setItemPurchasingTransaction: (id: number, data: { purchasing_transaction: "purchase_order" | "payment_request"; amount?: number }) =>
@@ -370,7 +330,6 @@ export const itemRequestAPI = {
 
 export const serviceRequestAPI = {
   create: (data: RequestPayload) => api.post("/service-request", data),
-  getAll: (params?: RequestListParams) => dedupedGet("/service-request", params),
   getById: (id: number) => api.get(`/service-request/${id}`),
   update: (id: number, data: RequestPayload) => api.put(`/service-request/${id}`, data),
   getPendingServices: () => api.get<PendingService[]>("/service-request/pending-services"),
@@ -380,7 +339,6 @@ export const serviceRequestAPI = {
 };
 
 export const deletionLogAPI = {
-  getAll: () => api.get<DeletionLogEntry[]>("/deletion-log"),
   recover: (id: number) => api.post(`/deletion-log/${id}/recover`),
 };
 
@@ -409,7 +367,6 @@ export interface AdjustmentLogEntry {
 }
 
 export const adjustmentLogAPI = {
-  getAll: () => api.get<AdjustmentLogEntry[]>("/adjustment-log"),
   getForRequest: (requestId: number, requestType: "item" | "service" | "petty_cash" = "item") =>
     api.get<AdjustmentLogEntry[]>(`/adjustment-log/${requestType}/${requestId}`),
 };
@@ -425,8 +382,6 @@ export interface ItemCatalogPayload {
 }
 
 export const itemCatalogAPI = {
-  getCount: (params?: { startDate?: string; endDate?: string }) =>
-    api.get<{ count: number }>("/item-catalog/count", { params }),
   create: (data: ItemCatalogPayload) => api.post<ItemCatalogEntry>("/item-catalog", data),
   update: (id: number, data: ItemCatalogPayload) => api.put<ItemCatalogEntry>(`/item-catalog/${id}`, data),
   delete: (id: number) => api.delete(`/item-catalog/${id}`),
@@ -441,7 +396,6 @@ export const optionListAPI = {
 };
 
 export const rolesAPI = {
-  getAll: () => api.get<RoleWithPermissions[]>("/roles"),
   create: (data: { name: string; label: string; permissions: RolePermissionGrant[] }) =>
     api.post<RoleWithPermissions>("/roles", data),
   update: (id: number, data: { label: string; permissions: RolePermissionGrant[] }) =>
@@ -546,7 +500,6 @@ export const statusAPI = {
 
 export const userAPI = {
   create: (data: UserPayload) => api.post("/users", data),
-  getAll: () => api.get("/users"),
   getById: (id: string) => api.get(`/users/${id}`),
   update: (id: string, data: UserPayload) => api.put(`/users/${id}`, data),
   // Scoped server-side to the caller's own department — see users.controller.ts.
