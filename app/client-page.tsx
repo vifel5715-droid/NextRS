@@ -1,10 +1,7 @@
-"use client";
+import ClientApp from "./client-app";
+import { getCurrentUser } from "@server/auth/session";
 
-import dynamic from "next/dynamic";
-
-const ClientApp = dynamic(() => import("./client-app"), {
-  ssr: false,
-  loading: () => <main aria-busy="true">Loading request system...</main>,
-});
-
-export default ClientApp;
+export default async function ClientPage() {
+  const initialUser = await getCurrentUser();
+  return <ClientApp initialUser={initialUser} />;
+}

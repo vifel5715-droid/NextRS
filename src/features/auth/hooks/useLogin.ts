@@ -6,7 +6,7 @@ const log = createLogger("useLogin");
 import type React from 'react';
 import { useNavigate } from '@shared/next-router';
 import { useAuth } from "@app/providers/AuthProvider";
-import { authAPI } from '../../../services/api';
+import { loginAction } from "@server/actions/auth";
 
 const ROLE_REDIRECT_MAP: Record<string, string> = {
   staff: '/dashboard/staff',
@@ -76,13 +76,19 @@ export const useLogin = () => {
     lastSubmitTime.current = now;
 
     try {
-      const response = await authAPI.login(formData.email, formData.password);
-      // No token in this response by design — the server set it as an
-      // httpOnly cookie. We get the user record and the CSRF token, both of
-      // which are held in memory only.
-      const { user: loggedIn, csrfToken } = response.data;
+      const response = await loginAction(formData.email, formData.password);
+      if (!response.success) {
+        setError(
+          response.error === "INVALID_CREDENTIALS"
+            ? "Invalid username or password."
+            : "Enter a valid username and password."
+        );
+        return;
+      }
+
+      const { user: loggedIn } = response;
       log.info("Login successful — role:", loggedIn.role, "redirecting to", ROLE_REDIRECT_MAP[loggedIn.role] || '/dashboard');
-      login(loggedIn, csrfToken);
+      login(loggedIn);
       navigate(ROLE_REDIRECT_MAP[loggedIn.role] || '/dashboard');
     } catch (err: unknown) {
       const status = getErrorStatus(err);

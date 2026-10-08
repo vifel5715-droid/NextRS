@@ -3,6 +3,7 @@ import type React from 'react';
 import { useSearchParams } from '@shared/next-router';
 import { useAuth } from "@app/providers/AuthProvider";
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from '../../../services/api';
+import { getStaffRequestsAction } from "@server/actions/staff-requests";
 import { fetchWithRetry } from '@shared/utils/fetchWithRetry';
 import { createLogger } from '@shared/utils/logger';
 import { makeRequestKey } from "@shared/utils/requestKey";
@@ -141,48 +142,6 @@ export const useStaffRequests = () => {
   }, [serviceRequests, searchQuery, startDate, endDate]);
 
   // Data fetching
-  const fetchItemRequests = useCallback(async (forceRefresh = false): Promise<ItemRequest[]> => {
-    const cacheKey = `items-${user?.department}-${user?.name}`;
-    if (!forceRefresh) {
-      const cached = requestCache.current.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        log.log("Cache hit:", cacheKey);
-        return cached.data as ItemRequest[];
-      }
-    }
-    log.log("Fetching item requests for", user?.name, `(${user?.department})`);
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-    const response = await itemRequestAPI.getAll({ department: user?.department, requested_by: user?.name });
-    // Fully-served requests live on the Complete Requests page instead — see
-    // useCompleteRequestsManagement.ts — so they are dropped here rather than shown twice.
-    const data = (response.data as ItemRequest[]).filter((r) => !r.all_items_served);
-    log.info("Item requests fetched:", data.length, "records");
-    requestCache.current.set(cacheKey, { data, timestamp: Date.now() });
-    return data;
-  }, [user?.department, user?.name]);
-
-  const fetchServiceRequests = useCallback(async (forceRefresh = false): Promise<ServiceRequest[]> => {
-    const cacheKey = `services-${user?.department}-${user?.name}`;
-    if (!forceRefresh) {
-      const cached = requestCache.current.get(cacheKey);
-      if (cached && Date.now() - cached.timestamp < CACHE_TTL) {
-        log.log("Cache hit:", cacheKey);
-        return cached.data as ServiceRequest[];
-      }
-    }
-    log.log("Fetching service requests for", user?.name, `(${user?.department})`);
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-    const response = await serviceRequestAPI.getAll({ department: user?.department, requested_by: user?.name });
-    // Finished PRs live on the Complete Requests page instead — see
-    // useCompleteRequestsManagement.ts — so they are dropped here rather than shown twice.
-    const data = (response.data as ServiceRequest[]).filter((r) => r.pr_status !== "finish");
-    log.info("Service requests fetched:", data.length, "records");
-    requestCache.current.set(cacheKey, { data, timestamp: Date.now() });
-    return data;
-  }, [user?.department, user?.name]);
-
   const loadRequests = useCallback(async (forceRefresh = false) => {
     if (isFetching.current && !forceRefresh) return;
     log.info("Loading requests — forceRefresh:", forceRefresh);
@@ -192,13 +151,28 @@ export const useStaffRequests = () => {
     if (abortControllerRef.current) abortControllerRef.current.abort();
 
     try {
-      const [itemData, serviceData] = await Promise.all([
-        fetchItemRequests(forceRefresh),
-        fetchServiceRequests(forceRefresh),
-      ]);
-      log.info("Requests loaded — items:", itemData.length, "services:", serviceData.length);
-      setItemRequests(itemData);
-      setServiceRequests(serviceData);
+      const cacheKey = `${user?.department}-${user?.name}`;
+      const itemCache = requestCache.current.get(`items-${cacheKey}`);
+      const serviceCache = requestCache.current.get(`services-${cacheKey}`);
+      if (
+        !forceRefresh &&
+        itemCache &&
+        serviceCache &&
+        Date.now() - itemCache.timestamp < CACHE_TTL &&
+        Date.now() - serviceCache.timestamp < CACHE_TTL
+      ) {
+        setItemRequests(itemCache.data as ItemRequest[]);
+        setServiceRequests(serviceCache.data as ServiceRequest[]);
+        return;
+      }
+
+      const data = await getStaffRequestsAction();
+      log.info("Requests loaded — items:", data.itemRequests.length, "services:", data.serviceRequests.length);
+      const timestamp = Date.now();
+      requestCache.current.set(`items-${cacheKey}`, { data: data.itemRequests, timestamp });
+      requestCache.current.set(`services-${cacheKey}`, { data: data.serviceRequests, timestamp });
+      setItemRequests(data.itemRequests);
+      setServiceRequests(data.serviceRequests);
     } catch (error: unknown) {
       const msg = getErrorMessage(error, '');
       log.error("Failed to load requests:", msg);
@@ -213,7 +187,7 @@ export const useStaffRequests = () => {
       isFetching.current = false;
       setIsLoading(false);
     }
-  }, [fetchItemRequests, fetchServiceRequests]);
+  }, [user?.department, user?.name]);
 
   useEffect(() => {
     if (!hasMounted.current) {
@@ -324,9 +298,8 @@ export const useStaffRequests = () => {
     // "Own" means either actually created it, OR is the named requester —
     // a secretary can submit on someone else's behalf (see StaffDashboard's
     // isSecretary comment), which sets `created_by` to the secretary but
-    // `requested_by` to the staff member's name. The "My Requests" list
-    // itself is scoped by requested_by (see itemRequestAPI.getAll's
-    // `requested_by: user?.name` filter above), so without this the request
+    // `requested_by` to the staff member's name. The server-side list action
+    // scopes results to the named requester, so without this the request
     // shows up in that staff member's own list but they can't edit it.
     if (userRole === "staff") {
       const isCreator = !!details.created_by && details.created_by === user?.id;

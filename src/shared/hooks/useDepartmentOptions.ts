@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { optionListAPI } from "../../services/api";
 import type { OptionListEntry } from "@shared/types";
+import { getOptionListAction } from "@server/actions/reference-data";
 
 const sortByValue = (list: OptionListEntry[]) => [...list].sort((a, b) => a.value.localeCompare(b.value));
 
@@ -17,8 +18,8 @@ export function useDepartmentOptions() {
 
   useEffect(() => {
     let cancelled = false;
-    optionListAPI.getAll("department")
-      .then((res) => { if (!cancelled) setEntries(sortByValue(res.data)); })
+    getOptionListAction("department")
+      .then((data) => { if (!cancelled) setEntries(sortByValue(data)); })
       .catch((err) => console.error("Failed to load department options", err));
     return () => { cancelled = true; };
   }, []);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { itemCatalogAPI } from "../../../services/api";
+import { getItemCatalogAction } from "@server/actions/reference-data";
 import type { ItemCatalogEntry } from "@shared/types";
 
 /**
@@ -14,13 +14,12 @@ export const useItemCatalogEntries = () => {
 
   useEffect(() => {
     let cancelled = false;
-    itemCatalogAPI
-      .getAll()
-      .then((res) => {
-        if (!cancelled) setEntries(res.data);
+    getItemCatalogAction()
+      .then((data) => {
+        if (!cancelled) setEntries(data);
       })
-      .catch(() => {
-        // silently ignore — existence-status/autocomplete is a soft assist, not critical path
+      .catch((error: unknown) => {
+        console.error("Failed to load item catalog entries", error);
       });
     return () => {
       cancelled = true;

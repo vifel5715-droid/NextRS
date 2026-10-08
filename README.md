@@ -1,10 +1,9 @@
 # Request System — Next.js client
 
-This is the unified-application migration workspace. The original Vite client
-and Express backend remain unchanged until their replacements are verified.
-The existing UI screens now load through explicit Next.js App Router paths;
-React stateful screens remain client-rendered while their shared providers and
-permissions are preserved.
+This is the unified-application migration workspace. The existing UI screens
+load through explicit Next.js App Router paths. Next.js server-renders their
+initial HTML, while React Client Components preserve interactive state,
+providers, and permissions after hydration.
 
 ## Run locally
 
@@ -14,16 +13,21 @@ Copy-Item .env.example .env.local
 npm run dev
 ```
 
-Set `DATABASE_URL`, `JWT_SECRET`, and `JWT_REFRESH_SECRET` in `.env.local`.
-Point `NEXT_PUBLIC_API_BASE_URL` directly at your backend origin, for example
-`https://your-backend.up.railway.app`. The frontend API client and Socket.IO
-client will both use that value; no legacy proxy or extra socket env vars are
-needed.
+Set `DATABASE_URL` and a unique `SESSION_SECRET` (at least 32 random bytes) in
+`.env.local`. Percent-encode reserved characters, including `@`, in the
+PostgreSQL username and password.
+Authentication calls same-origin Next.js Server Actions directly; it does not
+need a public backend URL, CORS origin, or manually configured `NODE_ENV`.
+Next.js sets `NODE_ENV` for its development/build/start commands.
 
 The Drizzle schema and a reusable server-only PostgreSQL pool are in
-`src/server/db`. The health endpoint is already served by Next.js. The rest of
-the API, auth/security middleware, and Socket.IO server remain migration work;
-this app is not a replacement for the existing backend deployment yet.
+`src/server/db`. Login, session restore, and logout use Next.js Server Actions
+and a signed HTTP-only session cookie. Item-catalog, option-list, staff
+item/service request, urgent request, and reimbursement request list reads
+also use authenticated Server Actions. Most request, admin, and inventory
+mutations still use REST clients and are not migrated yet; those API routes
+return HTTP 501 until implemented as Server Actions. Socket.IO still requires
+a separate realtime server until it is migrated.
 
 ## Database setup and migrations
 

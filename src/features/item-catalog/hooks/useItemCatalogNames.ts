@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { itemCatalogAPI } from "../../../services/api";
+import { getItemCatalogAction } from "@server/actions/reference-data";
 
 /**
  * Distinct item names from the item catalog (see db/schema.ts's itemCatalog)
@@ -12,14 +12,13 @@ export const useItemCatalogNames = () => {
 
   useEffect(() => {
     let cancelled = false;
-    itemCatalogAPI
-      .getAll()
-      .then((res) => {
+    getItemCatalogAction()
+      .then((data) => {
         if (cancelled) return;
-        setNames(Array.from(new Set(res.data.map((entry) => entry.item_name))).sort());
+        setNames(Array.from(new Set(data.map((entry) => entry.item_name))).sort());
       })
-      .catch(() => {
-        // silently ignore — existence-status/autocomplete is a soft assist, not critical path
+      .catch((error: unknown) => {
+        console.error("Failed to load item catalog names", error);
       });
     return () => {
       cancelled = true;

@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@app/providers/AuthProvider";
 import { urgentRequestAPI } from "../../../services/api";
+import { getUrgentRequestsAction } from "@server/actions/special-requests";
 import { createLogger } from "@shared/utils/logger";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { getErrorMessage } from "@shared/utils/errorMessage";
@@ -104,8 +105,7 @@ export function useUrgentRequests() {
 
   const loadUrgentRequests = useCallback(async () => {
     try {
-      const res = await urgentRequestAPI.getAll();
-      setUrgentRequests(res.data);
+      setUrgentRequests(await getUrgentRequestsAction());
     } catch (error) {
       log.error("Failed to load urgent requests:", error);
     } finally {

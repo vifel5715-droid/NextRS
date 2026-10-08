@@ -4,24 +4,7 @@ import type { ItemRequest, ServiceRequest, UrgentRequest, ReimbursementRequest }
 
 const log = createLogger("socket");
 
-// ARCH: the REST client and Socket.IO both use NEXT_PUBLIC_API_BASE_URL as the
-// direct backend endpoint. Strip a trailing "/api" so Socket.IO connects to the
-// backend origin, while a same-origin "/api" resolves to "" and lets the browser
-// use the current origin.
-const API_BASE_URL = (process.env.NEXT_PUBLIC_API_BASE_URL || "/api").replace(/\/+$/, "");
-const SOCKET_URL = (() => {
-  if (!API_BASE_URL || API_BASE_URL === "/api") {
-    return "";
-  }
-
-  try {
-    const parsed = new URL(API_BASE_URL, typeof window !== "undefined" ? window.location.origin : "http://localhost");
-    const basePath = parsed.pathname.replace(/\/api\/?$/, "").replace(/\/$/, "");
-    return `${parsed.origin}${basePath}`;
-  } catch {
-    return API_BASE_URL.replace(/\/api\/?$/, "");
-  }
-})();
+const SOCKET_URL = "";
 
 /**
  * `data` carries the changed row already projected into list shape (see

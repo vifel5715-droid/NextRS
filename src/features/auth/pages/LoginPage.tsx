@@ -1,6 +1,5 @@
 import React, { useState } from "react";
 import { useLogin } from "../hooks/useLogin";
-import LoadingScreen from "@shared/components/LoadingScreen";
 import brandIcon from "../../../assets/stples.svg";
 
 const UserIcon: React.FC = () => (
@@ -69,17 +68,12 @@ const Login: React.FC = () => {
     rememberMe,
     loading,
     error,
-    authLoading,
     handleSubmit,
     handleFieldChange,
     setRememberMe,
   } = useLogin();
 
   const [showPassword, setShowPassword] = useState(false);
-
-  if (authLoading) {
-    return <LoadingScreen />;
-  }
 
   return (
     <div className="login-page">

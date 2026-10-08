@@ -2,7 +2,7 @@ import "server-only";
 
 import { Pool } from "pg";
 import { drizzle } from "drizzle-orm/node-postgres";
-import { env } from "../../config/env.js";
+import { env } from "../../config/env";
 import * as schema from "./schema";
 
 const globalPools = globalThis as typeof globalThis & { requestSystemPgPool?: Pool };

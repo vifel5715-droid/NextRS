@@ -1,8 +1,8 @@
 import axios from "axios";
 import type { AxiosResponse } from "axios";
-import type { User, ItemCatalogEntry, OptionListEntry, ApprovalLevel, RoleWithPermissions, RolePermissionGrant, UrgentRequest, UrgentRequestItem, PaymentRequestForm, ItemPaymentRequestForm, SubmittedPaymentRequest, ReimbursementRequest, ReimbursementRequestItem, PettyCashTransaction } from "@shared/types";
+import type { ItemCatalogEntry, OptionListEntry, ApprovalLevel, RoleWithPermissions, RolePermissionGrant, UrgentRequest, UrgentRequestItem, PaymentRequestForm, ItemPaymentRequestForm, SubmittedPaymentRequest, ReimbursementRequest, ReimbursementRequestItem, PettyCashTransaction } from "@shared/types";
 
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "/api";
+const API_BASE_URL = "/api";
 
 /**
  * Bodies these wrappers only forward to the server. Typed as an open record
@@ -155,28 +155,11 @@ export interface DeletionLogEntry {
   recovered_at: string | null;
 }
 
-// Request deduplication for login
-let loginPromise: Promise<AxiosResponse<{ user: User; csrfToken: string }>> | null = null;
-
 /**
- * ARCH: credential handling.
- *
- * The JWT is NOT here, and must never be. It lives in an httpOnly cookie the
- * browser attaches automatically because of `withCredentials` below — script
- * in this page cannot read it, so an XSS cannot exfiltrate a reusable session.
- *
- * The CSRF token IS held here, in a module-level variable rather than
- * sessionStorage. It is not a bearer credential (it is worthless without the
- * cookie), but keeping it in memory means it dies with the tab and never sits
- * in a store that an XSS can enumerate. In-memory also means it is lost on
- * reload — recovered by AuthContext's /auth/me bootstrap, and by
- * ensureCsrfToken() below for any call that races ahead of it.
+ * Transitional CSRF token for REST endpoints not yet migrated to Server
+ * Actions. Next.js validates the origin of Server Action requests.
  */
 let csrfToken: string | null = null;
-
-export const setCsrfToken = (token: string | null) => {
-  csrfToken = token;
-};
 
 /**
  * Called when the server says the session is gone. AuthContext registers a
@@ -196,7 +179,7 @@ const isMutating = (method?: string) =>
 
 /**
  * Request deduplication for concurrent identical GET list calls — same
- * pattern as `loginPromise` below, generalized by URL+params. The Sidebar's
+ * generalized by URL+params. The Sidebar's
  * dashboard-summary badge counts and a page's own data hook (e.g. the
  * Custodian Dashboard's useRequestManagement) independently call
  * itemRequestAPI.getAll({})/serviceRequestAPI.getAll({}) on the same page
@@ -316,36 +299,6 @@ api.interceptors.response.use(
     return Promise.reject(error);
   }
 );
-
-export const authAPI = {
-  login: (email: string, password: string) => {
-    // If there's already a login request in progress, return it
-    if (loginPromise) {
-      console.log('Login request already in progress, returning existing promise');
-      return loginPromise;
-    }
-
-    // Create new login request
-    loginPromise = api.post("/auth/login", { email, password });
-
-    // Clear the promise when the request completes (success or error).
-    // `.finally()` returns its own derived promise that adopts the same
-    // rejection as `loginPromise` — since nothing else observes that derived
-    // promise, a failed login (e.g. 401/429) surfaced as an unhandled
-    // rejection in the console even though the caller's own `.catch`/`await`
-    // on `loginPromise` handled it correctly. Swallow it here explicitly.
-    loginPromise.finally(() => {
-      loginPromise = null;
-    }).catch(() => {});
-
-    return loginPromise;
-  },
-  /** Who am I? Answered from the auth cookie; drives session restore on reload. */
-  me: () => api.get<{ user: User; csrfToken: string }>("/auth/me"),
-  /** Server-side revocation — only it can clear an httpOnly cookie. */
-  logout: () => api.post("/auth/logout"),
-  register: (data: UserPayload) => api.post("/auth/register", data),
-};
 
 /** Percent (0-100) uploaded so far — passed to axios's onUploadProgress for attachment uploads. */
 export type UploadProgressHandler = (percent: number) => void;
@@ -472,7 +425,6 @@ export interface ItemCatalogPayload {
 }
 
 export const itemCatalogAPI = {
-  getAll: () => api.get<ItemCatalogEntry[]>("/item-catalog"),
   getCount: (params?: { startDate?: string; endDate?: string }) =>
     api.get<{ count: number }>("/item-catalog/count", { params }),
   create: (data: ItemCatalogPayload) => api.post<ItemCatalogEntry>("/item-catalog", data),
@@ -481,7 +433,6 @@ export const itemCatalogAPI = {
 };
 
 export const optionListAPI = {
-  getAll: (kind: "item_type" | "uom" | "machine_code" | "item_group" | "department") => api.get<OptionListEntry[]>("/option-list", { params: { kind } }),
   create: (kind: "item_type" | "uom" | "machine_code" | "item_group" | "department", value: string, description?: string) =>
     api.post<OptionListEntry>("/option-list", { kind, value, ...(description !== undefined ? { description } : {}) }),
   update: (id: number, value: string, description?: string) =>
@@ -503,7 +454,6 @@ export const urgentRequestAPI = {
   // below — the requester never submits it.
   create: (data: { department: string; requested_by?: string; purpose: string; remarks?: string; date_needed?: string; items: Array<Omit<UrgentRequestItem, "is_inventoriable">> }) =>
     api.post<UrgentRequest>("/urgent-request", data),
-  getAll: () => dedupedGet("/urgent-request"),
   getById: (id: number) => api.get<UrgentRequest>(`/urgent-request/${id}`),
   reviewAsSupervisor: (id: number, data: { decision: "approved" | "rejected"; rejection_comment?: string }) =>
     api.put<UrgentRequest>(`/urgent-request/${id}/supervisor-review`, data),
@@ -543,7 +493,6 @@ export const reimbursementRequestAPI = {
   // step for this workflow.
   create: (data: { department: string; requested_by?: string; purpose: string; remarks?: string; date_needed?: string; supplier: string; items: Array<Omit<ReimbursementRequestItem, "amount"> & { amount: number }> }) =>
     api.post<ReimbursementRequest>("/reimbursement-request", data),
-  getAll: () => dedupedGet("/reimbursement-request"),
   getById: (id: number) => api.get<ReimbursementRequest>(`/reimbursement-request/${id}`),
   reviewAsSupervisor: (id: number, data: { decision: "approved" | "rejected"; rejection_comment?: string }) =>
     api.put<ReimbursementRequest>(`/reimbursement-request/${id}/supervisor-review`, data),

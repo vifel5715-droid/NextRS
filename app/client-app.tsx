@@ -1,6 +1,7 @@
 "use client";
 
-import React, { Suspense, lazy, useEffect } from "react";
+import React, { Suspense, useEffect } from "react";
+import dynamic from "next/dynamic";
 import { usePathname, useRouter } from "next/navigation";
 import { AuthProvider, useAuth } from "@app/providers/AuthProvider";
 import { DateRangeProvider } from "@app/providers/DateRangeProvider";
@@ -10,29 +11,30 @@ import { PendingItemsProvider } from "@app/providers/PendingItemsProvider";
 import { PendingServicesProvider } from "@app/providers/PendingServicesProvider";
 import { useSocketConnection } from "@shared/hooks/useSocketConnection";
 import LoadingScreen from "@shared/components/LoadingScreen";
+import type { User } from "@shared/types";
 
-type PageComponent = React.LazyExoticComponent<React.ComponentType>;
+type PageComponent = React.ComponentType;
 
-const LoginPage = lazy(() => import("@features/auth/pages/LoginPage"));
-const UnauthorizedPage = lazy(() => import("@features/auth/pages/UnauthorizedPage"));
-const StaffDashboard = lazy(() => import("@features/requests/pages/StaffDashboard"));
-const SupervisorDashboard = lazy(() => import("@features/requests/pages/SupervisorDashboard"));
-const PurchaserDashboard = lazy(() => import("@features/requests/pages/PurchaserDashboard"));
-const APOfficerDashboard = lazy(() => import("@features/requests/pages/APOfficerDashboard"));
-const PettyCashPage = lazy(() => import("@features/requests/pages/PettyCashPage"));
-const CustodianDashboard = lazy(() => import("@features/requests/pages/CustodianDashboard"));
-const AdminDashboard = lazy(() => import("@features/admin/pages/AdminDashboard"));
-const PendingItemsPage = lazy(() => import("@features/requests/pages/PendingItemsPage"));
-const DeliveredItemsPage = lazy(() => import("@features/items/pages/DeliveredItemsPage"));
-const UrgentItemsPage = lazy(() => import("@features/requests/pages/UrgentItemsPage"));
-const PendingItemEntryPage = lazy(() => import("@features/requests/pages/PendingItemEntryPage"));
-const NewItemListPage = lazy(() => import("@features/requests/pages/NewItemListPage"));
-const CompleteRequestsPage = lazy(() => import("@features/requests/pages/CompleteRequestsPage"));
-const DeletedItemsPage = lazy(() => import("@features/items/pages/DeletedItemsPage"));
-const ItemsHubPage = lazy(() => import("@features/items/pages/ItemsHubPage"));
-const AdjustmentHistoryPage = lazy(() => import("@features/adjustments/pages/AdjustmentHistoryPage"));
-const SubmittedPaymentRequestsPage = lazy(() => import("@features/requests/pages/SubmittedPaymentRequestsPage"));
-const MainDashboardPage = lazy(() => import("@features/dashboard/pages/MainDashboardPage"));
+const LoginPage = dynamic(() => import("@features/auth/pages/LoginPage"));
+const UnauthorizedPage = dynamic(() => import("@features/auth/pages/UnauthorizedPage"));
+const StaffDashboard = dynamic(() => import("@features/requests/pages/StaffDashboard"));
+const SupervisorDashboard = dynamic(() => import("@features/requests/pages/SupervisorDashboard"));
+const PurchaserDashboard = dynamic(() => import("@features/requests/pages/PurchaserDashboard"));
+const APOfficerDashboard = dynamic(() => import("@features/requests/pages/APOfficerDashboard"));
+const PettyCashPage = dynamic(() => import("@features/requests/pages/PettyCashPage"));
+const CustodianDashboard = dynamic(() => import("@features/requests/pages/CustodianDashboard"));
+const AdminDashboard = dynamic(() => import("@features/admin/pages/AdminDashboard"));
+const PendingItemsPage = dynamic(() => import("@features/requests/pages/PendingItemsPage"));
+const DeliveredItemsPage = dynamic(() => import("@features/items/pages/DeliveredItemsPage"));
+const UrgentItemsPage = dynamic(() => import("@features/requests/pages/UrgentItemsPage"));
+const PendingItemEntryPage = dynamic(() => import("@features/requests/pages/PendingItemEntryPage"));
+const NewItemListPage = dynamic(() => import("@features/requests/pages/NewItemListPage"));
+const CompleteRequestsPage = dynamic(() => import("@features/requests/pages/CompleteRequestsPage"));
+const DeletedItemsPage = dynamic(() => import("@features/items/pages/DeletedItemsPage"));
+const ItemsHubPage = dynamic(() => import("@features/items/pages/ItemsHubPage"));
+const AdjustmentHistoryPage = dynamic(() => import("@features/adjustments/pages/AdjustmentHistoryPage"));
+const SubmittedPaymentRequestsPage = dynamic(() => import("@features/requests/pages/SubmittedPaymentRequestsPage"));
+const MainDashboardPage = dynamic(() => import("@features/dashboard/pages/MainDashboardPage"));
 
 const routes: Record<string, { component: PageComponent; permission?: string }> = {
   "/login": { component: LoginPage },
@@ -108,9 +110,9 @@ function RouteContent() {
   );
 }
 
-export default function ClientApp() {
+export default function ClientApp({ initialUser }: { initialUser: User | null }) {
   return (
-    <AuthProvider>
+    <AuthProvider initialUser={initialUser}>
       <SocketBridge />
       <DateRangeProvider>
         <PendingItemsProvider>

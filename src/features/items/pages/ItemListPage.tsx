@@ -16,6 +16,7 @@ import { filterByDateRange } from "@shared/utils/dateRange";
 import DateRangeFilter from "@shared/components/DateRangeFilter";
 import { copyToClipboard, formatItemForRegistration } from "@shared/utils/clipboard";
 import type { ItemCatalogEntry, OptionListEntry } from "@shared/types";
+import { getItemCatalogAction, getOptionListAction } from "@server/actions/reference-data";
 
 /** Human-readable labels for the two approval_level values — see db/schema.ts's itemCatalog. */
 const APPROVAL_LEVEL_LABELS: Record<string, string> = {
@@ -160,11 +161,11 @@ const ItemListPage: React.FC = () => {
     setLoading(true);
     try {
       const [entriesRes, uomsRes] = await Promise.all([
-        itemCatalogAPI.getAll(),
-        optionListAPI.getAll("uom"),
+        getItemCatalogAction(),
+        getOptionListAction("uom"),
       ]);
-      setEntries(entriesRes.data);
-      setUomEntries(uomsRes.data);
+      setEntries(entriesRes);
+      setUomEntries(uomsRes);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to load item catalog"));
     } finally {

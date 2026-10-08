@@ -9,6 +9,7 @@ import DepartmentCheckboxes from "@shared/components/DepartmentCheckboxes";
 import { formatLocalDate, formatMilitaryTime } from "@shared/utils/format";
 import { copyToClipboard, formatItemForRegistration } from "@shared/utils/clipboard";
 import type { ItemCatalogEntry, OptionListEntry } from "@shared/types";
+import { getItemCatalogAction, getOptionListAction } from "@server/actions/reference-data";
 
 interface ItemCatalogModalProps {
   isOpen: boolean;
@@ -81,11 +82,11 @@ const ItemCatalogModal: React.FC<ItemCatalogModalProps> = ({ isOpen, onClose }) 
     setLoading(true);
     try {
       const [entriesRes, uomsRes] = await Promise.all([
-        itemCatalogAPI.getAll(),
-        optionListAPI.getAll("uom"),
+        getItemCatalogAction(),
+        getOptionListAction("uom"),
       ]);
-      setEntries(entriesRes.data);
-      setUomEntries(uomsRes.data);
+      setEntries(entriesRes);
+      setUomEntries(uomsRes);
     } catch (err: unknown) {
       setError(getErrorMessage(err, "Failed to load item catalog"));
     } finally {

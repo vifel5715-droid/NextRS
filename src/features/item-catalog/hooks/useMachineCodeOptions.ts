@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { optionListAPI } from "../../../services/api";
 import type { OptionListEntry } from "@shared/types";
+import { getOptionListAction } from "@server/actions/reference-data";
 
 const sortByValue = (list: OptionListEntry[]) => [...list].sort((a, b) => a.value.localeCompare(b.value));
 
@@ -16,8 +17,8 @@ export function useMachineCodeOptions() {
 
   useEffect(() => {
     let cancelled = false;
-    optionListAPI.getAll("machine_code")
-      .then((res) => { if (!cancelled) setEntries(sortByValue(res.data)); })
+    getOptionListAction("machine_code")
+      .then((data) => { if (!cancelled) setEntries(sortByValue(data)); })
       .catch((err) => console.error("Failed to load machine code options", err));
     return () => { cancelled = true; };
   }, []);

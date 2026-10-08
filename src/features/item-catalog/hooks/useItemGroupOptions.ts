@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { optionListAPI } from "../../../services/api";
 import type { OptionListEntry } from "@shared/types";
+import { getOptionListAction } from "@server/actions/reference-data";
 
 const sortByValue = (list: OptionListEntry[]) => [...list].sort((a, b) => a.value.localeCompare(b.value));
 
@@ -18,8 +19,8 @@ export function useItemGroupOptions() {
 
   useEffect(() => {
     let cancelled = false;
-    optionListAPI.getAll("item_group")
-      .then((res) => { if (!cancelled) setEntries(sortByValue(res.data)); })
+    getOptionListAction("item_group")
+      .then((data) => { if (!cancelled) setEntries(sortByValue(data)); })
       .catch((err) => console.error("Failed to load item group options", err));
     return () => { cancelled = true; };
   }, []);

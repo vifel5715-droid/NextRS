@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@app/providers/AuthProvider";
 import { reimbursementRequestAPI } from "../../../services/api";
+import { getReimbursementRequestsAction } from "@server/actions/special-requests";
 import { createLogger } from "@shared/utils/logger";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { getErrorMessage } from "@shared/utils/errorMessage";
@@ -112,8 +113,7 @@ export function useReimbursementRequests() {
 
   const loadReimbursementRequests = useCallback(async () => {
     try {
-      const res = await reimbursementRequestAPI.getAll();
-      setReimbursementRequests(res.data);
+      setReimbursementRequests(await getReimbursementRequestsAction());
     } catch (error) {
       log.error("Failed to load reimbursement requests:", error);
     } finally {
