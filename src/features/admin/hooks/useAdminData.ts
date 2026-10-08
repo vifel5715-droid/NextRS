@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useSearchParams, useLocation } from '@shared/next-router';
-import { userAPI, itemRequestAPI, serviceRequestAPI, rolesAPI } from '../../../services/api';
+import { itemRequestAPI, serviceRequestAPI, rolesAPI } from '../../../services/api';
+import { saveAdminUserAction } from '@server/actions/admin-users';
 import { getAdminRolesAction, getAdminUsersAction } from '@server/actions/admin-read';
 import { fetchWithSimpleRetry } from '@shared/utils/fetchWithRetry';
 import { useRequestManagement } from '@features/requests/hooks/useRequestManagement';
@@ -217,16 +218,17 @@ export const useAdminData = () => {
     log.info(isEditingUser ? "Updating user:" : "Creating user:", email, `(${userForm.role})`);
     try {
       if (isEditingUser && selectedUser) {
-        const payload: { name: string; email: string; role: string; department: string; password?: string } = {
+        const payload: Parameters<typeof saveAdminUserAction>[0] = {
+          id: selectedUser.id,
           name,
           email,
           role: userForm.role,
           department: userForm.department,
         };
         if (userForm.password) payload.password = userForm.password;
-        await userAPI.update(selectedUser.id, payload);
+        await saveAdminUserAction(payload);
       } else {
-        await userAPI.create({ ...userForm, name, email });
+        await saveAdminUserAction({ ...userForm, name, email });
       }
       log.info("User saved successfully:", email);
       setShowUserModal(false);
