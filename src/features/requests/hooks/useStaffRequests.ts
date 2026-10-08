@@ -5,6 +5,7 @@ import { useAuth } from "@app/providers/AuthProvider";
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from '../../../services/api';
 import { getStaffRequestsAction } from "@server/actions/staff-requests";
 import { createItemRequestAction } from "@server/actions/create-item-request";
+import { createServiceRequestAction } from "@server/actions/create-service-request";
 import { fetchWithRetry } from '@shared/utils/fetchWithRetry';
 import { createLogger } from '@shared/utils/logger';
 import { makeRequestKey } from "@shared/utils/requestKey";
@@ -421,7 +422,7 @@ export const useStaffRequests = () => {
     e.preventDefault();
     log.info("Submitting service request — department:", serviceFormData.department, "services:", serviceTableData.length);
     try {
-      await serviceRequestAPI.create({
+      await createServiceRequestAction({
         ...serviceFormData,
         purpose: serviceFormData.purpose.toUpperCase(),
         remarks: serviceFormData.remarks.toUpperCase(),

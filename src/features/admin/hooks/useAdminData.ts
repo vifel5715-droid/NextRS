@@ -3,6 +3,7 @@ import { useSearchParams, useLocation } from '@shared/next-router';
 import { itemRequestAPI, serviceRequestAPI, rolesAPI } from '../../../services/api';
 import { saveAdminUserAction } from '@server/actions/admin-users';
 import { createItemRequestAction } from '@server/actions/create-item-request';
+import { createServiceRequestAction } from '@server/actions/create-service-request';
 import { getAdminRolesAction, getAdminUsersAction } from '@server/actions/admin-read';
 import { fetchWithSimpleRetry } from '@shared/utils/fetchWithRetry';
 import { useRequestManagement } from '@features/requests/hooks/useRequestManagement';
@@ -321,7 +322,7 @@ export const useAdminData = () => {
     if (!createServiceFormData.department) return alert('Please select a department.');
     log.info("Submitting service request (admin) — department:", createServiceFormData.department, "services:", createServiceTableData.length);
     try {
-      await serviceRequestAPI.create({
+      await createServiceRequestAction({
         ...createServiceFormData,
         purpose: createServiceFormData.purpose.toUpperCase(),
         remarks: createServiceFormData.remarks.toUpperCase(),
