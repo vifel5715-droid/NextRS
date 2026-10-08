@@ -38,12 +38,9 @@ function isLocalDatabase(databaseUrl: string): boolean {
 
 function getMigrationDatabaseUrl(databaseUrl: string): string {
   const url = new URL(databaseUrl);
-  if (
-    !isLocalDatabase(databaseUrl) &&
-    !url.searchParams.has("sslmode") &&
-    !url.searchParams.has("ssl")
-  ) {
-    url.searchParams.set("sslmode", "require");
+  if (!isLocalDatabase(databaseUrl)) {
+    // Railway Postgres may present a self-signed certificate; match init-db's TLS behavior.
+    url.searchParams.set("sslmode", "no-verify");
   }
   return url.toString();
 }
