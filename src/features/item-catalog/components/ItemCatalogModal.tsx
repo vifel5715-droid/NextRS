@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import Modal from "@shared/components/Modal";
 import SearchableCombobox from "@shared/components/SearchableCombobox";
-import { itemCatalogAPI, optionListAPI } from "../../../services/api";
+import { optionListAPI } from "../../../services/api";
 import { getErrorMessage } from "@shared/utils/errorMessage";
 import { useMachineCodeOptions } from "../hooks/useMachineCodeOptions";
 import { useItemGroupOptions } from "../hooks/useItemGroupOptions";
@@ -9,7 +9,13 @@ import DepartmentCheckboxes from "@shared/components/DepartmentCheckboxes";
 import { formatLocalDate, formatMilitaryTime } from "@shared/utils/format";
 import { copyToClipboard, formatItemForRegistration } from "@shared/utils/clipboard";
 import type { ItemCatalogEntry, OptionListEntry } from "@shared/types";
-import { getItemCatalogAction, getOptionListAction } from "@server/actions/reference-data";
+import {
+  createItemCatalogEntryAction,
+  deleteItemCatalogEntryAction,
+  getItemCatalogAction,
+  getOptionListAction,
+  updateItemCatalogEntryAction,
+} from "@server/actions/reference-data";
 
 interface ItemCatalogModalProps {
   isOpen: boolean;
@@ -181,7 +187,7 @@ const ItemCatalogModal: React.FC<ItemCatalogModalProps> = ({ isOpen, onClose }) 
     setSaving(true);
     setError(null);
     try {
-      await itemCatalogAPI.create({
+      await createItemCatalogEntryAction({
         item_name: itemName,
         uom,
         machine_code: machineCode || undefined,
@@ -220,7 +226,7 @@ const ItemCatalogModal: React.FC<ItemCatalogModalProps> = ({ isOpen, onClose }) 
     setSaving(true);
     setError(null);
     try {
-      await itemCatalogAPI.update(id, {
+      await updateItemCatalogEntryAction(id, {
         item_name: itemName,
         uom,
         machine_code: machineCode || undefined,
@@ -240,7 +246,7 @@ const ItemCatalogModal: React.FC<ItemCatalogModalProps> = ({ isOpen, onClose }) 
   const handleDelete = async (id: number, itemName: string) => {
     if (!confirm(`Remove "${itemName}" from the item catalog?`)) return;
     try {
-      await itemCatalogAPI.delete(id);
+      await deleteItemCatalogEntryAction(id);
       setEntries((prev) => prev.filter((entry) => entry.id !== id));
     } catch (err: unknown) {
       alert(getErrorMessage(err, "Failed to delete item"));

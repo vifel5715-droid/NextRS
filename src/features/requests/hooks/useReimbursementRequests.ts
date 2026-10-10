@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@app/providers/AuthProvider";
 import { reimbursementRequestAPI } from "../../../services/api";
 import { getReimbursementRequestsAction } from "@server/actions/special-requests";
+import { reviewSupervisorRequestAction } from "@server/actions/supervisor-review";
 import { createLogger } from "@shared/utils/logger";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { getErrorMessage } from "@shared/utils/errorMessage";
@@ -24,11 +25,13 @@ export function useReimbursementRequests() {
   // ---- Create form (requester side) ----
   const [reimbursementFormData, setReimbursementFormData] = useState({ department: "", requested_by: "", purpose: "", remarks: "", date_needed: "", supplier: "" });
   const [reimbursementItems, setReimbursementItems] = useState<ReimbursementRequestItem[]>([{ ...emptyReimbursementItem }]);
+  const [reimbursementAttachment, setReimbursementAttachment] = useState<File | null>(null);
   const [isSubmittingReimbursement, setIsSubmittingReimbursement] = useState(false);
 
   const resetReimbursementForm = useCallback(() => {
     setReimbursementFormData({ department: user?.department || "", requested_by: user?.name || "", purpose: "", remarks: "", date_needed: "", supplier: "" });
     setReimbursementItems([{ ...emptyReimbursementItem }]);
+    setReimbursementAttachment(null);
   }, [user?.department, user?.name]);
 
   // Defaults Requested By to whoever is logged in — same as
@@ -54,6 +57,20 @@ export function useReimbursementRequests() {
 
   const reimbursementTotalCost = reimbursementItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
 
+  // ---- List + three-stage review (Supervisor / Purchaser / AP Officer) ----
+  const [reimbursementRequests, setReimbursementRequests] = useState<ReimbursementRequest[]>([]);
+  const [loadingReimbursementRequests, setLoadingReimbursementRequests] = useState(true);
+
+  const loadReimbursementRequests = useCallback(async () => {
+    try {
+      setReimbursementRequests(await getReimbursementRequestsAction());
+    } catch (error) {
+      log.error("Failed to load reimbursement requests:", error);
+    } finally {
+      setLoadingReimbursementRequests(false);
+    }
+  }, []);
+
   const submitReimbursementRequest = useCallback(async (): Promise<boolean> => {
     if (!reimbursementFormData.department) {
       alert("Please select a department.");
@@ -76,25 +93,31 @@ export function useReimbursementRequests() {
       alert("Enter a valid amount for every item.");
       return false;
     }
+    if (reimbursementAttachment && reimbursementAttachment.size > 10 * 1024 * 1024) {
+      alert("PDF attachments cannot exceed 10 MB.");
+      return false;
+    }
 
     setIsSubmittingReimbursement(true);
     try {
       log.info("Submitting reimbursement request — department:", reimbursementFormData.department, "items:", items.length);
-      await reimbursementRequestAPI.create({
-        department: reimbursementFormData.department,
-        requested_by: reimbursementFormData.requested_by || undefined,
-        purpose: reimbursementFormData.purpose.toUpperCase(),
-        remarks: reimbursementFormData.remarks ? reimbursementFormData.remarks.toUpperCase() : undefined,
-        date_needed: reimbursementFormData.date_needed || undefined,
-        supplier: reimbursementFormData.supplier.toUpperCase(),
-        items: items.map((i) => ({
+      const formData = new FormData();
+      formData.append("department", reimbursementFormData.department);
+      formData.append("requested_by", reimbursementFormData.requested_by);
+      formData.append("purpose", reimbursementFormData.purpose.toUpperCase());
+      formData.append("remarks", reimbursementFormData.remarks.toUpperCase());
+      formData.append("date_needed", reimbursementFormData.date_needed);
+      formData.append("supplier", reimbursementFormData.supplier.toUpperCase());
+      formData.append("items", JSON.stringify(items.map((i) => ({
           item_description: i.item_description.toUpperCase(),
           quantity: i.quantity,
           uom: i.uom || undefined,
           amount: Number(i.amount),
-        })),
-      });
+      }))));
+      if (reimbursementAttachment) formData.append("attachment", reimbursementAttachment);
+      await reimbursementRequestAPI.create(formData);
       log.info("Reimbursement request created successfully");
+      await loadReimbursementRequests();
       resetReimbursementForm();
       return true;
     } catch (error: unknown) {
@@ -105,21 +128,7 @@ export function useReimbursementRequests() {
     } finally {
       setIsSubmittingReimbursement(false);
     }
-  }, [reimbursementFormData, reimbursementItems, resetReimbursementForm]);
-
-  // ---- List + three-stage review (Supervisor / Purchaser / AP Officer) ----
-  const [reimbursementRequests, setReimbursementRequests] = useState<ReimbursementRequest[]>([]);
-  const [loadingReimbursementRequests, setLoadingReimbursementRequests] = useState(true);
-
-  const loadReimbursementRequests = useCallback(async () => {
-    try {
-      setReimbursementRequests(await getReimbursementRequestsAction());
-    } catch (error) {
-      log.error("Failed to load reimbursement requests:", error);
-    } finally {
-      setLoadingReimbursementRequests(false);
-    }
-  }, []);
+  }, [reimbursementFormData, reimbursementItems, reimbursementAttachment, loadReimbursementRequests, resetReimbursementForm]);
 
   useEffect(() => {
     void loadReimbursementRequests();
@@ -137,7 +146,12 @@ export function useReimbursementRequests() {
   const reviewReimbursementAsSupervisor = useCallback(async (id: number, decision: "approved" | "rejected", rejectionComment?: string): Promise<boolean> => {
     try {
       log.info(decision === "approved" ? "Approving reimbursement request:" : "Declining reimbursement request:", id);
-      await reimbursementRequestAPI.reviewAsSupervisor(id, { decision, rejection_comment: rejectionComment });
+      await reviewSupervisorRequestAction({
+        type: "reimbursement",
+        id,
+        decision,
+        rejectionComment,
+      });
       await loadReimbursementRequests();
       return true;
     } catch (error: unknown) {
@@ -218,6 +232,8 @@ export function useReimbursementRequests() {
     reimbursementFormData,
     setReimbursementFormData,
     reimbursementItems,
+    reimbursementAttachment,
+    setReimbursementAttachment,
     addReimbursementItemRow,
     removeReimbursementItemRow,
     updateReimbursementItemRow,

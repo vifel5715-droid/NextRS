@@ -10,6 +10,7 @@ import { exportToExcel } from "@shared/utils/exportExcel";
 import { getBsStatusBadgeClass, formatStatusLabel } from "@shared/utils/status";
 import { sanitizeUserInput } from "@shared/utils/sanitize";
 import ApprovalStatusPanel from "@features/requests/components/ApprovalStatusPanel";
+import ReimbursementAttachmentLink from "@features/requests/components/ReimbursementAttachmentLink";
 import { useReimbursementRequests } from "@features/requests/hooks/useReimbursementRequests";
 import { createLogger } from "@shared/utils/logger";
 import { formatMilitaryDateTime } from "@shared/utils/format";
@@ -168,6 +169,11 @@ const APOfficerDashboard: React.FC = () => {
                           {row.remarks && (
                             <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
                           )}
+                          <ReimbursementAttachmentLink
+                            requestId={row.id}
+                            attachmentName={row.attachment_name}
+                            attachmentSize={row.attachment_size}
+                          />
 
                           <table className="table table-sm mt-2 mb-3">
                             <thead>

@@ -2,6 +2,9 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from '@shared/next-router';
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from '../../../services/api';
 import { getRequestListsAction } from "@server/actions/request-lists";
+import { reviewSupervisorRequestAction } from "@server/actions/supervisor-review";
+import { reviewCustodianRequestAction } from "@server/actions/custodian-review";
+import { updateRequestItemAction } from "@server/actions/update-request-item";
 import { fetchWithSimpleRetry } from '@shared/utils/fetchWithRetry';
 import { diffItemRow } from '@features/adjustments/utils/adjustmentSlip';
 import { createLogger } from '@shared/utils/logger';
@@ -45,7 +48,11 @@ const isPendingRow = (row: Record<string, unknown>) =>
 const withPendingFirst = <T extends Record<string, unknown>>(rows: T[]): T[] =>
   [...rows].sort((a, b) => Number(isPendingRow(b)) - Number(isPendingRow(a)));
 
-export const useRequestManagement = () => {
+const isSupervisorApproved = (row: { supervisor_status?: string }) =>
+  row.supervisor_status?.trim().toLowerCase() === 'approved';
+
+export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean } = {}) => {
+  const { supervisorApprovedOnly = false } = options;
   const [searchParams] = useSearchParams();
   const [activeTab, setActiveTab] = useState<RequestTab>('item');
   const [itemRequests, setItemRequests] = useState<ItemRequest[]>([]);
@@ -123,14 +130,17 @@ export const useRequestManagement = () => {
       const res = await getRequestListsAction();
       // Fully-served requests live on the Complete Requests page instead —
       // see useCompleteRequestsManagement.ts — so they are dropped here rather than shown twice.
-      const data = res.itemRequests.filter((r) => !r.all_items_served);
+      const data = res.itemRequests.filter((request) =>
+        !request.all_items_served &&
+        (!supervisorApprovedOnly || isSupervisorApproved(request))
+      );
       log.info("Item requests loaded:", data.length, "records");
       setItemRequests(data);
     } catch (error) {
       log.error("Failed to load item requests:", error);
       console.error('Error loading item requests:', error);
     }
-  }, []);
+  }, [supervisorApprovedOnly]);
 
   const loadServiceRequests = useCallback(async () => {
     log.info("Loading service requests");
@@ -138,14 +148,17 @@ export const useRequestManagement = () => {
       const res = await getRequestListsAction();
       // Finished PRs live on the Complete Requests page instead — see
       // useCompleteRequestsManagement.ts — so they are dropped here rather than shown twice.
-      const data = res.serviceRequests.filter((r) => r.pr_status !== "finish");
+      const data = res.serviceRequests.filter((request) =>
+        request.pr_status !== "finish" &&
+        (!supervisorApprovedOnly || isSupervisorApproved(request))
+      );
       log.info("Service requests loaded:", data.length, "records");
       setServiceRequests(data);
     } catch (error) {
       log.error("Failed to load service requests:", error);
       console.error('Error loading service requests:', error);
     }
-  }, []);
+  }, [supervisorApprovedOnly]);
 
   const reloadCurrentTab = () => {
     if (activeTab === 'item') loadItemRequests();
@@ -205,21 +218,20 @@ export const useRequestManagement = () => {
     }
 
     if (payload.data) {
-      // This hook backs the custodian dashboard only, which (like its REST
-      // fetch) must only ever show supervisor-approved requests — a
-      // realtime "created"/"updated" push can carry a still-pending row
-      // (e.g. a brand-new staff request), so mirror the REST filter here
-      // instead of blindly patching it into view.
-      const isSupervisorApproved = (payload.data as { supervisor_status?: string }).supervisor_status === 'approved';
+      // Keep custodian initial loads and realtime updates on the same
+      // supervisor/manager approval gate.
+      const isApprovedForThisList =
+        !supervisorApprovedOnly ||
+        isSupervisorApproved(payload.data as { supervisor_status?: string });
       if (payload.type === 'item') {
         // A request that just became fully served moves to the Complete
         // Requests page instead — drop it here rather than upsert it back in.
-        const shouldShow = isSupervisorApproved && !(payload.data as ItemRequest).all_items_served;
+        const shouldShow = isApprovedForThisList && !(payload.data as ItemRequest).all_items_served;
         setItemRequests(prev => shouldShow ? upsertById(prev, payload.data!) : removeById(prev, payload.id));
       } else {
         // A service request whose PR just got marked "finish" moves to the
         // Complete Requests page instead — drop it here rather than upsert it back in.
-        const shouldShow = isSupervisorApproved && (payload.data as ServiceRequest).pr_status !== "finish";
+        const shouldShow = isApprovedForThisList && (payload.data as ServiceRequest).pr_status !== "finish";
         setServiceRequests(prev => shouldShow ? upsertById(prev, payload.data!) : removeById(prev, payload.id));
       }
     }
@@ -228,7 +240,7 @@ export const useRequestManagement = () => {
     if (requestDetailsRef.current.has(key)) {
       debouncedDetailRefetch(key, payload.type, payload.id);
     }
-  }, [debouncedDetailRefetch]);
+  }, [debouncedDetailRefetch, supervisorApprovedOnly]);
 
   useRequestsChanged(handleRequestChanged);
 
@@ -277,17 +289,12 @@ export const useRequestManagement = () => {
     if (!selectedRequest) return;
     log.info("Updating request #" + selectedRequest.id, `to '${newStatus}' (${activeTab})`);
     try {
-      if (activeTab === 'item') {
-        await statusAPI.updateItemRequest(selectedRequest.id, {
-          status: newStatus,
-          rejection_comment: newStatus === 'rejected' ? rejectionComment.toUpperCase() : undefined,
-        });
-      } else {
-        await statusAPI.updateServiceRequest(selectedRequest.id, {
-          status: newStatus,
-          rejection_comment: newStatus === 'rejected' ? rejectionComment.toUpperCase() : undefined,
-        });
-      }
+      await reviewCustodianRequestAction({
+        type: activeTab,
+        id: selectedRequest.id,
+        decision: newStatus === "rejected" ? "rejected" : "approved",
+        rejectionComment: newStatus === "rejected" ? rejectionComment.toUpperCase() : undefined,
+      });
       log.info("Request #" + selectedRequest.id, "updated to", newStatus);
       setShowModal(false);
       setRejectionComment('');
@@ -304,10 +311,9 @@ export const useRequestManagement = () => {
         log.error("Failed to refresh details for request #" + selectedRequest.id, error);
       }
       reloadCurrentTab();
-    } catch (error) {
+    } catch (error: unknown) {
       log.error("Failed to update status for request #" + selectedRequest.id, error);
-      console.error('Error updating status:', error);
-      alert('Failed to update status');
+      alert(error instanceof Error ? error.message : "Failed to update request status.");
     }
   };
 
@@ -446,7 +452,7 @@ export const useRequestManagement = () => {
       }
       const savePayload = buildItemSavePayload(item);
       if (changes.length > 0) savePayload.adjustment_remarks = adjustmentRemarks;
-      await statusAPI.updateItem(item.id, savePayload);
+      await updateRequestItemAction(item.id, savePayload);
       const refreshed = await fetchWithSimpleRetry(() => itemRequestAPI.getById(requestId));
       setRequestDetails(prev => new Map(prev).set(makeRequestKey('item', requestId), refreshed.data));
       log.info("Item #" + itemId, "saved");
@@ -527,7 +533,7 @@ export const useRequestManagement = () => {
       items.map((item) => {
         const savePayload = buildItemSavePayload(item);
         if (itemsNeedingRemarks.includes(item)) savePayload.adjustment_remarks = sharedRemarks;
-        return statusAPI.updateItem(item.id!, savePayload);
+        return updateRequestItemAction(item.id!, savePayload);
       })
     );
 
@@ -654,8 +660,7 @@ export const useRequestManagement = () => {
     if (action === 'approve') {
       if (!confirm('Are you sure you want to approve this request as supervisor?')) return;
       try {
-        if (activeTab === 'item') await statusAPI.supervisorApproveItem(row.id, { status: 'approved' });
-        else await statusAPI.supervisorApproveService(row.id, { status: 'approved' });
+        await reviewSupervisorRequestAction({ type: activeTab, id: row.id, decision: "approved" });
         const approveKey = makeRequestKey(activeTab, row.id);
         setRequestDetails(prev => { const next = new Map(prev); next.delete(approveKey); return next; });
         setExpandedRows(prev => { const next = new Set(prev); next.delete(approveKey); return next; });
@@ -669,8 +674,12 @@ export const useRequestManagement = () => {
       const comment = window.prompt('Enter reason for declining:');
       if (comment === null) return;
       try {
-        if (activeTab === 'item') await statusAPI.supervisorApproveItem(row.id, { status: 'rejected', rejection_comment: comment.toUpperCase() });
-        else await statusAPI.supervisorApproveService(row.id, { status: 'rejected', rejection_comment: comment.toUpperCase() });
+        await reviewSupervisorRequestAction({
+          type: activeTab,
+          id: row.id,
+          decision: "rejected",
+          rejectionComment: comment.toUpperCase(),
+        });
         const rejectKey = makeRequestKey(activeTab, row.id);
         setRequestDetails(prev => { const next = new Map(prev); next.delete(rejectKey); return next; });
         setExpandedRows(prev => { const next = new Set(prev); next.delete(rejectKey); return next; });

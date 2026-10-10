@@ -126,6 +126,49 @@ export async function getAdjustmentLogAction(): Promise<AdjustmentLogEntry[]> {
     .orderBy(desc(adjustmentLog.adjusted_at));
 }
 
+export async function getAdjustmentLogForRequestAction(
+  requestId: number,
+  requestType: "item" | "service" | "petty_cash"
+): Promise<AdjustmentLogEntry[]> {
+  if (!Number.isSafeInteger(requestId) || requestId < 1) {
+    throw new Error("Invalid request ID.");
+  }
+
+  const user = await requirePermission("adjustment_history");
+  const db = getDb();
+  const scope = GLOBAL_HISTORY_ROLES.has(user.role.toLowerCase())
+    ? undefined
+    : eq(adjustmentLog.department, user.department);
+
+  return db
+    .select({
+      id: adjustmentLog.id,
+      adjustment_serial: adjustmentLog.adjustment_serial,
+      request_id: adjustmentLog.request_id,
+      request_serial: adjustmentLog.request_serial,
+      department: adjustmentLog.department,
+      item_label: adjustmentLog.item_label,
+      field: adjustmentLog.field,
+      before_value: adjustmentLog.before_value,
+      after_value: adjustmentLog.after_value,
+      adjustment_remarks: adjustmentLog.adjustment_remarks,
+      adjusted_by: adjustmentLog.adjusted_by,
+      adjusted_by_name: adjustmentLog.adjusted_by_name,
+      adjusted_by_role: adjustmentLog.adjusted_by_role,
+      adjusted_by_department: adjustmentLog.adjusted_by_department,
+      adjusted_at: adjustmentLog.adjusted_at,
+    })
+    .from(adjustmentLog)
+    .where(
+      and(
+        eq(adjustmentLog.request_id, requestId),
+        eq(adjustmentLog.request_type, requestType),
+        scope
+      )
+    )
+    .orderBy(desc(adjustmentLog.adjusted_at));
+}
+
 export async function getDeletionLogAction(): Promise<DeletionLogEntry[]> {
   const user = await requirePermission("deleted_items");
   const db = getDb();

@@ -1,9 +1,9 @@
 /**
  * ARCH: Built-in role/permission seed data and the logic that writes it —
- * shared by `npm run init-db` (fresh installs) and `npm run migrate:add-roles`
- * (existing installs that predate a given permission key), so the two can't
- * drift apart. Same sharing convention as database/tables.ts's
- * TABLE_STATEMENTS. Permission sets transcribed 1:1 from the hardcoded role
+ * shared by the idempotent database initializer for both fresh and existing
+ * installs, so those role grants can't drift apart. Same sharing convention
+ * as database/tables.ts's TABLE_STATEMENTS. Permission sets transcribed 1:1
+ * from the hardcoded role
  * arrays that used to live in client/src/components/Sidebar.tsx and
  * client/src/App.tsx's route allowedRoles, so behavior for every existing
  * role is unchanged.
@@ -19,11 +19,7 @@ import { PermissionKey } from "../core/security/permissionKeys.js";
 
 // Keys whose whole purpose is a single write action — a role granted one of
 // these should start with Edit already on rather than view-only, since
-// there's no read-only phase worth shipping first (see
-// add-pending-item-entry-permission.ts's/add-new-item-list-permission.ts's
-// same reasoning, folded in here so a *fresh* install gets it right directly
-// instead of needing those dedicated backfill scripts afterward — they still
-// matter for existing installs seeded before a key moved here).
+// there's no read-only phase worth shipping first.
 const EDIT_BY_DEFAULT = new Set<PermissionKey>(["pending_item_entry", "new_item_list", "ap_officer_dashboard", "petty_cash"]);
 
 const ALL_PERMISSIONS: PermissionKey[] = [

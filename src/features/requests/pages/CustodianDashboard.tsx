@@ -26,6 +26,7 @@ import IssuanceHistory from "@features/requests/components/IssuanceHistory";
 import { ItemExistenceBadge } from "@shared/components/ItemExistenceStatus";
 import { useItemCatalogNames } from "@features/item-catalog/hooks/useItemCatalogNames";
 import { getItemExistenceStatus } from "@shared/utils/itemExistenceStatus";
+import { getItemBalance } from "@shared/utils/itemBalance";
 import { copyToClipboard, formatItemsForClipboard, formatItemsForProjectGrid } from "@shared/utils/clipboard";
 import { formatMilitaryTime, formatMilitaryDateTime } from "@shared/utils/format";
 import { useDateRangeContext } from "@app/providers/DateRangeProvider";
@@ -642,7 +643,14 @@ const CustodianDashboard: React.FC = () => {
                         />
                       ) : sanitizeUserInput(item.machine_code || "N/A")}
                     </div>
-                    <div data-label="Balance">{item.qty_balance ?? (item.quantity - (item.quantity_delivered || 0))}</div>
+                    <div data-label="Balance">
+                      {getItemBalance(
+                        item,
+                        item.issuance_number?.trim()
+                          ? item.quantity_out_now ?? outstandingToRelease
+                          : 0
+                      )}
+                    </div>
                     <div data-label="Existence Status">
                       <ItemExistenceBadge status={existenceStatus} />
                     </div>
@@ -670,7 +678,7 @@ const CustodianDashboard: React.FC = () => {
                           onChange={(e) => updateSelectedItemField(row.id, index, item, items, "delivery_status", e.target.value)}
                         >
                           <option value="">Select Status</option>
-                          <option value="OUT">OUT</option>
+                          <option value="OUT">ON HAND</option>
                           <option value="PURCHASE REQUEST">PURCHASE REQUEST</option>
                           <option value="URGENT">URGENT</option>
                           {/* Same underlying "HOLD" value either way — only the

@@ -1,6 +1,6 @@
 "use server";
 
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { and, desc, eq, getTableColumns, inArray, isNull, or } from "drizzle-orm";
 import type { ReimbursementRequest, UrgentRequest } from "@shared/types";
 import { getCurrentUser } from "../auth/session";
 import { getDb } from "../db";
@@ -177,8 +177,10 @@ export async function getReimbursementRequestsAction(): Promise<ReimbursementReq
           )
         );
 
+  const { attachment_data: _attachmentData, ...headerColumns } =
+    getTableColumns(reimbursementRequests);
   const headers = await db
-    .select()
+    .select(headerColumns)
     .from(reimbursementRequests)
     .where(scope)
     .orderBy(desc(reimbursementRequests.created_at));
@@ -221,6 +223,8 @@ export async function getReimbursementRequestsAction(): Promise<ReimbursementReq
       requested_by: request.requested_by ?? creator?.name,
       remarks: request.remarks ?? undefined,
       date_needed: request.date_needed ?? undefined,
+      attachment_name: request.attachment_name ?? undefined,
+      attachment_size: request.attachment_size ?? undefined,
       supervisor_status: request.supervisor_status as ReimbursementRequest["supervisor_status"],
       purchaser_status: request.purchaser_status as ReimbursementRequest["purchaser_status"],
       ap_status: request.ap_status as ReimbursementRequest["ap_status"],

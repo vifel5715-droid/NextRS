@@ -146,6 +146,7 @@ export interface ItemRequest {
   purpose: string;
   remarks: string;
   status: string;
+  request_type?: string;
   supervisor_status?: string;
   custodian_status?: string;
   supervisor_name?: string;
@@ -168,6 +169,7 @@ export interface ItemRequest {
   has_edited_held_item?: boolean;
   attachment?: string;
   attachment_name?: string;
+  attachment_size?: number;
   items?: ItemRow[];
 }
 
@@ -359,6 +361,8 @@ export interface ReimbursementRequest {
   remarks?: string;
   date_needed?: string;
   supplier: string;
+  attachment_name?: string;
+  attachment_size?: number;
   supervisor_status: "pending" | "approved" | "rejected";
   supervisor_approved_by?: string;
   supervisor_approved_by_name?: string;

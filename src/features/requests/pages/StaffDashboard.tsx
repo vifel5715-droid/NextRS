@@ -7,6 +7,7 @@ import Modal from "@shared/components/Modal";
 import DeleteReasonModal from "@shared/components/DeleteReasonModal";
 import AdjustmentHistoryModal from "@features/adjustments/components/AdjustmentHistoryModal";
 import ApprovalStatusPanel from "@features/requests/components/ApprovalStatusPanel";
+import ReimbursementAttachmentLink from "@features/requests/components/ReimbursementAttachmentLink";
 import { useAuth } from "@app/providers/AuthProvider";
 import { useStaffRequests } from "@features/requests/hooks/useStaffRequests";
 import { useUrgentRequests } from "@features/requests/hooks/useUrgentRequests";
@@ -24,6 +25,7 @@ import SearchableCombobox from "@shared/components/SearchableCombobox";
 import { ItemExistenceBadge, ItemExistenceLegend } from "@shared/components/ItemExistenceStatus";
 import { useItemCatalogEntries } from "@features/item-catalog/hooks/useItemCatalogEntries";
 import { getItemExistenceStatus } from "@shared/utils/itemExistenceStatus";
+import { getItemBalance } from "@shared/utils/itemBalance";
 import { getErrorMessage } from "@shared/utils/errorMessage";
 import { getMachineCodeError, isMachineCodeEnabled } from "@shared/utils/machineCodeValidation";
 import { formatMilitaryTime, formatMilitaryDateTime } from "@shared/utils/format";
@@ -142,6 +144,8 @@ const StaffDashboard: React.FC = () => {
     reimbursementFormData,
     setReimbursementFormData,
     reimbursementItems,
+    reimbursementAttachment,
+    setReimbursementAttachment,
     addReimbursementItemRow,
     removeReimbursementItemRow,
     updateReimbursementItemRow,
@@ -1066,6 +1070,23 @@ const StaffDashboard: React.FC = () => {
         </div>
       </div>
 
+      <div className="mb-3">
+        <label className="form-label">SUPPORTING DOCUMENT (PDF, MAX 10 MB)</label>
+        <AttachmentDropzone
+          id="reimbursement-attachment"
+          accept="application/pdf,.pdf"
+          label="Add a supporting PDF"
+          maxSizeMB={10}
+          onFileSelected={setReimbursementAttachment}
+        />
+        {reimbursementAttachment && (
+          <SelectedFileChip
+            file={reimbursementAttachment}
+            onRemove={() => setReimbursementAttachment(null)}
+          />
+        )}
+      </div>
+
       <div className="table-responsive mb-3">
         <table className="table table-sm">
           <thead>
@@ -1469,7 +1490,6 @@ const StaffDashboard: React.FC = () => {
                             {row.remarks && (
                               <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
                             )}
-
                             <table className="table table-sm mt-2 mb-3">
                               <thead>
                                 <tr>
@@ -1676,6 +1696,12 @@ const StaffDashboard: React.FC = () => {
                             {row.remarks && (
                               <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
                             )}
+
+                            <ReimbursementAttachmentLink
+                              requestId={row.id}
+                              attachmentName={row.attachment_name}
+                              attachmentSize={row.attachment_size}
+                            />
 
                             <table className="table table-sm mt-2 mb-3">
                               <thead>
@@ -2061,7 +2087,7 @@ const StaffDashboard: React.FC = () => {
                                         {sanitizeUserInput(item.machine_code || "N/A")}
                                       </td>
                                       <td data-label="Balance" style={{ padding: "12px", border: "none" }}>
-                                        {item.qty_balance ?? (item.quantity - (item.quantity_delivered || 0))}
+                                        {getItemBalance(item)}
                                       </td>
                                       <td data-label="Existence Status" style={{ padding: "12px", border: "none" }}>
                                         <ItemExistenceBadge status={getItemExistenceStatus(item.item_name, itemCatalogNames)} />
@@ -2086,6 +2112,26 @@ const StaffDashboard: React.FC = () => {
                                               }}
                                             >
                                               <tbody>
+                                                {item.delivery_status === "OUT" && (
+                                                  <>
+                                                    <tr style={{ borderBottom: "1px solid #dee2e6" }}>
+                                                      <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>
+                                                        Issuance No.
+                                                      </td>
+                                                      <td style={{ padding: "8px 12px", border: "none", color: "#212529" }}>
+                                                        {item.issuance_number || "Not issued yet"}
+                                                      </td>
+                                                    </tr>
+                                                    <tr style={{ borderBottom: "1px solid #dee2e6" }}>
+                                                      <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>
+                                                        Qty Out
+                                                      </td>
+                                                      <td style={{ padding: "8px 12px", border: "none", color: "#212529" }}>
+                                                        {item.quantity_out ?? 0} / {item.quantity}
+                                                      </td>
+                                                    </tr>
+                                                  </>
+                                                )}
                                                 {(item.delivery_status === "PURCHASE REQUEST" ||
                                                   item.delivery_status === "URGENT") && (
                                                   <tr style={{ borderBottom: "1px solid #dee2e6" }}>

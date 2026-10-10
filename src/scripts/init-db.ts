@@ -1,91 +1,94 @@
-﻿/**
- * ARCH: One-off bootstrap script (run via `npm run init-db`).
- */
 import { randomBytes } from "node:crypto";
 import { Pool } from "pg";
 import { env } from "../config/env.js";
-import { hashPassword } from "../shared/utils/password.js";
-import { INDEX_STATEMENTS } from "../database/indexes.js";
-import { TABLE_STATEMENTS } from "../database/tables.js";
 import { seedBuiltInRoles } from "../database/seedRoles.js";
+import { initializeDatabaseSchema } from "../database/bootstrap.js";
+import { seedReferenceData } from "../database/seedData.js";
+import { hashPassword } from "../shared/utils/password.js";
 
-async function main() {
-  console.log("Creating database tables...");
+const DEFAULT_USERS = [
+  { name: "JOEL", username: "joel", role: "staff", department: "HR" },
+  { name: "MYRNA", username: "myrna", role: "supervisor", department: "HR" },
+  { name: "ROB", username: "rob", role: "manager", department: "HR" },
+  { name: "MARQUEZ, PETER PAUL", username: "paul", role: "custodian", department: "ACCTG" },
+  { name: "GABRIEL", username: "gabriel", role: "director", department: "ACCTG" },
+  { name: "ADMIN", username: "admin", role: "admin", department: "ACCTG" },
+] as const;
 
-  // Added SSL options so Railway Postgres connections do not throw ErrorEvent
+function isLocalDatabase(databaseUrl: string): boolean {
+  return ["localhost", "127.0.0.1", "::1", "[::1]"].includes(new URL(databaseUrl).hostname);
+}
+
+function requireProductionSeedPassword(): void {
+  const isProduction = process.env.NODE_ENV === "production" || Boolean(process.env.RAILWAY_ENVIRONMENT);
+  if (isProduction && !env.INIT_DB_DEMO_PASSWORD?.trim()) {
+    throw new Error(
+      "Set INIT_DB_DEMO_PASSWORD to a strong initial admin password before initializing the production database."
+    );
+  }
+}
+
+async function seedDefaultUsers(pool: Pool): Promise<void> {
+  const configuredPassword = env.INIT_DB_DEMO_PASSWORD;
+  const now = new Date().toISOString();
+  const createdUsers: Array<{ username: string; role: string; department: string; password: string }> = [];
+
+  for (const user of DEFAULT_USERS) {
+    const password = configuredPassword || randomBytes(6).toString("base64url");
+    const passwordHash = await hashPassword(password);
+    const result = await pool.query(
+      `INSERT INTO users (name, username, password_hash, role, department, created_at)
+       VALUES ($1, $2, $3, $4, $5, $6)
+       ON CONFLICT (username) DO NOTHING
+       RETURNING username`,
+      [user.name, user.username, passwordHash, user.role, user.department, now]
+    );
+    if (result.rowCount) {
+      createdUsers.push({ username: user.username, role: user.role, department: user.department, password });
+    }
+  }
+
+  if (createdUsers.length) {
+    console.log("New default accounts:");
+    for (const user of createdUsers) {
+      const passwordNote = configuredPassword
+        ? "password set via INIT_DB_DEMO_PASSWORD"
+        : `password: ${user.password}`;
+      console.log(`  ${user.role}: ${user.username} — ${passwordNote} (${user.department})`);
+    }
+  } else {
+    console.log("Default accounts already exist; existing passwords were left unchanged.");
+  }
+}
+
+async function main(): Promise<void> {
+  requireProductionSeedPassword();
+
   const pool = new Pool({
     connectionString: env.DATABASE_URL,
-    ssl: env.DATABASE_URL?.includes("localhost") || env.DATABASE_URL?.includes("127.0.0.1")
-      ? false
-      : { rejectUnauthorized: false },
+    ssl: isLocalDatabase(env.DATABASE_URL) ? false : { rejectUnauthorized: false },
   });
 
   try {
-    for (const table of TABLE_STATEMENTS) {
-      await pool.query(table.sql);
-    }
-    console.log(`Created ${TABLE_STATEMENTS.length} tables (or already present)`);
-
-    for (const index of INDEX_STATEMENTS) {
-      await pool.query(index.sql);
-    }
-    console.log(`Created ${INDEX_STATEMENTS.length} indexes (or already present)`);
+    console.log("Creating/updating the current database schema...");
+    await initializeDatabaseSchema(pool);
 
     console.log("\nSeeding built-in roles and permissions...");
     await seedBuiltInRoles(pool);
 
-    const departments = [
-      { code: "ACCTG", name: "Accounting" },
-      { code: "HR", name: "Human Resources" },
-      { code: "QA", name: "Quality Assurance" },
-      { code: "ENGG", name: "Engineering" },
-      { code: "PRODNCAN", name: "Production Canning" },
-      { code: "PRODSIO", name: "Production Siomai" },
-      { code: "PRODNMAR", name: "Production Marine" },
-      { code: "PRODNHOT", name: "Production Hotdog" },
-    ];
+    console.log("\nImporting reference data...");
+    await seedReferenceData(pool);
 
-    for (const dept of departments) {
-      await pool.query(
-        `INSERT INTO departments (code, name) VALUES ($1, $2) ON CONFLICT (code) DO NOTHING`,
-        [dept.code, dept.name]
-      );
-    }
+    console.log("\nSeeding default accounts...");
+    await seedDefaultUsers(pool);
 
-    const demoPassword = process.env.INIT_DB_DEMO_PASSWORD;
-    const defaultUsers = [
-      { name: "JOEL", email: "joel", role: "staff", department: "HR" },
-      { name: "MYRNA", email: "myrna", role: "supervisor", department: "HR" },
-      { name: "ROB", email: "rob", role: "manager", department: "HR" },
-      { name: "MARQUEZ, PETER PAUL", email: "paul", role: "custodian", department: "ACCTG" },
-      { name: "GABRIEL", email: "gabriel", role: "director", department: "ACCTG" },
-      { name: "ADMIN", email: "admin", role: "admin", department: "ACCTG" },
-    ].map((user) => ({ ...user, password: demoPassword || randomBytes(6).toString("base64url") }));
-
-    for (const user of defaultUsers) {
-      const passwordHash = await hashPassword(user.password);
-      await pool.query(
-        `INSERT INTO users (name, username, password_hash, role, department, created_at)
-         VALUES ($1, $2, $3, $4, $5, $6)
-         ON CONFLICT (username) DO NOTHING`,
-        [user.name, user.email, passwordHash, user.role, user.department, new Date().toISOString()]
-      );
-    }
-
-    console.log("Default users created (existing accounts left untouched):");
-    for (const user of defaultUsers) {
-      const passwordNote = demoPassword ? "password set via INIT_DB_DEMO_PASSWORD" : `password: ${user.password}`;
-      console.log(`  ${user.role}: ${user.email} — ${passwordNote} (${user.department})`);
-    }
-
-    console.log("Database tables created successfully!");
-    process.exit(0);
-  } catch (error) {
-    console.error("Error creating tables:", error);
-    process.exit(1);
+    console.log("\nDatabase initialization completed successfully.");
   } finally {
     await pool.end();
   }
 }
 
-main();
+main().catch((error: unknown) => {
+  console.error("Database initialization failed:", error);
+  process.exitCode = 1;
+});

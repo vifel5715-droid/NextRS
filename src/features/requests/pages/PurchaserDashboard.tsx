@@ -11,6 +11,7 @@ import { exportToExcel } from "@shared/utils/exportExcel";
 import { getBsStatusBadgeClass, formatStatusLabel } from "@shared/utils/status";
 import { sanitizeUserInput } from "@shared/utils/sanitize";
 import ApprovalStatusPanel from "@features/requests/components/ApprovalStatusPanel";
+import ReimbursementAttachmentLink from "@features/requests/components/ReimbursementAttachmentLink";
 import PaymentRequestFormFields from "@features/requests/components/PaymentRequestFormFields";
 import { useUrgentRequests } from "@features/requests/hooks/useUrgentRequests";
 import { useReimbursementRequests } from "@features/requests/hooks/useReimbursementRequests";
@@ -540,6 +541,11 @@ const PurchaserDashboard: React.FC = () => {
                           {row.remarks && (
                             <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
                           )}
+                          <ReimbursementAttachmentLink
+                            requestId={row.id}
+                            attachmentName={row.attachment_name}
+                            attachmentSize={row.attachment_size}
+                          />
 
                           <table className="table table-sm mt-2 mb-3">
                             <thead>

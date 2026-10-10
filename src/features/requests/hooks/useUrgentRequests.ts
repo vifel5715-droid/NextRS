@@ -2,6 +2,7 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@app/providers/AuthProvider";
 import { urgentRequestAPI } from "../../../services/api";
 import { getUrgentRequestsAction } from "@server/actions/special-requests";
+import { reviewSupervisorRequestAction } from "@server/actions/supervisor-review";
 import { createLogger } from "@shared/utils/logger";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { getErrorMessage } from "@shared/utils/errorMessage";
@@ -143,7 +144,12 @@ export function useUrgentRequests() {
   const reviewUrgentRequestAsSupervisor = useCallback(async (id: number, decision: "approved" | "rejected", rejectionComment?: string): Promise<boolean> => {
     try {
       log.info(decision === "approved" ? "Approving urgent request (supervisor):" : "Declining urgent request (supervisor):", id);
-      await urgentRequestAPI.reviewAsSupervisor(id, { decision, rejection_comment: rejectionComment });
+      await reviewSupervisorRequestAction({
+        type: "urgent",
+        id,
+        decision,
+        rejectionComment,
+      });
       await loadUrgentRequests();
       return true;
     } catch (error: unknown) {

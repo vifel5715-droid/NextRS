@@ -2,6 +2,7 @@
 
 import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
 import type { ItemRequest, ServiceRequest } from "@shared/types";
+import { getItemBalance } from "@shared/utils/itemBalance";
 import { getCurrentUser } from "../auth/session";
 import { getDb } from "../db";
 import {
@@ -22,6 +23,8 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
   if (!user) throw new Error("Authentication required.");
   if (!user.permissions.includes("create_request")) throw new Error("Permission denied.");
 
+  const role = user.role.trim().toLowerCase();
+  const canViewAllRequests = role === "supervisor" || role === "manager";
   const db = getDb();
   const [itemHeaders, serviceHeaders] = await Promise.all([
     db
@@ -48,13 +51,15 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
       })
       .from(itemRequests)
       .where(
-        and(
-          eq(itemRequests.department, user.department),
-          or(
-            eq(itemRequests.requested_by, user.name),
-            and(isNull(itemRequests.requested_by), eq(itemRequests.created_by, user.id))
-          )
-        )
+        canViewAllRequests
+          ? undefined
+          : and(
+              eq(itemRequests.department, user.department),
+              or(
+                eq(itemRequests.requested_by, user.name),
+                and(isNull(itemRequests.requested_by), eq(itemRequests.created_by, user.id))
+              )
+            )
       )
       .orderBy(desc(itemRequests.created_at)),
     db
@@ -80,13 +85,15 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
       })
       .from(serviceRequests)
       .where(
-        and(
-          eq(serviceRequests.department, user.department),
-          or(
-            eq(serviceRequests.requested_by, user.name),
-            and(isNull(serviceRequests.requested_by), eq(serviceRequests.created_by, user.id))
-          )
-        )
+        canViewAllRequests
+          ? undefined
+          : and(
+              eq(serviceRequests.department, user.department),
+              or(
+                eq(serviceRequests.requested_by, user.name),
+                and(isNull(serviceRequests.requested_by), eq(serviceRequests.created_by, user.id))
+              )
+            )
       )
       .orderBy(desc(serviceRequests.created_at)),
   ]);
@@ -172,7 +179,7 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
         issuance_number: item.issuance_number ?? undefined,
         quantity_delivered: item.quantity_delivered ?? undefined,
         quantity_out: item.quantity_out ?? undefined,
-        qty_balance: item.qty_balance,
+        qty_balance: getItemBalance(item),
         hold_edited: item.hold_edited,
       })),
     };

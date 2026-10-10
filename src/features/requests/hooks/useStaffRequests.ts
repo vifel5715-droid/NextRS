@@ -2,7 +2,8 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type React from 'react';
 import { useSearchParams } from '@shared/next-router';
 import { useAuth } from "@app/providers/AuthProvider";
-import { itemRequestAPI, serviceRequestAPI, statusAPI } from '../../../services/api';
+import { itemRequestAPI, serviceRequestAPI } from '../../../services/api';
+import { reviewSupervisorRequestAction } from "@server/actions/supervisor-review";
 import { getStaffRequestsAction } from "@server/actions/staff-requests";
 import { createItemRequestAction } from "@server/actions/create-item-request";
 import { createServiceRequestAction } from "@server/actions/create-service-request";
@@ -481,8 +482,7 @@ export const useStaffRequests = () => {
       if (!confirm('Are you sure you want to approve this request?')) return;
       log.info("Approving request #" + row.id, `(${activeTab})`);
       try {
-        if (activeTab === 'item') await statusAPI.supervisorApproveItem(row.id, { status: 'approved' });
-        else await statusAPI.supervisorApproveService(row.id, { status: 'approved' });
+        await reviewSupervisorRequestAction({ type: activeTab, id: row.id, decision: "approved" });
         log.info("Request #" + row.id, "approved");
         const key = makeRequestKey(activeTab, row.id);
         setRequestDetails(prev => { const next = new Map(prev); next.delete(key); return next; });
@@ -504,11 +504,12 @@ export const useStaffRequests = () => {
   const handleRejectSubmit = async () => {
     if (!rejectRequest) return;
     try {
-      if (activeTab === 'item') {
-        await statusAPI.supervisorApproveItem(rejectRequest.id, { status: 'rejected', rejection_comment: rejectComment });
-      } else {
-        await statusAPI.supervisorApproveService(rejectRequest.id, { status: 'rejected', rejection_comment: rejectComment });
-      }
+      await reviewSupervisorRequestAction({
+        type: activeTab,
+        id: rejectRequest.id,
+        decision: "rejected",
+        rejectionComment: rejectComment,
+      });
       const rejectKey = makeRequestKey(activeTab, rejectRequest.id);
       setRequestDetails(prev => { const next = new Map(prev); next.delete(rejectKey); return next; });
       setExpandedRows(prev => { const next = new Set(prev); next.delete(rejectKey); return next; });

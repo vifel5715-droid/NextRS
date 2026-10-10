@@ -184,7 +184,7 @@ export async function createItemRequestAction(formData: FormData): Promise<void>
         uom: item.uom,
         remarks: item.remarks || null,
         machine_code: item.machine_code ?? null,
-        qty_balance: 0,
+        qty_balance: item.quantity,
       }))
     );
   });

@@ -136,6 +136,8 @@ type DeliveryStatusItem = { delivery_status?: string | null; hold_edited?: boole
 export const getItemStatusText = (item: DeliveryStatusItem): string =>
   item?.delivery_status === 'HOLD'
     ? (item.hold_edited ? 'RELEASE ON HOLD' : 'ON HOLD')
+    : item?.delivery_status === 'OUT'
+      ? 'ON HAND'
     : (item?.delivery_status || 'pending');
 
 export const getItemStatusBadgeClass = (item: DeliveryStatusItem): string =>

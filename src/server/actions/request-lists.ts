@@ -1,10 +1,18 @@
 "use server";
 
-import { and, asc, desc, eq, inArray, isNull, or } from "drizzle-orm";
-import type { ItemRequest, ServiceRequest } from "@shared/types";
+import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import type { ItemAudit, ItemRequest, ServiceRequest } from "@shared/types";
+import { getItemBalance } from "@shared/utils/itemBalance";
 import { getCurrentUser } from "../auth/session";
 import { getDb } from "../db";
-import { itemRequestItems, itemRequests, serviceItems, serviceRequests, users } from "../db/schema";
+import {
+  itemIssuanceAudits,
+  itemRequestItems,
+  itemRequests,
+  serviceItems,
+  serviceRequests,
+  users,
+} from "../db/schema";
 
 export interface RequestListsResult {
   itemRequests: ItemRequest[];
@@ -16,6 +24,8 @@ const GLOBAL_REQUEST_ROLES = new Set([
   "admin",
   "custodian",
   "director",
+  "supervisor",
+  "manager",
   "purchaser",
   "ap_officer",
   "operations_manager",
@@ -23,14 +33,18 @@ const GLOBAL_REQUEST_ROLES = new Set([
 
 async function loadRequestLists(
   scope: RequestScope,
-  allowOverview = false
+  allowOverview = false,
+  requestId?: number
 ): Promise<RequestListsResult> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Authentication required.");
 
+  const role = user.role.toLowerCase().trim();
   const hasBroadListPermission =
     user.permissions.includes("department_requests") ||
-    user.permissions.includes("supervisor_dashboard");
+    user.permissions.includes("supervisor_dashboard") ||
+    role === "supervisor" ||
+    role === "manager";
   const hasOwnListPermission =
     user.permissions.includes("create_request") ||
     user.permissions.includes("complete_requests") ||
@@ -42,43 +56,88 @@ async function loadRequestLists(
   }
 
   const db = getDb();
-  const role = user.role.toLowerCase();
   const globalScope = scope === "all" && GLOBAL_REQUEST_ROLES.has(role);
   const ownScope = scope === "own" || (!globalScope && !hasBroadListPermission);
   const departmentScope = !globalScope && !ownScope && hasBroadListPermission;
+  const itemAccessFilter = ownScope
+    ? and(
+        eq(sql`upper(trim(${itemRequests.department}))`, user.department.trim().toUpperCase()),
+        or(
+          eq(itemRequests.requested_by, user.name),
+          and(isNull(itemRequests.requested_by), eq(itemRequests.created_by, user.id))
+        )
+      )
+    : departmentScope
+      ? eq(sql`upper(trim(${itemRequests.department}))`, user.department.trim().toUpperCase())
+      : undefined;
+  const serviceAccessFilter = ownScope
+    ? and(
+        eq(sql`upper(trim(${serviceRequests.department}))`, user.department.trim().toUpperCase()),
+        or(
+          eq(serviceRequests.requested_by, user.name),
+          and(isNull(serviceRequests.requested_by), eq(serviceRequests.created_by, user.id))
+        )
+      )
+    : departmentScope
+      ? eq(sql`upper(trim(${serviceRequests.department}))`, user.department.trim().toUpperCase())
+      : undefined;
   const [itemHeaders, serviceHeaders] = await Promise.all([
     db
-      .select()
+      .select({
+        id: itemRequests.id,
+        serial: itemRequests.serial,
+        created_at: itemRequests.created_at,
+        created_by: itemRequests.created_by,
+        requested_by: itemRequests.requested_by,
+        department: itemRequests.department,
+        purpose: itemRequests.purpose,
+        remarks: itemRequests.remarks,
+        status: itemRequests.status,
+        request_type: itemRequests.request_type,
+        supervisor_status: itemRequests.supervisor_status,
+        supervisor_approved_by: itemRequests.supervisor_approved_by,
+        supervisor_approved_at: itemRequests.supervisor_approved_at,
+        custodian_status: itemRequests.custodian_status,
+        custodian_approved_by: itemRequests.custodian_approved_by,
+        custodian_approved_at: itemRequests.custodian_approved_at,
+        rejection_comment: itemRequests.rejection_comment,
+        attachment: itemRequests.attachment,
+        attachment_name: itemRequests.attachment_name,
+        attachment_size: itemRequests.attachment_size,
+      })
       .from(itemRequests)
       .where(
-        ownScope
-          ? and(
-              eq(itemRequests.department, user.department),
-              or(
-                eq(itemRequests.requested_by, user.name),
-                and(isNull(itemRequests.requested_by), eq(itemRequests.created_by, user.id))
-              )
-            )
-        : departmentScope
-          ? eq(itemRequests.department, user.department)
-          : undefined
+        requestId === undefined
+          ? itemAccessFilter
+          : and(eq(itemRequests.id, requestId), itemAccessFilter)
       )
       .orderBy(desc(itemRequests.created_at)),
     db
-      .select()
+      .select({
+        id: serviceRequests.id,
+        serial: serviceRequests.serial,
+        created_at: serviceRequests.created_at,
+        created_by: serviceRequests.created_by,
+        requested_by: serviceRequests.requested_by,
+        department: serviceRequests.department,
+        purpose: serviceRequests.purpose,
+        remarks: serviceRequests.remarks,
+        status: serviceRequests.status,
+        supervisor_status: serviceRequests.supervisor_status,
+        supervisor_approved_by: serviceRequests.supervisor_approved_by,
+        supervisor_approved_at: serviceRequests.supervisor_approved_at,
+        custodian_status: serviceRequests.custodian_status,
+        custodian_approved_by: serviceRequests.custodian_approved_by,
+        custodian_approved_at: serviceRequests.custodian_approved_at,
+        rejection_comment: serviceRequests.rejection_comment,
+        pr_number: serviceRequests.pr_number,
+        pr_status: serviceRequests.pr_status,
+      })
       .from(serviceRequests)
       .where(
-        ownScope
-          ? and(
-              eq(serviceRequests.department, user.department),
-              or(
-                eq(serviceRequests.requested_by, user.name),
-                and(isNull(serviceRequests.requested_by), eq(serviceRequests.created_by, user.id))
-              )
-            )
-          : departmentScope
-            ? eq(serviceRequests.department, user.department)
-            : undefined
+        requestId === undefined
+          ? serviceAccessFilter
+          : and(eq(serviceRequests.id, requestId), serviceAccessFilter)
       )
       .orderBy(desc(serviceRequests.created_at)),
   ]);
@@ -101,6 +160,23 @@ async function loadRequestLists(
           .orderBy(asc(serviceItems.id))
       : Promise.resolve([]),
   ]);
+  const itemLineIds = itemLines.map((item) => item.id);
+  const auditRows = itemLineIds.length
+    ? await db
+        .select({
+          id: itemIssuanceAudits.id,
+          item_id: itemIssuanceAudits.item_request_item_id,
+          issuance_number: itemIssuanceAudits.issuance_number,
+          transaction_type: itemIssuanceAudits.transaction_type,
+          quantity_issued: itemIssuanceAudits.quantity_issued,
+          remaining_balance: itemIssuanceAudits.remaining_balance,
+          custodian_name: itemIssuanceAudits.custodian_name,
+          issued_at: itemIssuanceAudits.issued_at,
+        })
+        .from(itemIssuanceAudits)
+        .where(inArray(itemIssuanceAudits.item_request_item_id, itemLineIds))
+        .orderBy(asc(itemIssuanceAudits.issued_at), asc(itemIssuanceAudits.id))
+    : [];
 
   const referencedUserIds = [
     ...new Set(
@@ -139,6 +215,27 @@ async function loadRequestLists(
     lines.push(service);
     serviceLinesByRequest.set(service.service_request_id, lines);
   }
+  const auditsByItemId = new Map<number, ItemAudit[]>();
+  for (const audit of auditRows) {
+    if (
+      audit.transaction_type !== "OUT" &&
+      audit.transaction_type !== "PARTIAL" &&
+      audit.transaction_type !== "FULL"
+    ) {
+      continue;
+    }
+    const audits = auditsByItemId.get(audit.item_id) ?? [];
+    audits.push({
+      id: audit.id,
+      issuance_number: audit.issuance_number,
+      transaction_type: audit.transaction_type,
+      quantity_issued: audit.quantity_issued,
+      remaining_balance: audit.remaining_balance,
+      custodian_name: audit.custodian_name,
+      issued_at: audit.issued_at,
+    });
+    auditsByItemId.set(audit.item_id, audits);
+  }
 
   const mappedItemRequests: ItemRequest[] = itemHeaders.map((request) => {
     const lines = itemLinesByRequest.get(request.id) ?? [];
@@ -162,6 +259,7 @@ async function loadRequestLists(
       purpose: request.purpose,
       remarks: request.remarks ?? "",
       status: request.status,
+      request_type: request.request_type,
       supervisor_status: request.supervisor_status ?? undefined,
       supervisor_name: supervisor?.name,
       supervisor_approved_by_name: supervisor?.name,
@@ -175,6 +273,7 @@ async function loadRequestLists(
       rejection_comment: request.rejection_comment ?? undefined,
       attachment: request.attachment ?? undefined,
       attachment_name: request.attachment_name ?? undefined,
+      attachment_size: request.attachment_size ?? undefined,
       all_items_served:
         lines.length > 0 && lines.every((item) => (item.quantity_out ?? 0) >= item.quantity),
       has_held_item: heldLines.length > 0,
@@ -198,7 +297,8 @@ async function loadRequestLists(
         issuance_number: item.issuance_number ?? undefined,
         quantity_delivered: item.quantity_delivered ?? undefined,
         quantity_out: item.quantity_out ?? undefined,
-        qty_balance: item.qty_balance,
+        qty_balance: getItemBalance(item),
+        audits: auditsByItemId.get(item.id) ?? [],
         hold_edited: item.hold_edited,
         purchasing_transaction: item.purchasing_transaction,
         amount: item.amount,
@@ -266,6 +366,26 @@ export async function getRequestListsAction(): Promise<RequestListsResult> {
 
 export async function getMyRequestListsAction(): Promise<RequestListsResult> {
   return loadRequestLists("own");
+}
+
+function assertValidRequestId(id: number): void {
+  if (!Number.isSafeInteger(id) || id < 1) throw new Error("Invalid request ID.");
+}
+
+export async function getItemRequestByIdAction(id: number): Promise<ItemRequest> {
+  assertValidRequestId(id);
+  const { itemRequests } = await loadRequestLists("all", false, id);
+  const request = itemRequests[0];
+  if (!request) throw new Error("Item request not found or access denied.");
+  return request;
+}
+
+export async function getServiceRequestByIdAction(id: number): Promise<ServiceRequest> {
+  assertValidRequestId(id);
+  const { serviceRequests } = await loadRequestLists("all", false, id);
+  const request = serviceRequests[0];
+  if (!request) throw new Error("Service request not found or access denied.");
+  return request;
 }
 
 export interface DashboardRequestCounts {

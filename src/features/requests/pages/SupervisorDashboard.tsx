@@ -3,6 +3,7 @@ import Layout from "@shared/components/Layout";
 import Modal from "@shared/components/Modal";
 import DeleteReasonModal from "@shared/components/DeleteReasonModal";
 import ApprovalStatusPanel from "@features/requests/components/ApprovalStatusPanel";
+import ReimbursementAttachmentLink from "@features/requests/components/ReimbursementAttachmentLink";
 import { useAuth } from "@app/providers/AuthProvider";
 import { sanitizeUserInput } from "@shared/utils/sanitize";
 import { getBsStatusBadgeClass, formatStatusLabel, getItemStatusText, getItemStatusBadgeClass, getHeldServiceCount, hasEditedHeldService } from "@shared/utils/status";
@@ -17,6 +18,7 @@ import IssuanceHistory from "@features/requests/components/IssuanceHistory";
 import { ItemExistenceBadge } from "@shared/components/ItemExistenceStatus";
 import { useItemCatalogNames } from "@features/item-catalog/hooks/useItemCatalogNames";
 import { getItemExistenceStatus } from "@shared/utils/itemExistenceStatus";
+import { getItemBalance } from "@shared/utils/itemBalance";
 import { formatMilitaryTime, formatMilitaryDateTime } from "@shared/utils/format";
 import DateRangeFilter from "@shared/components/DateRangeFilter";
 import type { ItemRow, ServiceRow } from "@shared/types";
@@ -313,7 +315,7 @@ const SupervisorDashboard: React.FC = () => {
                                       Same data and layout as the other dashboards' Details column, so
                                       "who received it and when" is visible everywhere the item is. */}
                                   <td data-label="Balance" style={{ padding: "12px", border: "none" }}>
-                                    {item.qty_balance ?? (item.quantity - (item.quantity_delivered || 0))}
+                                    {getItemBalance(item)}
                                   </td>
                                   <td data-label="Existence Status" style={{ padding: "12px", border: "none" }}>
                                     <ItemExistenceBadge status={getItemExistenceStatus(item.item_name, itemCatalogNames)} />
@@ -328,6 +330,18 @@ const SupervisorDashboard: React.FC = () => {
                                       <div className="table-responsive">
                                         <table className="table table-sm mb-0" style={{ borderCollapse: "separate", borderSpacing: "0", border: "1px solid #dee2e6", borderRadius: "6px", overflow: "hidden", backgroundColor: "#fafbfc" }}>
                                           <tbody>
+                                            {item.delivery_status === "OUT" && (
+                                              <>
+                                                <tr style={{ borderBottom: "1px solid #dee2e6" }}>
+                                                  <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Issuance No.</td>
+                                                  <td style={{ padding: "8px 12px", border: "none", color: "#212529" }}>{item.issuance_number || "Not issued yet"}</td>
+                                                </tr>
+                                                <tr style={{ borderBottom: "1px solid #dee2e6" }}>
+                                                  <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Qty Out</td>
+                                                  <td style={{ padding: "8px 12px", border: "none", color: "#212529" }}>{item.quantity_out ?? 0} / {item.quantity}</td>
+                                                </tr>
+                                              </>
+                                            )}
                                             {(item.delivery_status === "PURCHASE REQUEST" || item.delivery_status === "URGENT") && (
                                               <tr style={{ borderBottom: "1px solid #dee2e6" }}>
                                                 <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>{item.delivery_status === "URGENT" ? "Date Needed" : "PR Number"}</td>
@@ -466,7 +480,6 @@ const SupervisorDashboard: React.FC = () => {
                             {row.remarks && (
                               <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
                             )}
-
                             <table className="table table-sm mt-2 mb-3">
                               <thead>
                                 <tr>
@@ -604,6 +617,12 @@ const SupervisorDashboard: React.FC = () => {
                             {row.remarks && (
                               <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
                             )}
+
+                            <ReimbursementAttachmentLink
+                              requestId={row.id}
+                              attachmentName={row.attachment_name}
+                              attachmentSize={row.attachment_size}
+                            />
 
                             <table className="table table-sm mt-2 mb-3">
                               <thead>

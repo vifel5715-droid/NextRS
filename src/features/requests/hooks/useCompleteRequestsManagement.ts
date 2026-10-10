@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from "../../../services/api";
 import { getRequestListsAction } from "@server/actions/request-lists";
+import { updateRequestItemAction } from "@server/actions/update-request-item";
 import type { ItemRequest, ServiceRequest, RequestDetail, ItemRow, ServiceRow, RequestTab, FieldValue } from "@shared/types";
 import { useRequestsChanged, type RequestChangedPayload } from "@shared/hooks/useRequestsChanged";
 import { upsertById, removeById } from "@shared/utils/reconcileRequests";
@@ -232,7 +233,7 @@ export const useCompleteRequestsManagement = () => {
         data.quantity_out = releasedNow;
       }
       if (changes.length > 0) data.adjustment_remarks = adjustmentRemarks;
-      await statusAPI.updateItem(item.id!, data);
+      await updateRequestItemAction(item.id!, data);
       const refreshed = await itemRequestAPI.getById(requestId);
       setRequestDetails((prev) => new Map(prev).set(makeRequestKey("item", requestId), refreshed.data));
       log.info("Item #" + itemId, "saved");

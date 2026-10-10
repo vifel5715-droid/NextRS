@@ -25,34 +25,27 @@ The Drizzle schema and a reusable server-only PostgreSQL pool are in
 and a signed HTTP-only session cookie. Item-catalog and option-list reads,
 item/service and urgent/reimbursement request lists, dashboard counts,
 admin user/role lists, outed items, and adjustment/deletion history also use
-authenticated Server Actions. Pending purchase-item counts also use an
-authenticated Server Action; pending-service lists now use the same
-authenticated request-list Server Action. Delivered-item history also uses an
-authenticated Server Action. Most request, admin, and inventory mutations
-and some detail reads still use REST clients and are not migrated yet; those
-API routes return HTTP 501 until implemented as Server Actions. The client
-does not attempt a Socket.IO connection because no realtime server is
-deployed; open dashboards do not receive changes made by other users until
-they reload.
+authenticated Server Actions. The client does not attempt a Socket.IO
+connection because no realtime server is deployed; open dashboards do not
+receive changes made by other users until they reload.
 
-## Database setup and migrations
+## Database setup
 
-The PostgreSQL schema, bootstrap scripts, seed data, and existing one-off
-migrations are available here:
+The PostgreSQL schema, database bootstrap, and seed data are available here:
 
 - Schema and idempotent create-table SQL: `src/server/db/schema.ts` and
   `src/database/tables.ts`
-- Database initialization and demo-user/role seeding: `src/scripts/init-db.ts`
-- Existing schema/data migration scripts: `src/scripts/migrate/`
+- Database initialization, existing-schema upgrades, and reference-data
+  imports: `src/scripts/init-db.ts` and `src/database/`
 - Drizzle Kit config: `drizzle.config.ts`
 
 Set `DATABASE_URL` in `.env.local` (or provide it in the shell environment) as
 a PostgreSQL URL, such as
 `postgresql://postgres:<URL-encoded-password>@localhost:5432/RS_DB?connect_timeout=10`.
 Percent-encode reserved characters in the username or password. Then run
-this command from the project directory to create the current tables, apply
-the tracked schema upgrades, seed built-in roles and options, merge missing
-catalog items, and finish indexes and demo-user setup:
+this command from the project directory to create the current tables, add
+missing columns to existing tables, seed built-in roles and options, add
+missing catalog items, create indexes, and seed demo users:
 
 ```powershell
 npm run db:setup
@@ -60,40 +53,19 @@ npm run db:setup
 
 Before running this against Railway or any production database, take a
 database backup and set `INIT_DB_DEMO_PASSWORD` to a strong, unique password.
-The seeded demo accounts share that password; existing accounts are never
-reset. The setup command records completed migration steps in
-`nextjs_schema_migrations` and stops on the first error. It is safe to rerun
-the curated sequence, but a failed step must be corrected before retrying.
+The seeded demo accounts share that password; existing accounts and their
+passwords are never reset. `npm run db:setup` and `npm run init-db` run the
+same idempotent initializer; there is no separate migration runner or
+migration-history table. Existing request, catalog, and administrator data
+is preserved. Catalog loading is additive and never truncates the catalog.
+The initializer does not run destructive operations such as table drops,
+catalog replacement, or historical serial rewrites. If legacy data prevents
+a foreign key or unique index from being created, setup stops with the
+database error rather than deleting records automatically.
 
-The command deliberately does not run operations that can discard data or
-rewrite administrator choices: catalog replacement, legacy attachment-file
-migration, service-field drops, adjustment-department rewrites, and
-admin-permission backfills remain manual. Legacy serial normalization and
-adjustment-serial generation are also left as targeted operations because
-they rewrite historical identifiers and need duplicate/sequence checks. The
-missing historical `migrate:import-item-catalog-2026-08` target was removed;
-the setup command uses an additive catalog merge instead, preserving
-existing item records.
-Unique-index or foreign-key creation can still stop if legacy data contains
-duplicates or orphan rows; resolve those explicitly rather than deleting
-production data automatically.
-
-This command prepares the database only. It does not implement the remaining
-unmigrated REST endpoints, which still return HTTP 501 until converted to
-Server Actions.
-
-The individual maintenance commands are retained for reviewed, targeted
-operations. Do not use `migrate:replace-item-catalog-2026-09`, `drop-tables`,
-or `clear-requests` unless the corresponding data loss is explicitly
-intended. `npm run init-db` remains available for standalone table/index and
-seed initialization.
-
-**Back up the database first.** Some retained maintenance commands are
-destructive: `migrate:replace-item-catalog-2026-09` truncates and replaces the
-item catalog; `drop-tables` removes tables; `clear-requests` deletes request
-data. Do not run these against production unless that operation is intended.
-The optional `INIT_DB_DEMO_PASSWORD` and `ADMIN_RESET_PASSWORD` variables are
-for database scripts only and must not use a `NEXT_PUBLIC_` prefix.
+**Back up the database first.** The optional `INIT_DB_DEMO_PASSWORD` and
+`ADMIN_RESET_PASSWORD` variables are for database scripts only and must not
+use a `NEXT_PUBLIC_` prefix.
 
 ## Build and run
 

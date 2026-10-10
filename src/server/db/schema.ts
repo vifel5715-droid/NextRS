@@ -48,8 +48,8 @@ export const itemRequests = pgTable("item_requests", {
   // ARCH: `attachment` is the legacy on-disk filename — dev/small-hosting
   // deployments have no persistent disk, so every attachment was lost on
   // every restart/redeploy. New uploads go straight into `attachment_data`
-  // (bytea) instead; `attachment` is kept only so already-migrated rows
-  // (see scripts/migrate/attachment-db-storage.ts) still resolve. Total
+  // (bytea) instead; `attachment` is kept only so rows with legacy file
+  // references still resolve. Total
   // attachment bytes are capped — see lib/attachmentStorage.ts.
   attachment: text("attachment"),
   attachment_name: text("attachment_name"),
@@ -381,8 +381,7 @@ export const optionLists = pgTable("option_lists", {
  * reset route (see middleware/permission.ts's editPermissionMiddleware) —
  * a role, built-in or custom, needs Edit on the matching sidebar page to
  * use that page's write actions. Each built-in role's pre-existing write
- * access was backfilled onto its matching Edit checkbox (see
- * scripts/migrate/backfill-write-edit-permissions.ts) so nothing changed
+ * access was backfilled onto its matching Edit checkbox so nothing changed
  * for them; an admin can now grant or revoke any of it from the Roles
  * screen. Two deliberate exceptions stay hardcoded to literal role names
  * rather than can_edit:
@@ -639,6 +638,9 @@ export const reimbursementRequests = pgTable("reimbursement_requests", {
   // Who the requester is being reimbursed for paying — one per request, not
   // per item, since a reimbursement is normally for a single purchase/trip.
   supplier: text("supplier").notNull(),
+  attachment_name: text("attachment_name"),
+  attachment_data: bytea("attachment_data"),
+  attachment_size: integer("attachment_size"),
   // "pending" | "approved" | "rejected" — Supervisor/Manager's review,
   // evaluated first.
   supervisor_status: text("supervisor_status").notNull().default("pending"),

@@ -1,10 +1,8 @@
 /**
  * ARCH: The indexes declared in schema.ts, as runnable SQL.
  *
- * Single source for both `npm run init-db` (fresh database) and
- * `npm run migrate:add-indexes` (existing database). They used to keep separate
- * lists, which is how item_issuance_audits ended up indexed in one and not the
- * other. Names must match schema.ts exactly, or drizzle considers them missing.
+ * Single source for fresh databases and existing-schema upgrades. Names must
+ * match schema.ts exactly, or Drizzle considers them missing.
  */
 export const INDEX_STATEMENTS: Array<{ label: string; sql: string }> = [
   { label: "item_requests.department", sql: "CREATE INDEX IF NOT EXISTS item_requests_department_idx ON item_requests (department)" },

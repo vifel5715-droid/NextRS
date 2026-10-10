@@ -1,5 +1,9 @@
 import axios from "axios";
-import type { ItemCatalogEntry, OptionListEntry, ApprovalLevel, RoleWithPermissions, RolePermissionGrant, UrgentRequest, UrgentRequestItem, PaymentRequestForm, ItemPaymentRequestForm, SubmittedPaymentRequest, ReimbursementRequest, ReimbursementRequestItem, PettyCashTransaction } from "@shared/types";
+import type { ItemCatalogEntry, OptionListEntry, ApprovalLevel, RoleWithPermissions, RolePermissionGrant, UrgentRequest, UrgentRequestItem, PaymentRequestForm, ItemPaymentRequestForm, SubmittedPaymentRequest, ReimbursementRequest, PettyCashTransaction, RequestDetail } from "@shared/types";
+import { getItemRequestByIdAction, getServiceRequestByIdAction } from "@server/actions/request-lists";
+import { getAttachmentStorageUsageAction } from "@server/actions/attachment-storage";
+import { createReimbursementRequestAction } from "@server/actions/create-reimbursement-request";
+import { getAdjustmentLogForRequestAction } from "@server/actions/history-reads";
 
 const API_BASE_URL = "/api";
 
@@ -274,7 +278,10 @@ const toUploadProgressConfig = (onUploadProgress?: UploadProgressHandler) =>
     : undefined;
 
 export const itemRequestAPI = {
-  getById: (id: number) => api.get(`/item-request/${id}`),
+  getById: async (id: number): Promise<{ data: RequestDetail }> => {
+    const request = await getItemRequestByIdAction(id);
+    return { data: { ...request } };
+  },
   update: (id: number, data: RequestPayload) => api.put(`/item-request/${id}`, data),
   delete: (id: number, reason: string) => api.delete(`/item-request/${id}`, { data: { reason } }),
   deleteItem: (id: number, reason: string) => api.delete(`/item-request/item/${id}`, { data: { reason } }),
@@ -309,7 +316,9 @@ export const itemRequestAPI = {
     api.put<ItemPaymentRequestForm>(`/item-request/${requestId}/payment-request-form/submit`, {}),
   getSubmittedPaymentRequestForms: () =>
     api.get<SubmittedPaymentRequest[]>("/item-request/payment-request-forms/submitted"),
-  getStorageUsage: () => api.get<{ used: number; max: number }>("/item-request/storage-usage"),
+  getStorageUsage: async (): Promise<{ data: { used: number; max: number } }> => ({
+    data: await getAttachmentStorageUsageAction(),
+  }),
   downloadAttachment: (id: number) => api.get(`/item-request/${id}/attachment`, { responseType: "blob" }),
   replaceAttachment: (id: number, file: File, onUploadProgress?: UploadProgressHandler) => {
     const formData = new FormData();
@@ -324,7 +333,10 @@ export const itemRequestAPI = {
 
 export const serviceRequestAPI = {
   create: (data: RequestPayload) => api.post("/service-request", data),
-  getById: (id: number) => api.get(`/service-request/${id}`),
+  getById: async (id: number): Promise<{ data: RequestDetail }> => {
+    const request = await getServiceRequestByIdAction(id);
+    return { data: { ...request } };
+  },
   update: (id: number, data: RequestPayload) => api.put(`/service-request/${id}`, data),
   getPendingCount: (params?: { startDate?: string; endDate?: string }) =>
     api.get<{ count: number }>("/service-request/pending-count", { params }),
@@ -360,8 +372,9 @@ export interface AdjustmentLogEntry {
 }
 
 export const adjustmentLogAPI = {
-  getForRequest: (requestId: number, requestType: "item" | "service" | "petty_cash" = "item") =>
-    api.get<AdjustmentLogEntry[]>(`/adjustment-log/${requestType}/${requestId}`),
+  getForRequest: async (requestId: number, requestType: "item" | "service" | "petty_cash" = "item") => ({
+    data: await getAdjustmentLogForRequestAction(requestId, requestType),
+  }),
 };
 
 export interface ItemCatalogPayload {
@@ -438,8 +451,7 @@ export const reimbursementRequestAPI = {
   // Supplier and each item's Amount are sent up front, unlike
   // urgentRequestAPI.create — there's no later Purchaser classification
   // step for this workflow.
-  create: (data: { department: string; requested_by?: string; purpose: string; remarks?: string; date_needed?: string; supplier: string; items: Array<Omit<ReimbursementRequestItem, "amount"> & { amount: number }> }) =>
-    api.post<ReimbursementRequest>("/reimbursement-request", data),
+  create: (formData: FormData) => createReimbursementRequestAction(formData),
   getById: (id: number) => api.get<ReimbursementRequest>(`/reimbursement-request/${id}`),
   reviewAsSupervisor: (id: number, data: { decision: "approved" | "rejected"; rejection_comment?: string }) =>
     api.put<ReimbursementRequest>(`/reimbursement-request/${id}/supervisor-review`, data),

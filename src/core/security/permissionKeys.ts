@@ -7,9 +7,8 @@
  *
  * Each key maps to exactly one sidebar section / page, mirroring the current
  * hardcoded role arrays in client/src/components/Sidebar.tsx and
- * client/src/App.tsx's route allowedRoles — see
- * scripts/migrate/add-roles.ts's BUILT_IN_ROLE_PERMISSIONS for how the 7
- * existing roles are seeded to reproduce today's access exactly.
+ * client/src/App.tsx's route allowedRoles. Built-in role grants are seeded
+ * in database/seedRoles.ts to reproduce today's access exactly.
  *
  * Client mirror: client/src/constants/permissions.ts — keep both in sync by
  * hand (no shared package between the two workspaces).

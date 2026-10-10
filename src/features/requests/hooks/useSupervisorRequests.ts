@@ -1,8 +1,9 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from '@shared/next-router';
 import { useAuth } from "@app/providers/AuthProvider";
-import { itemRequestAPI, serviceRequestAPI, statusAPI } from '../../../services/api';
+import { itemRequestAPI, serviceRequestAPI } from '../../../services/api';
 import { getRequestListsAction } from "@server/actions/request-lists";
+import { reviewSupervisorRequestAction } from "@server/actions/supervisor-review";
 import { sanitizeUserInput } from '@shared/utils/sanitize';
 import { createLogger } from '@shared/utils/logger';
 import { makeRequestKey } from "@shared/utils/requestKey";
@@ -299,12 +300,12 @@ export const useSupervisorRequests = () => {
     }
     log.info("Updating request #" + selectedRequest.id, `to ${newStatus} (${activeTab})`);
     try {
-      const statusPayload = {
-        status: newStatus,
-        rejection_comment: newStatus === 'rejected' ? sanitizeUserInput(rejectionComment) : undefined,
-      };
-      if (activeTab === 'item') await statusAPI.supervisorApproveItem(selectedRequest.id, statusPayload);
-      else await statusAPI.supervisorApproveService(selectedRequest.id, statusPayload);
+      await reviewSupervisorRequestAction({
+        type: activeTab,
+        id: selectedRequest.id,
+        decision: newStatus === "rejected" ? "rejected" : "approved",
+        rejectionComment: newStatus === "rejected" ? sanitizeUserInput(rejectionComment) : undefined,
+      });
       log.info("Request #" + selectedRequest.id, "status updated to", newStatus);
 
       setShowModal(false);
@@ -321,9 +322,9 @@ export const useSupervisorRequests = () => {
         return next;
       });
       loadPendingRequests(true);
-    } catch {
+    } catch (error: unknown) {
       log.error("Failed to update status for request #" + selectedRequest.id);
-      console.error('Error updating status');
+      alert(error instanceof Error ? error.message : "Failed to update request status.");
     }
   };
 

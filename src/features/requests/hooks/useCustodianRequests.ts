@@ -2,7 +2,7 @@ import { useEffect } from 'react';
 import { useRequestManagement } from './useRequestManagement';
 
 export const useCustodianRequests = () => {
-  const management = useRequestManagement();
+  const management = useRequestManagement({ supervisorApprovedOnly: true });
   const { loadItemRequests, loadServiceRequests } = management;
 
   // Both lists load together on mount, not just whichever tab is active —

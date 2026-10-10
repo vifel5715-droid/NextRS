@@ -18,6 +18,7 @@ import SearchableCombobox from "@shared/components/SearchableCombobox";
 import { ItemExistenceBadge } from "@shared/components/ItemExistenceStatus";
 import { useItemCatalogNames } from "@features/item-catalog/hooks/useItemCatalogNames";
 import { getItemExistenceStatus } from "@shared/utils/itemExistenceStatus";
+import { getItemBalance } from "@shared/utils/itemBalance";
 import { formatMilitaryTime } from "@shared/utils/format";
 import DateRangeFilter from "@shared/components/DateRangeFilter";
 import ListToolbar from "@shared/components/ListToolbar";
@@ -454,7 +455,14 @@ const CompleteRequestsPage: React.FC = () => {
                                     />
                                   ) : sanitizeUserInput(item.machine_code || "N/A")}
                                 </td>
-                                <td data-label="Balance" style={{ padding: "12px", border: "none" }}>{item.qty_balance ?? (item.quantity - (item.quantity_delivered || 0))}</td>
+                                <td data-label="Balance" style={{ padding: "12px", border: "none" }}>
+                                  {getItemBalance(
+                                    item,
+                                    item.issuance_number?.trim()
+                                      ? item.quantity_out_now ?? outstandingToRelease
+                                      : 0
+                                  )}
+                                </td>
                                 <td data-label="Existence Status" style={{ padding: "12px", border: "none" }}>
                                   <ItemExistenceBadge status={existenceStatus} />
                                 </td>
@@ -586,7 +594,7 @@ const CompleteRequestsPage: React.FC = () => {
                               <td style={{ padding: "12px", border: "none" }}>{sanitizeUserInput(item.uom || "")}</td>
                               <td style={{ padding: "12px", border: "none" }}>{sanitizeUserInput(item.remarks || "N/A")}</td>
                               <td style={{ padding: "12px", border: "none" }}>{sanitizeUserInput(item.machine_code || "N/A")}</td>
-                              <td style={{ padding: "12px", border: "none" }}>{item.qty_balance ?? (item.quantity - (item.quantity_delivered || 0))}</td>
+                              <td style={{ padding: "12px", border: "none" }}>{getItemBalance(item)}</td>
                               <td style={{ padding: "12px", border: "none" }}>
                                 <ItemExistenceBadge status={getItemExistenceStatus(item.item_name, itemCatalogNames)} />
                               </td>
