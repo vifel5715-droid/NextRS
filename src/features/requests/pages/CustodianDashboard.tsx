@@ -528,11 +528,11 @@ const CustodianDashboard: React.FC = () => {
               <div>Item Name</div>
               <div>Quantity</div>
               <div>UoM</div>
+              <div>Status</div>
               <div>Remarks</div>
               <div>Machine Code</div>
               <div>Balance</div>
               <div>Existence Status</div>
-              <div>Status</div>
               <div>Actions</div>
             </div>
             {items.map((item, index) => {
@@ -628,32 +628,6 @@ const CustodianDashboard: React.FC = () => {
                         </select>
                       ) : item.uom}
                     </div>
-                    <div data-label="Remarks">{sanitizeUserInput(item.remarks || "N/A")}</div>
-                    <div data-label="Machine Code">
-                      {isAdmin && !isHeldLocked ? (
-                        <SearchableCombobox
-                          className="form-control form-control-sm text-uppercase"
-                          value={item.machine_code || ""}
-                          onChange={(value) => updateItemField(row.id, index, "machine_code", value)}
-                          options={machineCodeOptions.options}
-                          descriptions={machineCodeOptions.descriptions}
-                          placeholder="Search or type…"
-                          noResultsText="No record found"
-                          onEnter={item.id !== undefined ? () => handleSaveItem(row.id, item.id!) : undefined}
-                        />
-                      ) : sanitizeUserInput(item.machine_code || "N/A")}
-                    </div>
-                    <div data-label="Balance">
-                      {getItemBalance(
-                        item,
-                        item.issuance_number?.trim()
-                          ? item.quantity_out_now ?? outstandingToRelease
-                          : 0
-                      )}
-                    </div>
-                    <div data-label="Existence Status">
-                      <ItemExistenceBadge status={existenceStatus} />
-                    </div>
                     <div data-label="Status">
                       {/* Custodian keeps full control of Status even once an item is HOLD —
                           only Status; item name/qty/delete stay locked (see isHeldLocked
@@ -694,6 +668,27 @@ const CustodianDashboard: React.FC = () => {
                           />
                         )}
                       </div>
+                    </div>
+                    <div data-label="Remarks">{sanitizeUserInput(item.remarks || "N/A")}</div>
+                    <div data-label="Machine Code">
+                      {isAdmin && !isHeldLocked ? (
+                        <SearchableCombobox
+                          className="form-control form-control-sm text-uppercase"
+                          value={item.machine_code || ""}
+                          onChange={(value) => updateItemField(row.id, index, "machine_code", value)}
+                          options={machineCodeOptions.options}
+                          descriptions={machineCodeOptions.descriptions}
+                          placeholder="Search or type…"
+                          noResultsText="No record found"
+                          onEnter={item.id !== undefined ? () => handleSaveItem(row.id, item.id!) : undefined}
+                        />
+                      ) : sanitizeUserInput(item.machine_code || "N/A")}
+                    </div>
+                    <div data-label="Balance">
+                      {getItemBalance(item, item.quantity_out_now ?? 0)}
+                    </div>
+                    <div data-label="Existence Status">
+                      <ItemExistenceBadge status={existenceStatus} />
                     </div>
                     <div data-label="Actions">
                       <div className="d-flex gap-1">
@@ -739,7 +734,7 @@ const CustodianDashboard: React.FC = () => {
                                     <tr style={{ borderBottom: "1px solid #dee2e6" }}>
                                       <td style={{ width: "110px", padding: "12px 16px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Qty Out</td>
                                       <td style={{ padding: "12px 16px", border: "none" }}>
-                                        <input type="number" min="0" max={outstandingToRelease} className="form-control form-control-sm" placeholder={`Qty Out (max ${outstandingToRelease})`} value={item.quantity_out_now ?? outstandingToRelease} disabled={!isApproved} onChange={(e) => updateSelectedItemField(row.id, index, item, items, "quantity_out_now", e.target.value === "" ? undefined : parseInt(e.target.value) || 0)} />
+                                        <input type="number" min="0" max={outstandingToRelease} className="form-control form-control-sm" placeholder={`Qty Out (max ${outstandingToRelease})`} value={item.quantity_out_now ?? ""} disabled={!isApproved} onChange={(e) => updateSelectedItemField(row.id, index, item, items, "quantity_out_now", e.target.value === "" ? undefined : parseInt(e.target.value) || 0)} />
                                       </td>
                                     </tr>
                               </>

@@ -440,11 +440,13 @@
   background: #f8fafc;
   border-radius: 12px;
   padding: 20px;
+  overflow-x: auto;
 }
 
 .itemCardsHeader {
   display: grid;
   grid-template-columns: 32px 28px minmax(200px, 1.6fr) 90px 90px 110px 130px 70px 130px 190px 110px;
+  min-width: 1200px;
   gap: 12px;
   padding: 0 16px 10px;
   font-size: 11px;
@@ -476,6 +478,7 @@
 .itemCardRow {
   display: grid;
   grid-template-columns: 32px 28px minmax(200px, 1.6fr) 90px 90px 110px 130px 70px 130px 190px 110px;
+  min-width: 1200px;
   gap: 12px;
   align-items: center;
 }
@@ -487,12 +490,17 @@
 }
 
 @media (max-width: 767.98px) {
+  .itemCardsPanel {
+    overflow-x: visible;
+  }
+
   .itemCardsHeader {
     display: none;
   }
 
   .itemCardRow {
     display: flex;
+    min-width: 0;
     flex-direction: column;
     align-items: stretch;
     gap: 10px;

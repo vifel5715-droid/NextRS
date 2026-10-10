@@ -397,14 +397,10 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
     if (deliveredNow !== undefined && deliveredNow !== null) {
       data.quantity_delivered = deliveredNow;
     }
-    // Qty Out defaults to the item's balance, so an untouched OUT row
-    // releases what is left. Gated on an issuance number being present:
-    // without it the release would be rejected, which would block saving
-    // an item that was only just switched to OUT.
-    const outstandingToRelease = Math.max(0, (item.quantity || 0) - (item.quantity_out || 0));
-    const releasedNow = item.quantity_out_now ?? (
-      item.delivery_status === 'OUT' && item.issuance_number ? outstandingToRelease : undefined
-    );
+    // Only release the quantity the custodian explicitly entered. Defaulting
+    // an untouched Qty Out field to the full remainder made a status-only save
+    // release all pending stock.
+    const releasedNow = item.quantity_out_now;
     if (releasedNow !== undefined && releasedNow !== null) {
       data.quantity_out = releasedNow;
     }
