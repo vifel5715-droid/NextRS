@@ -39,6 +39,10 @@ import styles from "./Dashboard.module.css";
 
 const log = createLogger("StaffDashboard");
 
+/** Urgent/Reimbursement share one Supervisor/Manager stage — name it after whoever actually acted on it. */
+const supervisorStageLabel = (approverRole?: string) =>
+  approverRole?.toLowerCase().trim() === "manager" ? "Manager" : "Supervisor";
+
 const StaffDashboard: React.FC = () => {
   const { user } = useAuth();
   // Only a secretary submits requests on someone else's behalf — everyone
@@ -1464,13 +1468,13 @@ const StaffDashboard: React.FC = () => {
                     <div data-label="Status">
                       <span className={`badge ${getBsStatusBadgeClass(row.stockroom_status === "approved" ? "approved" : row.supervisor_status)}`}>
                         {row.supervisor_status === "rejected"
-                          ? "Declined (Supervisor)"
+                          ? `Declined (${supervisorStageLabel(row.supervisor_approved_by_role)})`
                           : row.stockroom_status === "rejected"
                           ? "Declined (Stockroom)"
                           : row.stockroom_status === "approved"
                           ? "Approved"
                           : row.supervisor_status === "approved"
-                          ? "Approved (Supervisor)"
+                          ? `Approved (${supervisorStageLabel(row.supervisor_approved_by_role)})`
                           : "Pending"}
                       </span>
                     </div>
@@ -1664,7 +1668,7 @@ const StaffDashboard: React.FC = () => {
                     <div data-label="Status">
                       <span className={`badge ${getBsStatusBadgeClass(row.ap_status === "closed" ? "closed" : row.ap_status === "approved" ? "approved" : row.purchaser_status === "approved" ? "approved" : row.supervisor_status)}`}>
                         {row.supervisor_status === "rejected"
-                          ? "Declined (Supervisor)"
+                          ? `Declined (${supervisorStageLabel(row.supervisor_approved_by_role)})`
                           : row.purchaser_status === "rejected"
                           ? "Declined (Purchaser)"
                           : row.ap_status === "rejected"
@@ -1676,7 +1680,7 @@ const StaffDashboard: React.FC = () => {
                           : row.purchaser_status === "approved"
                           ? "Approved (Purchaser)"
                           : row.supervisor_status === "approved"
-                          ? "Approved (Supervisor)"
+                          ? `Approved (${supervisorStageLabel(row.supervisor_approved_by_role)})`
                           : "Pending"}
                       </span>
                     </div>

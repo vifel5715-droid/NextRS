@@ -319,6 +319,8 @@ export interface UrgentRequest {
   supervisor_approved_by?: string;
   /** Resolved display name for the Supervisor/Manager approval. */
   supervisor_approved_by_name?: string;
+  /** Approver's role — the stage is shared, so this says whether a Supervisor or a Manager signed it. */
+  supervisor_approved_by_role?: string;
   supervisor_approved_at?: string;
   /** "not_required" — an all-Not-Inventoriable request has nothing for
    * Stockroom to assign an Item List entry to, so it skips straight to
@@ -369,6 +371,8 @@ export interface ReimbursementRequest {
   supervisor_status: "pending" | "approved" | "rejected";
   supervisor_approved_by?: string;
   supervisor_approved_by_name?: string;
+  /** Approver's role — the stage is shared, so this says whether a Supervisor or a Manager signed it. */
+  supervisor_approved_by_role?: string;
   supervisor_approved_at?: string;
   purchaser_status: "pending" | "approved" | "rejected";
   purchaser_approved_by?: string;

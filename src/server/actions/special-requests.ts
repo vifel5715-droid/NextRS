@@ -102,6 +102,9 @@ export async function getUrgentRequestsAction(): Promise<UrgentRequest[]> {
       supervisor_approved_by_name: request.supervisor_approved_by
         ? actorsById.get(request.supervisor_approved_by)?.name
         : undefined,
+      supervisor_approved_by_role: request.supervisor_approved_by
+        ? actorsById.get(request.supervisor_approved_by)?.role
+        : undefined,
       stockroom_approved_by_name: request.stockroom_approved_by
         ? actorsById.get(request.stockroom_approved_by)?.name
         : undefined,
@@ -230,6 +233,9 @@ export async function getReimbursementRequestsAction(): Promise<ReimbursementReq
       ap_status: request.ap_status as ReimbursementRequest["ap_status"],
       supervisor_approved_by_name: request.supervisor_approved_by
         ? actorsById.get(request.supervisor_approved_by)?.name
+        : undefined,
+      supervisor_approved_by_role: request.supervisor_approved_by
+        ? actorsById.get(request.supervisor_approved_by)?.role
         : undefined,
       purchaser_approved_by_name: request.purchaser_approved_by
         ? actorsById.get(request.purchaser_approved_by)?.name

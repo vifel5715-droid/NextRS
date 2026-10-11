@@ -119,7 +119,15 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
       .where(
         inArray(
           users.id,
-          [...new Set([...itemHeaders, ...serviceHeaders].map((request) => request.created_by))]
+          // Approvers too: their role tells the status badge whether a
+          // Supervisor or a Manager signed the shared approval stage.
+          [
+            ...new Set(
+              [...itemHeaders, ...serviceHeaders]
+                .flatMap((request) => [request.created_by, request.supervisor_approved_by])
+                .filter((id): id is string => !!id)
+            ),
+          ]
         )
       ),
   ]);
@@ -153,6 +161,9 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
       remarks: request.remarks ?? "",
       requested_by: request.requested_by ?? creator?.name,
       supervisor_status: request.supervisor_status ?? undefined,
+      supervisor_approved_by_role: request.supervisor_approved_by
+        ? creatorById.get(request.supervisor_approved_by)?.role
+        : undefined,
       supervisor_approved_at: request.supervisor_approved_at ?? undefined,
       custodian_status: request.custodian_status ?? undefined,
       custodian_approved_at: request.custodian_approved_at ?? undefined,
@@ -194,6 +205,9 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
       remarks: request.remarks ?? "",
       requested_by: request.requested_by ?? creator?.name,
       supervisor_status: request.supervisor_status ?? undefined,
+      supervisor_approved_by_role: request.supervisor_approved_by
+        ? creatorById.get(request.supervisor_approved_by)?.role
+        : undefined,
       supervisor_approved_at: request.supervisor_approved_at ?? undefined,
       custodian_status: request.custodian_status ?? undefined,
       custodian_approved_at: request.custodian_approved_at ?? undefined,
