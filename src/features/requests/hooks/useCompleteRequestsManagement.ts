@@ -169,9 +169,16 @@ export const useCompleteRequestsManagement = () => {
     return loadReimbursementRequests();
   }, [loadItemRequests, loadServiceRequests, loadUrgentRequests, loadReimbursementRequests]);
 
+  // Only a tab's first load blanks the table; switching back to a tab (or
+  // returning to this page) refreshes it in the background over the rows
+  // already shown.
+  const loadedTabs = useRef(new Set<string>());
   useEffect(() => {
-    setLoading(true);
-    loadTab(activeTab).finally(() => setLoading(false));
+    if (!loadedTabs.current.has(activeTab)) setLoading(true);
+    loadTab(activeTab).finally(() => {
+      loadedTabs.current.add(activeTab);
+      setLoading(false);
+    });
   }, [activeTab, loadTab]);
 
   // Realtime events carry ids only, so the affected list is refetched (debounced).

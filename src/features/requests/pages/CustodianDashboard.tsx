@@ -1400,7 +1400,7 @@ const CustodianDashboard: React.FC = () => {
               />
             </div>
           )}
-          <div className="modal-footer d-flex justify-content-end gap-2">
+          <div className="modal-actions">
             <button onClick={handleStatusUpdate} className="btn btn-primary">Submit</button>
           </div>
         </div>

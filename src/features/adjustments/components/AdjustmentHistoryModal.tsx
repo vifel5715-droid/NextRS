@@ -67,7 +67,7 @@ const AdjustmentHistoryModal: React.FC<AdjustmentHistoryModalProps> = ({ isOpen,
           </div>
           <div className="table-responsive">
             {/* simple-list-table collapses each row into a labeled stacked
-                card below 768px (see app.css) instead of letting this wide
+                card below 768px (see globals.css) instead of letting this wide
                 table overflow off the side of a phone screen — same
                 technique AdjustmentHistoryPage.tsx's full-page table uses. */}
             <table className="table table-sm simple-list-table" style={{ borderCollapse: "separate", borderSpacing: "0", border: "1px solid #e0e0e0", borderRadius: "8px", overflow: "hidden" }}>

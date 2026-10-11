@@ -29,7 +29,33 @@ const EVENTS_URL = "/api/events";
 let source: EventSource | null = null;
 let hasConnected = false;
 
+/**
+ * Per-type count of events delivered so far. A subscriber that pauses (a
+ * kept-alive screen hidden by the app shell tears its effects down) records
+ * a snapshot, and on resubscribing is replayed a refetch signal for exactly
+ * the types that changed in between — nothing if nothing changed.
+ */
+const changeSeq: Record<RequestType, number> = { item: 0, service: 0, urgent: 0, reimbursement: 0 };
+export type ChangeSnapshot = Readonly<Record<RequestType, number>>;
+
+export const getChangeSnapshot = (): ChangeSnapshot => ({ ...changeSeq });
+
+export function replayChangesSince(
+  snapshot: ChangeSnapshot,
+  cb: (payload: RequestChangedPayload) => void
+): void {
+  for (const type of REQUEST_TYPES) {
+    if (changeSeq[type] === snapshot[type]) continue;
+    try {
+      cb({ type, action: "updated", id: 0 } as RequestChangedPayload);
+    } catch (error) {
+      console.error("Realtime listener failed:", error);
+    }
+  }
+}
+
 function emit(payload: RequestChangedPayload): void {
+  changeSeq[payload.type] += 1;
   for (const listener of listeners) {
     try {
       listener(payload);
@@ -107,13 +133,24 @@ function disconnect(): void {
   hasConnected = false;
 }
 
+// Brief zero-subscriber gaps (e.g. login handing over to the dashboard shell)
+// shouldn't tear the stream down and reopen it a moment later.
+const IDLE_DISCONNECT_MS = 10_000;
+let idleTimer: ReturnType<typeof setTimeout> | null = null;
+
 export const subscribeRequestChanged = (
   cb: (payload: RequestChangedPayload) => void
 ): (() => void) => {
+  if (idleTimer) clearTimeout(idleTimer);
+  idleTimer = null;
   listeners.add(cb);
   connect();
   return () => {
     listeners.delete(cb);
-    if (listeners.size === 0) disconnect();
+    if (listeners.size > 0 || idleTimer) return;
+    idleTimer = setTimeout(() => {
+      idleTimer = null;
+      if (listeners.size === 0) disconnect();
+    }, IDLE_DISCONNECT_MS);
   };
 };

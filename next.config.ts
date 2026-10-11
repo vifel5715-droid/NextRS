@@ -13,6 +13,13 @@ const nextConfig: NextConfig = {
     serverActions: {
       bodySizeLimit: "12mb",
     },
+    // App route segments render nothing (app/(app)/layout.tsx's client shell
+    // draws every screen and fetches its own data through authorized Server
+    // Actions), so a visited route's payload is safe to reuse: going back to
+    // a page within 5 minutes needs no server round trip at all.
+    staleTimes: {
+      dynamic: 300,
+    },
   },
   async headers() {
     return [

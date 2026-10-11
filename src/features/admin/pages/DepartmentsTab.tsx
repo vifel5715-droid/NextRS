@@ -131,11 +131,11 @@ const DepartmentsTab: React.FC = () => {
           />
         </div>
         {error && <div className="alert alert-danger py-1 px-2 small">{error}</div>}
-        <div className="d-flex gap-2">
-          <button className="btn btn-primary" onClick={handleSave} disabled={saving}>
+        <div className="modal-actions">
+          <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSave} disabled={saving} aria-busy={saving}>
             {saving ? "Saving…" : "Save"}
           </button>
-          <button className="btn btn-secondary" onClick={() => setShowModal(false)}>Cancel</button>
         </div>
       </Modal>
     </div>

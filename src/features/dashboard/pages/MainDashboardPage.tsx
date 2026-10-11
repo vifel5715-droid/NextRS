@@ -6,8 +6,7 @@ import { usePendingItemsContext } from "@app/providers/PendingItemsProvider";
 import { usePendingServicesContext } from "@app/providers/PendingServicesProvider";
 import { useDeliveredItemsContext } from "@app/providers/DeliveredItemsProvider";
 import { useOutedItemsContext } from "@app/providers/OutedItemsProvider";
-import { useMyRequestsProcessingCount } from "../hooks/useMyRequestsProcessingCount";
-import { useDashboardSummary } from "../hooks/useDashboardSummary";
+import { useDashboardCounts } from "@app/providers/DashboardCountsProvider";
 import { useDateRangeContext } from "@app/providers/DateRangeProvider";
 import { filterByDateRange } from "@shared/utils/dateRange";
 import DateRangeFilter from "@shared/components/DateRangeFilter";
@@ -44,8 +43,10 @@ const MainDashboardPage: React.FC = () => {
     (sum, req) => sum + filterByDateRange(req.items, startDate, endDate, "issued_at").length,
     0
   );
-  const myRequestsProcessingCount = useMyRequestsProcessingCount(user?.role, user?.name, user?.department, startDate, endDate);
-  const { completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount, loading } = useDashboardSummary(user?.permissions.includes("deleted_items") ?? false);
+  const {
+    myRequestsProcessingCount,
+    summary: { completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount, loading },
+  } = useDashboardCounts();
   // Same total the Custodian/Admin "Pending Requests" page shows across its
   // Item + Service Requests tabs — not just requests still awaiting the
   // custodian (see Sidebar.tsx for the identical reasoning).

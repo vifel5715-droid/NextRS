@@ -17,7 +17,10 @@ export function useNavigate() {
         else router.forward();
         return;
       }
-      router.push(destination);
+      // Page segments are empty (the client shell renders every screen), so
+      // Next's scroll-to-segment has nothing to target; the shell restores
+      // each page's own scroll position instead.
+      router.push(destination, { scroll: false });
     },
     [router]
   );

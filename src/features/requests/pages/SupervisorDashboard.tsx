@@ -287,7 +287,7 @@ const SupervisorDashboard: React.FC = () => {
       </div>
 
       {showRequestTabs && (
-      <div className="mb-3">
+      <div className="mb-4">
         <DateRangeFilter />
       </div>
       )}
@@ -855,19 +855,19 @@ const SupervisorDashboard: React.FC = () => {
           </div>
         )}
 
-        <div className="d-flex justify-content-end gap-2 mt-4 pt-3" style={{ borderTop: "1px solid #e5e7eb" }}>
+        <div className="modal-actions">
           {editMode ? (
             <>
-              <button type="button" onClick={() => setEditMode(false)} className="btn btn-sm btn-secondary">Discard</button>
-              <button type="button" onClick={handleEdit} className="btn btn-sm btn-success">Save Changes</button>
+              <button type="button" onClick={() => setEditMode(false)} className="btn btn-secondary">Discard</button>
+              <button type="button" onClick={handleEdit} className="btn btn-success">Save Changes</button>
             </>
           ) : (
             <>
-              <button type="button" onClick={() => setEditMode(true)} className="btn btn-sm btn-warning">Edit Request</button>
+              <button type="button" onClick={() => setEditMode(true)} className="btn btn-warning">Edit Request</button>
               <button
                 type="button"
                 onClick={handleStatusUpdate}
-                className={`btn btn-sm ${newStatus === "rejected" ? "btn-danger" : "btn-primary"}`}
+                className={`btn ${newStatus === "rejected" ? "btn-danger" : "btn-primary"}`}
                 disabled={newStatus === "rejected" && !rejectionComment.trim()}
               >
                 {newStatus === "rejected" ? "Decline" : "Approve"}

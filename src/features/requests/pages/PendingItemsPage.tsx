@@ -437,7 +437,7 @@ const PendingItemsPage: React.FC = () => {
               exportDisabled={filteredCombinedRows.length === 0}
             />
 
-            <div className="mb-3">
+            <div className="mb-4">
               <DateRangeFilter />
             </div>
 
@@ -556,7 +556,7 @@ const PendingItemsPage: React.FC = () => {
               exportDisabled={filteredItemRows.length === 0}
             />
 
-            <div className="mb-3">
+            <div className="mb-4">
               <DateRangeFilter />
             </div>
 
@@ -649,7 +649,7 @@ const PendingItemsPage: React.FC = () => {
               exportDisabled={filteredServiceRows.length === 0}
             />
 
-            <div className="mb-3">
+            <div className="mb-4">
               <DateRangeFilter />
             </div>
 

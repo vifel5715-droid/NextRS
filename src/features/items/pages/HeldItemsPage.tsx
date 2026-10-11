@@ -253,7 +253,7 @@ const HeldItemsPage: React.FC = () => {
         exportDisabled={(activeTab === "item" ? filteredHeldRequests : filteredHeldServiceRequests).length === 0}
       />
 
-      <div className="mb-3">
+      <div className="mb-4">
         <DateRangeFilter />
       </div>
 

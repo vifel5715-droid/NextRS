@@ -169,7 +169,9 @@ const ItemListPage: React.FC = () => {
   );
 
   const load = async () => {
-    setLoading(true);
+    // Blank the table only while there is nothing to show yet; reloads after
+    // an edit or on returning to this page refresh in the background.
+    if (entries.length === 0) setLoading(true);
     try {
       const [entriesRes, uomsRes] = await Promise.all([
         getItemCatalogAction(),
@@ -401,7 +403,7 @@ const ItemListPage: React.FC = () => {
           exportDisabled={filteredEntries.length === 0}
         />
 
-        <div className="mb-3">
+        <div className="mb-4">
           <DateRangeFilter />
         </div>
 
@@ -493,7 +495,7 @@ const ItemListPage: React.FC = () => {
 
         <div className="table-responsive">
           {/* simple-list-table collapses each row into a labeled stacked
-              card below 768px (see app.css) instead of letting this wide
+              card below 768px (see globals.css) instead of letting this wide
               table overflow off the side of a phone screen. */}
           <table className="table table-sm table-hover mb-0 simple-list-table">
             <thead className="table-light">

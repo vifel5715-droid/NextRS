@@ -151,9 +151,9 @@ const RolesTab: React.FC<RolesTabProps> = ({
             </tbody>
           </table>
         </div>
-        <div className="d-flex gap-2">
-          <button className="btn btn-primary" onClick={handleSaveRole}>Save</button>
+        <div className="modal-actions">
           <button className="btn btn-secondary" onClick={() => setShowRoleModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSaveRole}>Save</button>
         </div>
       </Modal>
     </div>

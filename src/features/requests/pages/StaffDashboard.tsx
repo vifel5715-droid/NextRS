@@ -2578,10 +2578,7 @@ const StaffDashboard: React.FC = () => {
               placeholder="Enter reason for declining..."
             />
           </div>
-          <div className="d-flex gap-2">
-            <button type="submit" className="btn btn-danger">
-              Decline
-            </button>
+          <div className="modal-actions">
             <button
               type="button"
               className="btn btn-secondary"
@@ -2591,6 +2588,9 @@ const StaffDashboard: React.FC = () => {
               }}
             >
               Cancel
+            </button>
+            <button type="submit" className="btn btn-danger">
+              Decline
             </button>
           </div>
         </form>
@@ -2923,16 +2923,16 @@ const StaffDashboard: React.FC = () => {
                 + Add {editingRequestType === "item" ? "Item" : "Service"}
               </button>
             </div>
-            <div className="d-flex gap-2">
-              <button type="submit" className="btn btn-primary">
-                Save Changes
-              </button>
+            <div className="modal-actions">
               <button
                 type="button"
                 className="btn btn-secondary"
                 onClick={closeEditModal}
               >
                 Cancel
+              </button>
+              <button type="submit" className="btn btn-primary">
+                Save Changes
               </button>
             </div>
           </form>

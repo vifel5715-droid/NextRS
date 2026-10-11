@@ -105,6 +105,7 @@ export const useStaffRequests = () => {
   // Refs
   const hasMounted = useRef(false);
   const isFetching = useRef(false);
+  const hasLoaded = useRef(false);
   const abortControllerRef = useRef<AbortController | null>(null);
   const requestCache = useRef<Map<string, CacheEntry<ItemRequest[] | ServiceRequest[] | { itemRequests: ItemRequest[]; serviceRequests: ServiceRequest[] }>>>(new Map());
 
@@ -154,7 +155,9 @@ export const useStaffRequests = () => {
     if (isFetching.current && !forceRefresh) return;
     log.info("Loading requests — forceRefresh:", forceRefresh);
     isFetching.current = true;
-    setIsLoading(true);
+    // The blocking overlay is for the first load only — realtime/refresh
+    // reloads keep the current rows on screen and swap them in when ready.
+    if (!hasLoaded.current) setIsLoading(true);
     setApiError(null);
     if (abortControllerRef.current) abortControllerRef.current.abort();
 
@@ -181,6 +184,7 @@ export const useStaffRequests = () => {
       requestCache.current.set(`services-${cacheKey}`, { data: data.serviceRequests, timestamp });
       setItemRequests(data.itemRequests);
       setServiceRequests(data.serviceRequests);
+      hasLoaded.current = true;
     } catch (error: unknown) {
       const msg = getErrorMessage(error, '');
       log.error("Failed to load requests:", msg);

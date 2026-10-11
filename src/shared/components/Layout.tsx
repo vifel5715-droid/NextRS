@@ -1,16 +1,25 @@
-import React, { useState, useEffect } from "react";
+import React, { createContext, useContext, useState, useEffect } from "react";
 import Navbar from "./Navbar";
 import Sidebar from "./Sidebar";
 import { createLogger } from "@shared/utils/logger";
 
 const log = createLogger("Layout");
 
+/**
+ * True below the persistent app shell (app/client-app.tsx), which renders the
+ * one Layout for every dashboard route. Pages still wrap themselves in
+ * <Layout>, but inside the shell that becomes a pass-through, so navigating
+ * between pages never remounts the Navbar/Sidebar (or refetches the badge
+ * counts they display).
+ */
+const InShellContext = createContext(false);
+
 interface LayoutProps {
   children: React.ReactNode;
   hideSidebar?: boolean;
 }
 
-const Layout: React.FC<LayoutProps> = ({ children, hideSidebar = false }) => {
+const ChromeLayout: React.FC<LayoutProps> = ({ children, hideSidebar = false }) => {
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -47,5 +56,18 @@ const Layout: React.FC<LayoutProps> = ({ children, hideSidebar = false }) => {
     </div>
   );
 };
+
+const Layout: React.FC<LayoutProps> = (props) => {
+  const inShell = useContext(InShellContext);
+  if (inShell) return <>{props.children}</>;
+  return <ChromeLayout {...props} />;
+};
+
+/** The persistent chrome rendered once by the app shell; any <Layout> below it is a pass-through. */
+export const ShellLayout: React.FC<{ children: React.ReactNode }> = ({ children }) => (
+  <ChromeLayout>
+    <InShellContext.Provider value={true}>{children}</InShellContext.Provider>
+  </ChromeLayout>
+);
 
 export default Layout;

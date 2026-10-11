@@ -158,9 +158,9 @@ const AdminDashboard: React.FC = () => {
           <label className="form-label">{isEditingUser ? "New Password (leave blank to keep current)" : "Password"}</label>
           <input type="password" className="form-control" value={userForm.password} onChange={(e) => setUserForm({ ...userForm, password: e.target.value })} autoComplete="new-password" required={!isEditingUser} />
         </div>
-        <div className="d-flex gap-2">
-          <button className="btn btn-primary" onClick={handleSaveUser}>Save</button>
+        <div className="modal-actions">
           <button className="btn btn-secondary" onClick={() => setShowUserModal(false)}>Cancel</button>
+          <button className="btn btn-primary" onClick={handleSaveUser}>Save</button>
         </div>
       </Modal>
 

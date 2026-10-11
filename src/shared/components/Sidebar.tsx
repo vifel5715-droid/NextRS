@@ -5,9 +5,7 @@ import { usePendingItemsContext } from "@app/providers/PendingItemsProvider";
 import { usePendingServicesContext } from "@app/providers/PendingServicesProvider";
 import { useDeliveredItemsContext } from "@app/providers/DeliveredItemsProvider";
 import { useOutedItemsContext } from "@app/providers/OutedItemsProvider";
-import { useMyRequestsProcessingCount } from "@features/dashboard/hooks/useMyRequestsProcessingCount";
-import { useDashboardSummary } from "@features/dashboard/hooks/useDashboardSummary";
-import { useAdjustmentLog } from "@features/adjustments/hooks/useAdjustmentLog";
+import { useDashboardCounts } from "@app/providers/DashboardCountsProvider";
 import { useDateRangeContext } from "@app/providers/DateRangeProvider";
 import { filterByDateRange } from "@shared/utils/dateRange";
 import { createLogger } from "@shared/utils/logger";
@@ -74,14 +72,16 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
     (sum, req) => sum + filterByDateRange(req.items, startDate, endDate, "issued_at").length,
     0
   );
-  const myRequestsProcessingCount = useMyRequestsProcessingCount(user?.role, user?.name, user?.department, startDate, endDate);
-  const { completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount } = useDashboardSummary(hasPermission("deleted_items"));
+  const {
+    myRequestsProcessingCount,
+    summary: { completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount },
+    adjustmentLog: { entries: adjustmentEntries },
+  } = useDashboardCounts();
   // Same total the Custodian/Admin "Pending Requests" page shows across its
   // Item + Service Requests tabs (CustodianDashboard.tsx) — not just requests
   // still awaiting the custodian, so this badge can never disagree with what
   // that page's own tab badges add up to.
   const pendingRequestsCount = totalRequestsCount;
-  const { entries: adjustmentEntries } = useAdjustmentLog(hasPermission("adjustment_history"));
   const adjustmentHistoryCount = adjustmentEntries.length;
   const isAdmin = user?.role?.toLowerCase().trim() === "admin";
   // Supervisor/Manager keep the supervisor_dashboard permission (server
@@ -109,7 +109,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
     navigate(path);
     // Always closes the mobile drawer after a nav click — harmless on
     // desktop, where the sidebar's visibility is driven entirely by CSS
-    // (see .sidebar's media query in app.css) and doesn't depend on this
+    // (see .sidebar's media query in globals.css) and doesn't depend on this
     // callback at all. Previously gated on `isDesktop`, but Layout.tsx always
     // passes isDesktop={true} regardless of actual screen size, so on a real
     // mobile device this never fired and the drawer stayed open over the

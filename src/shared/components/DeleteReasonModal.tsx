@@ -39,12 +39,12 @@ const DeleteReasonModal: React.FC<DeleteReasonModalProps> = ({ isOpen, title, on
             placeholder="Enter reason for deletion..."
           />
         </div>
-        <div className="d-flex gap-2">
-          <button type="submit" className="btn btn-danger">
-            Delete
-          </button>
+        <div className="modal-actions">
           <button type="button" className="btn btn-secondary" onClick={handleClose}>
             Cancel
+          </button>
+          <button type="submit" className="btn btn-danger">
+            Delete
           </button>
         </div>
       </form>

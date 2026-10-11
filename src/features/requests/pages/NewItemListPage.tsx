@@ -188,7 +188,7 @@ const NewItemListPage: React.FC = () => {
           exportDisabled={filteredRows.length === 0}
         />
 
-        <div className="mb-3">
+        <div className="mb-4">
           <DateRangeFilter />
         </div>
 

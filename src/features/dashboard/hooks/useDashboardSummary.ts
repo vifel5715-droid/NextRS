@@ -1,10 +1,11 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { getItemCatalogCountAction } from "@server/actions/dashboard-read";
 import { getDashboardRequestCountsAction } from "@server/actions/request-lists";
 import { getDeletionLogAction } from "@server/actions/history-reads";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { useDateRangeContext } from "@app/providers/DateRangeProvider";
 import { filterByDateRange } from "@shared/utils/dateRange";
+import { debounce } from "@shared/utils/debounce";
 
 /**
  * Counts for the sidebar sections that don't already have their own
@@ -57,7 +58,18 @@ export const useDashboardSummary = (canSeeDeleted = true) => {
     void fetchSummary();
   }, [fetchSummary]);
 
-  useRequestsChanged(fetchSummary);
+  // Debounced like the other badge hooks: a burst of events (bulk edits, or
+  // the four-type resync after a reconnect) costs one refetch, not one per
+  // event — and each refetch here is three server actions.
+  const debouncedFetch = useRef(debounce(fetchSummary, 400));
+  useEffect(() => {
+    debouncedFetch.current = debounce(fetchSummary, 400);
+  }, [fetchSummary]);
+  const handleChange = useCallback(() => debouncedFetch.current(), []);
+  useRequestsChanged(handleChange);
 
-  return { completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount, loading };
+  return useMemo(
+    () => ({ completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount, loading }),
+    [completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount, loading]
+  );
 };

@@ -2,7 +2,7 @@ import React, { useMemo, useState } from "react";
 import Layout from "@shared/components/Layout";
 import ListToolbar from "@shared/components/ListToolbar";
 import DateRangeFilter from "@shared/components/DateRangeFilter";
-import { useAdjustmentLog } from "../hooks/useAdjustmentLog";
+import { useDashboardCounts } from "@app/providers/DashboardCountsProvider";
 import { exportToExcel } from "@shared/utils/exportExcel";
 import { formatMilitaryDateTime } from "@shared/utils/format";
 
@@ -15,7 +15,9 @@ import { formatMilitaryDateTime } from "@shared/utils/format";
  * from a single request.
  */
 const AdjustmentHistoryPage: React.FC = () => {
-  const { entries, loading } = useAdjustmentLog();
+  // Shared with the Sidebar badge (DashboardCountsProvider) — one fetch, one
+  // realtime subscription, already warm when this page opens.
+  const { entries, loading } = useDashboardCounts().adjustmentLog;
   const [searchQuery, setSearchQuery] = useState("");
 
   const filteredEntries = useMemo(() => {
@@ -131,7 +133,7 @@ const AdjustmentHistoryPage: React.FC = () => {
           exportDisabled={filteredEntries.length === 0}
         />
 
-        <div className="mb-3">
+        <div className="mb-4">
           <DateRangeFilter />
         </div>
 
