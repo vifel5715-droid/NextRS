@@ -58,9 +58,27 @@ function isPayload(value: unknown): value is RequestChangedPayload {
   );
 }
 
+let retryTimer: ReturnType<typeof setTimeout> | null = null;
+const CLOSED_RETRY_MS = 15_000;
+
 function connect(): void {
-  if (source || typeof window === "undefined" || typeof EventSource === "undefined") return;
+  if (typeof window === "undefined" || typeof EventSource === "undefined") return;
+  if (source && source.readyState !== EventSource.CLOSED) return;
+  source?.close();
   source = new EventSource(EVENTS_URL, { withCredentials: true });
+  source.addEventListener("error", () => {
+    // A 401 (e.g. subscribed on the login page, or the session expired)
+    // closes the EventSource for good. Drop it and retry later so the
+    // stream comes back once the user is logged in.
+    if (source?.readyState !== EventSource.CLOSED) return;
+    source = null;
+    if (!retryTimer && listeners.size > 0) {
+      retryTimer = setTimeout(() => {
+        retryTimer = null;
+        if (listeners.size > 0) connect();
+      }, CLOSED_RETRY_MS);
+    }
+  });
   source.addEventListener("ready", () => {
     if (hasConnected) emitResync();
     hasConnected = true;
@@ -76,12 +94,14 @@ function connect(): void {
       // Ignore malformed events.
     }
   });
-  // EventSource reconnects on its own (server sends `retry: 5000`), except
-  // after an HTTP error such as 401 — then it stays closed, which is right
-  // for a logged-out session. The "ready" handler resyncs after reconnects.
+  // EventSource reconnects on its own after a dropped connection (server
+  // sends `retry: 5000`); the "error" handler above covers HTTP errors. The
+  // "ready" handler resyncs after any reconnect.
 }
 
 function disconnect(): void {
+  if (retryTimer) clearTimeout(retryTimer);
+  retryTimer = null;
   source?.close();
   source = null;
   hasConnected = false;

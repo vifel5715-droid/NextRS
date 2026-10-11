@@ -1,18 +1,9 @@
 import type { NextConfig } from "next";
 
-const contentSecurityPolicy = [
-  "default-src 'self'",
-  `script-src 'self' 'unsafe-inline'${process.env.NODE_ENV === "production" ? "" : " 'unsafe-eval'"}`,
-  "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data: blob:",
-  "font-src 'self' data:",
-  "connect-src 'self' ws: wss:",
-  "media-src 'self' blob:",
-  "object-src 'none'",
-  "base-uri 'self'",
-  "form-action 'self'",
-  "frame-ancestors 'none'",
-].join("; ");
+// Pages get a per-request nonce Content-Security-Policy from proxy.ts. API
+// routes only ever return JSON, PDFs, or an event stream — nothing that
+// should execute — so they get a deny-everything policy instead.
+const apiContentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'";
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),
@@ -31,13 +22,18 @@ const nextConfig: NextConfig = {
           { key: "X-Content-Type-Options", value: "nosniff" },
           { key: "X-Frame-Options", value: "DENY" },
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
-          { key: "Content-Security-Policy", value: contentSecurityPolicy },
         ]
       },
       {
-        // The global policy's object-src 'none' stops Chrome's built-in PDF
-        // viewer from rendering an attachment opened inline. Next.js applies
-        // the last matching rule for a header, so attachment responses get a
+        source: "/api/:path*",
+        headers: [
+          { key: "Content-Security-Policy", value: apiContentSecurityPolicy },
+        ]
+      },
+      {
+        // The deny-all policy would stop Chrome's built-in PDF viewer from
+        // rendering an attachment opened inline. Next.js applies the last
+        // matching rule for a header, so attachment responses get a
         // locked-down policy that still allows the viewer.
         source: "/api/:type(item-request|reimbursement-request)/:id/attachment",
         headers: [
