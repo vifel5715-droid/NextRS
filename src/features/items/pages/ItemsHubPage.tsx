@@ -31,12 +31,13 @@ const ItemsHubPage: React.FC = () => {
   const location = useLocation();
   const [searchParams] = useSearchParams();
   const { user } = useAuth();
-  // Held Items has never been visible to staff (see Sidebar/App.tsx's role
-  // lists) — that stays true here: staff simply never gets the tab. A custom
-  // role reaches this branch via its held_items permission instead, since it
+  // Staff see the tab read-only: the list is scoped server-side to their own
+  // requests, and HeldItemsPage shows no edit controls for staff (the HOLD
+  // fix itself stays with Secretary/Supervisor/Manager). A custom role
+  // reaches this branch via its held_items permission instead, since it
   // won't match any of these hardcoded built-in role names.
   const canSeeHeld =
-    ["secretary", "supervisor", "manager", "custodian", "admin", "director"].includes(
+    ["staff", "secretary", "supervisor", "manager", "custodian", "admin", "director"].includes(
       user?.role?.toLowerCase().trim() ?? ""
     ) || (user?.permissions.includes("held_items") ?? false);
 

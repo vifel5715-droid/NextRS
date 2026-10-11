@@ -215,7 +215,11 @@ const HeldItemsPage: React.FC = () => {
               ? "Items on HOLD in your department — fix the item name, quantity, UoM, remarks, or machine code, then save. The item stays on HOLD until the custodian reviews and releases it."
               : isCustodian
               ? "Read-only — items on HOLD can only be edited by Secretary, Supervisor, or Manager."
+              : role === "staff"
+              ? "Your request items currently on HOLD. Your Secretary, Supervisor, or Manager will correct them, then the custodian releases them."
               : "Items currently on HOLD."
+            : role === "staff"
+            ? "Your request services currently marked ON HOLD."
             : "Services currently marked ON HOLD."}
         </p>
       </div>
