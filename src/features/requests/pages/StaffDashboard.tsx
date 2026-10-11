@@ -1075,7 +1075,9 @@ const StaffDashboard: React.FC = () => {
       </div>
 
       <div className="mb-3">
-        <label className="form-label">SUPPORTING DOCUMENT (PDF, MAX 10 MB)</label>
+        <label className="form-label">
+          SUPPORTING DOCUMENT (PDF, MAX 10 MB) <span className="text-danger">*</span>
+        </label>
         <AttachmentDropzone
           id="reimbursement-attachment"
           accept="application/pdf,.pdf"

@@ -96,7 +96,11 @@ export function useReimbursementRequests() {
       alert("Enter a valid amount for every item.");
       return false;
     }
-    if (reimbursementAttachment && reimbursementAttachment.size > 10 * 1024 * 1024) {
+    if (!reimbursementAttachment) {
+      alert("Supporting document (PDF) is required.");
+      return false;
+    }
+    if (reimbursementAttachment.size > 10 * 1024 * 1024) {
       alert("PDF attachments cannot exceed 10 MB.");
       return false;
     }
@@ -117,7 +121,7 @@ export function useReimbursementRequests() {
           uom: i.uom || undefined,
           amount: Number(i.amount),
       }))));
-      if (reimbursementAttachment) formData.append("attachment", reimbursementAttachment);
+      formData.append("attachment", reimbursementAttachment);
       await reimbursementRequestAPI.create(formData);
       log.info("Reimbursement request created successfully");
       await loadReimbursementRequests();

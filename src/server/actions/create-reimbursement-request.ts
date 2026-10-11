@@ -105,31 +105,32 @@ async function createReimbursementRequest(formData: FormData): Promise<void> {
     throw new Error("You can only create requests for your department.");
   }
 
-  let attachment: { data: Buffer; name: string } | undefined;
+  // Every reimbursement must be backed by a supporting PDF (receipt/invoice).
   const attachmentEntry = formData.get("attachment");
-  if (attachmentEntry !== null) {
-    if (!(attachmentEntry instanceof File) || attachmentEntry.size === 0) {
-      throw new Error("The PDF attachment is invalid.");
-    }
-    if (attachmentEntry.size > MAX_ATTACHMENT_BYTES) {
-      throw new Error("PDF attachments cannot exceed 10 MB.");
-    }
-    if (
-      attachmentEntry.type !== "application/pdf" ||
-      !attachmentEntry.name.toLowerCase().endsWith(".pdf")
-    ) {
-      throw new Error("Only PDF attachments are allowed.");
-    }
-
-    const bytes = Buffer.from(await attachmentEntry.arrayBuffer());
-    if (bytes.length < 5 || bytes.subarray(0, 5).toString("ascii") !== "%PDF-") {
-      throw new Error("The attachment is not a valid PDF file.");
-    }
-    attachment = {
-      data: bytes,
-      name: attachmentEntry.name.replace(/[\\/]/g, "_").slice(0, 255),
-    };
+  if (attachmentEntry === null) {
+    throw new Error("A supporting document (PDF) is required.");
   }
+  if (!(attachmentEntry instanceof File) || attachmentEntry.size === 0) {
+    throw new Error("The PDF attachment is invalid.");
+  }
+  if (attachmentEntry.size > MAX_ATTACHMENT_BYTES) {
+    throw new Error("PDF attachments cannot exceed 10 MB.");
+  }
+  if (
+    attachmentEntry.type !== "application/pdf" ||
+    !attachmentEntry.name.toLowerCase().endsWith(".pdf")
+  ) {
+    throw new Error("Only PDF attachments are allowed.");
+  }
+
+  const bytes = Buffer.from(await attachmentEntry.arrayBuffer());
+  if (bytes.length < 5 || bytes.subarray(0, 5).toString("ascii") !== "%PDF-") {
+    throw new Error("The attachment is not a valid PDF file.");
+  }
+  const attachment = {
+    data: bytes,
+    name: attachmentEntry.name.replace(/[\\/]/g, "_").slice(0, 255),
+  };
 
   const db = getDb();
   const now = new Date().toISOString();
@@ -166,13 +167,9 @@ async function createReimbursementRequest(formData: FormData): Promise<void> {
         purchaser_status: "pending",
         ap_status: "pending",
         created_at: now,
-        ...(attachment
-          ? {
-              attachment_name: attachment.name,
-              attachment_data: attachment.data,
-              attachment_size: attachment.data.length,
-            }
-          : {}),
+        attachment_name: attachment.name,
+        attachment_data: attachment.data,
+        attachment_size: attachment.data.length,
       })
       .returning({ id: reimbursementRequests.id });
 
