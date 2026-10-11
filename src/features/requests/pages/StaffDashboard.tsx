@@ -15,6 +15,7 @@ import { useReimbursementRequests } from "@features/requests/hooks/useReimbursem
 import { useAttachmentStorageUsage } from "@features/requests/hooks/useAttachmentStorageUsage";
 import { useMachineCodeOptions } from "@features/item-catalog/hooks/useMachineCodeOptions";
 import { itemRequestAPI } from "../../../services/api";
+import { openAttachment } from "@shared/utils/openAttachment";
 import { createLogger } from "@shared/utils/logger";
 import { makeRequestKey } from "@shared/utils/requestKey";
 import { UOM_OPTIONS } from "../../../constants/uom";
@@ -158,6 +159,7 @@ const StaffDashboard: React.FC = () => {
     toggleReimbursementRow,
     reviewReimbursementAsSupervisor,
     canApproveReimbursementAsSupervisor,
+    reloadReimbursementRequests,
   } = useReimbursementRequests();
   // Item tab only — the Urgent Request workflow (Phase 1, see the Urgent
   // Request plan) is item-focused; Create Service is unaffected.
@@ -354,18 +356,7 @@ const StaffDashboard: React.FC = () => {
   // Which item request's Adjustment History modal is open, if any.
   const [historyRequestId, setHistoryRequestId] = useState<number | null>(null);
 
-  const handleDownloadAttachment = async (id: number, _filename: string) => {
-    try {
-      const response = await itemRequestAPI.downloadAttachment(id);
-      const url = window.URL.createObjectURL(
-        new Blob([response.data], { type: "application/pdf" })
-      );
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
-    } catch {
-      alert("Failed to open attachment");
-    }
-  };
+  const handleDownloadAttachment = (id: number, _filename: string) => openAttachment(itemRequestAPI.attachmentUrl(id));
 
   const handleReplaceAttachment = async (id: number, file: File) => {
     setReplaceProgressFor(id, 0);
@@ -397,8 +388,17 @@ const StaffDashboard: React.FC = () => {
     }
   };
 
-  const canManageAttachment = (details: RequestDetail | undefined) =>
-    !!details && (isSupervisor || user?.id === details.created_by);
+  // Mirrors replaceItemAttachmentAction's rule: Staff on their own request
+  // (creator or named requester), Secretary/Supervisor/Manager department-wide.
+  const canManageAttachment = (details: RequestDetail | undefined) => {
+    if (!details || !user) return false;
+    const role = user.role?.toLowerCase();
+    if (isSupervisor || role === "secretary" || role === "manager" || role === "admin") return true;
+    return (
+      details.created_by_id === user.id ||
+      (!!details.requested_by && details.requested_by.trim().toUpperCase() === user.name.trim().toUpperCase())
+    );
+  };
 
   /** Shared attachment cell for the item/service detail panels — download link
    * (with file size, when known) plus, when the caller may manage it, a
@@ -450,7 +450,7 @@ const StaffDashboard: React.FC = () => {
             className="btn btn-link btn-sm p-0 mt-1"
             onClick={() => toggleReplaceOpen(requestId)}
           >
-            {details?.attachment_name ? "Replace attachment" : "Add attachment"}
+            {details?.attachment_name ? "Update Supporting Document" : "Add Supporting Document"}
           </button>
         )}
         {replaceAttachmentProgress.has(requestId) && (
@@ -1701,6 +1701,8 @@ const StaffDashboard: React.FC = () => {
                               requestId={row.id}
                               attachmentName={row.attachment_name}
                               attachmentSize={row.attachment_size}
+                              request={row}
+                              onReplaced={() => void reloadReimbursementRequests()}
                             />
 
                             <table className="table table-sm mt-2 mb-3">

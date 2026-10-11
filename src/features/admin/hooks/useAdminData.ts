@@ -1,9 +1,9 @@
 import { useState, useEffect, useCallback, type FormEvent } from 'react';
 import { useSearchParams, useLocation } from '@shared/next-router';
 import { itemRequestAPI, serviceRequestAPI, rolesAPI } from '../../../services/api';
-import { saveAdminUserAction } from '@server/actions/admin-users';
-import { createItemRequestAction } from '@server/actions/create-item-request';
-import { createServiceRequestAction } from '@server/actions/create-service-request';
+import { saveAdminUserAction as saveAdminUserResult } from '@server/actions/admin-users';
+import { createItemRequestAction as createItemRequestResult } from '@server/actions/create-item-request';
+import { createServiceRequestAction as createServiceRequestResult } from '@server/actions/create-service-request';
 import { getAdminRolesAction, getAdminUsersAction } from '@server/actions/admin-read';
 import { fetchWithSimpleRetry } from '@shared/utils/fetchWithRetry';
 import { useRequestManagement } from '@features/requests/hooks/useRequestManagement';
@@ -12,6 +12,11 @@ import { createLogger } from '@shared/utils/logger';
 import { makeRequestKey } from "@shared/utils/requestKey";
 import { getErrorMessage, getValidationMessage } from '@shared/utils/errorMessage';
 import type { AdminTab, UserForm, UserRecord, ItemFormData, ServiceFormData, ItemRow, ServiceRow, RequestTab, EditableRequestDetail, RequestDetail, FieldValue, RoleForm, RoleWithPermissions } from '@shared/types';
+import { throwOnError } from "@shared/utils/actionResult";
+
+const saveAdminUserAction = throwOnError(saveAdminUserResult);
+const createItemRequestAction = throwOnError(createItemRequestResult);
+const createServiceRequestAction = throwOnError(createServiceRequestResult);
 
 const log = createLogger("useAdminData");
 

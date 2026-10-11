@@ -17,6 +17,7 @@ import { useItemCatalogEntries } from "@features/item-catalog/hooks/useItemCatal
 import { getItemExistenceStatus } from "@shared/utils/itemExistenceStatus";
 import { exportToExcel } from "@shared/utils/exportExcel";
 import { UOM_OPTIONS } from "@constants/uom";
+import { isMachineCodeEnabled } from "@shared/utils/machineCodeValidation";
 import type { ItemRow, ServiceRow } from "@shared/types";
 
 /**
@@ -280,6 +281,10 @@ const HeldItemsPage: React.FC = () => {
                   .map((entry) => entry.item_name)
               )
             ).sort();
+            // Machine Code only applies to Engineering (ENGG) requests — every
+            // other department shows N/A, read-only, same rule as the
+            // create/edit request forms (and enforced server-side).
+            const machineCodeEnabled = isMachineCodeEnabled(row.department);
             return (
               <div key={row.id} className="border rounded mb-2">
                 <div
@@ -343,7 +348,7 @@ const HeldItemsPage: React.FC = () => {
                           // create-item-request form for the same rule.
                           const isUomLocked = existenceStatus === "existing";
                           return (
-                            <tr key={index} style={{ backgroundColor: index % 2 === 0 ? "#ffffff" : "#f8f9fa" }}>
+                            <tr key={item.id ?? `new-${index}`} style={{ backgroundColor: index % 2 === 0 ? "#ffffff" : "#f8f9fa" }}>
                               <td style={{ padding: "10px", border: "none" }}>{index + 1}</td>
                               <td style={{ padding: "10px", border: "none" }}>
                                 {canEdit ? (
@@ -406,7 +411,7 @@ const HeldItemsPage: React.FC = () => {
                                 ) : sanitizeUserInput(item.remarks || "N/A")}
                               </td>
                               <td style={{ padding: "10px", border: "none" }}>
-                                {canEdit ? (
+                                {canEdit && machineCodeEnabled ? (
                                   <SearchableCombobox
                                     className="form-control form-control-sm text-uppercase"
                                     value={item.machine_code || ""}

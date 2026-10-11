@@ -1,7 +1,9 @@
 "use server";
 
 import { like, sql } from "drizzle-orm";
+import { runAction, type ActionResult } from "../action-result";
 import { getCurrentUser } from "../auth/session";
+import { publishRequestChanged } from "../realtime";
 import { getDb } from "../db";
 import { itemRequestItems, itemRequests } from "../db/schema";
 
@@ -72,7 +74,11 @@ function parseRequestItems(value: FormDataEntryValue | null): RequestItemInput[]
   });
 }
 
-export async function createItemRequestAction(formData: FormData): Promise<void> {
+export async function createItemRequestAction(formData: FormData): Promise<ActionResult<void>> {
+  return runAction(() => createItemRequest(formData));
+}
+
+async function createItemRequest(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Authentication required.");
   if (!user.permissions.includes("create_request")) throw new Error("Permission denied.");
@@ -135,7 +141,7 @@ export async function createItemRequestAction(formData: FormData): Promise<void>
   const year = new Date().getFullYear();
   const serialPrefix = `IRS-00-${year}-`;
 
-  await db.transaction(async (tx) => {
+  const createdId = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`item-request-serial-${year}`}))`);
 
     const existingSerials = await tx
@@ -187,5 +193,8 @@ export async function createItemRequestAction(formData: FormData): Promise<void>
         qty_balance: item.quantity,
       }))
     );
+    return request.id;
   });
+
+  await publishRequestChanged({ type: "item", action: "created", id: createdId, department });
 }

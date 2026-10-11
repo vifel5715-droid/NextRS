@@ -1,7 +1,9 @@
 "use server";
 
 import { and, eq, isNull, or } from "drizzle-orm";
+import { runAction, type ActionResult } from "../action-result";
 import { getCurrentUser } from "../auth/session";
+import { publishRequestChanged } from "../realtime";
 import { getDb } from "../db";
 import { itemRequests, serviceRequests } from "../db/schema";
 
@@ -15,13 +17,19 @@ interface CustodianReviewInput {
   rejectionComment?: string;
 }
 
-export async function reviewCustodianRequestAction(input: CustodianReviewInput): Promise<void> {
+export async function reviewCustodianRequestAction(input: CustodianReviewInput): Promise<ActionResult<void>> {
+  return runAction(() => reviewCustodianRequest(input));
+}
+
+async function reviewCustodianRequest(input: CustodianReviewInput): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Authentication required.");
 
   const role = user.role.trim().toLowerCase();
   if (!["custodian", "admin"].includes(role)) throw new Error("Permission denied.");
-  if (!user.permissions.includes("pending_items_services")) throw new Error("Permission denied.");
+  if (role !== "admin" && !user.permissions.includes("pending_items_services") && !user.permissions.includes("department_requests")) {
+    throw new Error("Permission denied.");
+  }
 
   if (!input || !Number.isSafeInteger(input.id) || input.id < 1) {
     throw new Error("Invalid request ID.");
@@ -45,10 +53,11 @@ export async function reviewCustodianRequestAction(input: CustodianReviewInput):
   const table = input.type === "item" ? itemRequests : serviceRequests;
   const reviewedAt = new Date().toISOString();
 
-  await db.transaction(async (tx) => {
+  const department = await db.transaction(async (tx) => {
     const [request] = await tx
       .select({
         id: table.id,
+        department: table.department,
         supervisor_status: table.supervisor_status,
         custodian_status: table.custodian_status,
       })
@@ -83,5 +92,8 @@ export async function reviewCustodianRequestAction(input: CustodianReviewInput):
       .returning({ id: table.id });
 
     if (!updated) throw new Error("This request has already been reviewed by the custodian.");
+    return request.department;
   });
+
+  await publishRequestChanged({ type: input.type, action: "updated", id: input.id, department });
 }

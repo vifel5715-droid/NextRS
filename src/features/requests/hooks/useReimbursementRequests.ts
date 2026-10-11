@@ -2,11 +2,14 @@ import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "@app/providers/AuthProvider";
 import { reimbursementRequestAPI } from "../../../services/api";
 import { getReimbursementRequestsAction } from "@server/actions/special-requests";
-import { reviewSupervisorRequestAction } from "@server/actions/supervisor-review";
+import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@server/actions/supervisor-review";
 import { createLogger } from "@shared/utils/logger";
 import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
 import { getErrorMessage } from "@shared/utils/errorMessage";
 import type { ReimbursementRequest, ReimbursementRequestItem } from "@shared/types";
+import { throwOnError } from "@shared/utils/actionResult";
+
+const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
 
 const log = createLogger("useReimbursementRequests");
 
@@ -229,6 +232,7 @@ export function useReimbursementRequests() {
   }, []);
 
   return {
+    reloadReimbursementRequests: loadReimbursementRequests,
     reimbursementFormData,
     setReimbursementFormData,
     reimbursementItems,

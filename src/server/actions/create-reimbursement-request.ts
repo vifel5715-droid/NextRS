@@ -1,7 +1,9 @@
 "use server";
 
 import { like, sql } from "drizzle-orm";
+import { runAction, type ActionResult } from "../action-result";
 import { getCurrentUser } from "../auth/session";
+import { publishRequestChanged } from "../realtime";
 import { getDb } from "../db";
 import { reimbursementItems, reimbursementRequests } from "../db/schema";
 
@@ -79,7 +81,11 @@ function parseItems(value: FormDataEntryValue | null): ReimbursementItemInput[] 
   });
 }
 
-export async function createReimbursementRequestAction(formData: FormData): Promise<void> {
+export async function createReimbursementRequestAction(formData: FormData): Promise<ActionResult<void>> {
+  return runAction(() => createReimbursementRequest(formData));
+}
+
+async function createReimbursementRequest(formData: FormData): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Authentication required.");
   if (!user.permissions.includes("create_request")) throw new Error("Permission denied.");
@@ -131,7 +137,7 @@ export async function createReimbursementRequestAction(formData: FormData): Prom
   const serialPrefix = `RMB-${year}-`;
   const serialLockKey = `reimbursement-request-serial-${year}`;
 
-  await db.transaction(async (tx) => {
+  const createdId = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${serialLockKey}))`);
 
     const existingSerials = await tx
@@ -182,5 +188,8 @@ export async function createReimbursementRequestAction(formData: FormData): Prom
         created_at: now,
       }))
     );
+    return request.id;
   });
+
+  await publishRequestChanged({ type: "reimbursement", action: "created", id: createdId, department });
 }

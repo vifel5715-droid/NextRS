@@ -33,6 +33,16 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Content-Security-Policy", value: contentSecurityPolicy },
         ]
+      },
+      {
+        // The global policy's object-src 'none' stops Chrome's built-in PDF
+        // viewer from rendering an attachment opened inline. Next.js applies
+        // the last matching rule for a header, so attachment responses get a
+        // locked-down policy that still allows the viewer.
+        source: "/api/:type(item-request|reimbursement-request)/:id/attachment",
+        headers: [
+          { key: "Content-Security-Policy", value: "default-src 'none'; object-src 'self'; style-src 'unsafe-inline'; frame-ancestors 'self'" },
+        ]
       }
     ];
   }

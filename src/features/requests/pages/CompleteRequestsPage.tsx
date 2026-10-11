@@ -3,6 +3,7 @@ import { useCompleteRequestsManagement } from "@features/requests/hooks/useCompl
 import { useMachineCodeOptions } from "@features/item-catalog/hooks/useMachineCodeOptions";
 import { useAuth } from "@app/providers/AuthProvider";
 import { itemRequestAPI } from "../../../services/api";
+import { openAttachment } from "@shared/utils/openAttachment";
 import { getCompositeStatus, getStatusBadgeClass, getItemStatusText, getItemStatusBadgeClass, getServiceStatusText, getServiceStatusBadgeClass } from "@shared/utils/status";
 import { sanitizeUserInput } from "@shared/utils/sanitize";
 import { copyToClipboard, formatItemsForClipboard, formatItemsForProjectGrid } from "@shared/utils/clipboard";
@@ -224,16 +225,7 @@ const CompleteRequestsPage: React.FC = () => {
     setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
   };
 
-  const handleDownloadAttachment = async (id: number) => {
-    try {
-      const response = await itemRequestAPI.downloadAttachment(id);
-      const url = window.URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
-    } catch {
-      alert("Failed to open attachment");
-    }
-  };
+  const handleDownloadAttachment = (id: number) => openAttachment(itemRequestAPI.attachmentUrl(id));
 
   const renderItemRow = (req: ItemRequest) => {
     const key = makeRequestKey("item", req.id);

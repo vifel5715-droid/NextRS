@@ -10,12 +10,17 @@ import { formatLocalDate, formatMilitaryTime } from "@shared/utils/format";
 import { copyToClipboard, formatItemForRegistration } from "@shared/utils/clipboard";
 import type { ItemCatalogEntry, OptionListEntry } from "@shared/types";
 import {
-  createItemCatalogEntryAction,
-  deleteItemCatalogEntryAction,
+  createItemCatalogEntryAction as createItemCatalogEntryResult,
+  deleteItemCatalogEntryAction as deleteItemCatalogEntryResult,
   getItemCatalogAction,
   getOptionListAction,
-  updateItemCatalogEntryAction,
+  updateItemCatalogEntryAction as updateItemCatalogEntryResult,
 } from "@server/actions/reference-data";
+import { throwOnError } from "@shared/utils/actionResult";
+
+const createItemCatalogEntryAction = throwOnError(createItemCatalogEntryResult);
+const updateItemCatalogEntryAction = throwOnError(updateItemCatalogEntryResult);
+const deleteItemCatalogEntryAction = throwOnError(deleteItemCatalogEntryResult);
 
 interface ItemCatalogModalProps {
   isOpen: boolean;

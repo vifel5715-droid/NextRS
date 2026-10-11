@@ -2,7 +2,9 @@
 
 import { eq } from "drizzle-orm";
 import type { ApprovalLevel, ItemCatalogEntry, OptionListEntry } from "@shared/types";
+import { runAction, type ActionResult } from "../action-result";
 import { getCurrentUser } from "../auth/session";
+import { publishRequestChanged } from "../realtime";
 import { getDb } from "../db";
 import { itemCatalog, optionLists } from "../db/schema";
 
@@ -129,7 +131,11 @@ export async function getItemCatalogAction(): Promise<ItemCatalogEntry[]> {
   return rows.map(toItemCatalogEntry);
 }
 
-export async function createItemCatalogEntryAction(input: SaveItemCatalogInput): Promise<ItemCatalogEntry> {
+export async function createItemCatalogEntryAction(input: SaveItemCatalogInput): Promise<ActionResult<ItemCatalogEntry>> {
+  return runAction(() => createItemCatalogEntry(input));
+}
+
+async function createItemCatalogEntry(input: SaveItemCatalogInput): Promise<ItemCatalogEntry> {
   const user = await requireItemCatalogManagementPermission();
   const values = validateItemCatalogInput(input);
   const [row] = await getDb()
@@ -137,10 +143,15 @@ export async function createItemCatalogEntryAction(input: SaveItemCatalogInput):
     .values({ ...values, created_by: user.id, created_at: new Date().toISOString() })
     .returning();
   if (!row) throw new Error("Failed to add item to the catalog.");
+  await publishRequestChanged({ type: "catalog", action: "created", id: row.id, department: null });
   return toItemCatalogEntry(row);
 }
 
-export async function updateItemCatalogEntryAction(id: number, input: SaveItemCatalogInput): Promise<ItemCatalogEntry> {
+export async function updateItemCatalogEntryAction(id: number, input: SaveItemCatalogInput): Promise<ActionResult<ItemCatalogEntry>> {
+  return runAction(() => updateItemCatalogEntry(id, input));
+}
+
+async function updateItemCatalogEntry(id: number, input: SaveItemCatalogInput): Promise<ItemCatalogEntry> {
   await requireItemCatalogManagementPermission();
   if (!Number.isSafeInteger(id) || id < 1) throw new Error("Invalid item ID.");
   const values = validateItemCatalogInput(input);
@@ -150,10 +161,15 @@ export async function updateItemCatalogEntryAction(id: number, input: SaveItemCa
     .where(eq(itemCatalog.id, id))
     .returning();
   if (!row) throw new Error("Item not found.");
+  await publishRequestChanged({ type: "catalog", action: "updated", id, department: null });
   return toItemCatalogEntry(row);
 }
 
-export async function deleteItemCatalogEntryAction(id: number): Promise<void> {
+export async function deleteItemCatalogEntryAction(id: number): Promise<ActionResult<void>> {
+  return runAction(() => deleteItemCatalogEntry(id));
+}
+
+async function deleteItemCatalogEntry(id: number): Promise<void> {
   await requireItemCatalogManagementPermission();
   if (!Number.isSafeInteger(id) || id < 1) throw new Error("Invalid item ID.");
   const [deleted] = await getDb()
@@ -161,4 +177,5 @@ export async function deleteItemCatalogEntryAction(id: number): Promise<void> {
     .where(eq(itemCatalog.id, id))
     .returning({ id: itemCatalog.id });
   if (!deleted) throw new Error("Item not found.");
+  await publishRequestChanged({ type: "catalog", action: "deleted", id, department: null });
 }

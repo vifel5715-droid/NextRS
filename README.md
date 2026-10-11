@@ -25,9 +25,21 @@ The Drizzle schema and a reusable server-only PostgreSQL pool are in
 and a signed HTTP-only session cookie. Item-catalog and option-list reads,
 item/service and urgent/reimbursement request lists, dashboard counts,
 admin user/role lists, outed items, and adjustment/deletion history also use
-authenticated Server Actions. The client does not attempt a Socket.IO
-connection because no realtime server is deployed; open dashboards do not
-receive changes made by other users until they reload.
+authenticated Server Actions. Every former `/api/*` REST call is now a
+Server Action too; `app/api/[...path]` only remains as a 501 guard for
+unknown URLs. Mutations return `{ ok, data | error }` instead of throwing,
+because Next.js hides thrown Server Action messages in production (they
+surface as "Minified React error #441").
+
+Realtime: after a write commits, the server publishes a Postgres
+`NOTIFY request_changed` with ids only, and `/api/events` streams it to
+browsers as Server-Sent Events, so open dashboards refetch automatically. No
+extra service or environment variable is needed, and it keeps working with
+more than one app instance. Attachments are stored in the database and served
+from `/api/item-request/:id/attachment` and
+`/api/reimbursement-request/:id/attachment` (inline; `?download=1` to save).
+`LEGACY_UPLOADS_DIR` is only read for very old rows that still point to a
+file on disk.
 
 ## Database setup
 

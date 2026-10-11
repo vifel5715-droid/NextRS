@@ -1,7 +1,9 @@
 "use server";
 
 import { and, eq, isNull, or } from "drizzle-orm";
+import { runAction, type ActionResult } from "../action-result";
 import { getCurrentUser } from "../auth/session";
+import { publishRequestChanged } from "../realtime";
 import { getDb } from "../db";
 import {
   itemCatalog,
@@ -59,7 +61,7 @@ function validateInput(input: SupervisorReviewInput): string | null {
 async function requirePendingRequest(
   tx: Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0],
   input: SupervisorReviewInput
-): Promise<{ created_by: string }> {
+): Promise<{ created_by: string; department: string }> {
   const table =
     input.type === "item"
       ? itemRequests
@@ -70,7 +72,7 @@ async function requirePendingRequest(
           : reimbursementRequests;
 
   const [request] = await tx
-    .select({ id: table.id, created_by: table.created_by, supervisor_status: table.supervisor_status })
+    .select({ id: table.id, created_by: table.created_by, department: table.department, supervisor_status: table.supervisor_status })
     .from(table)
     .where(eq(table.id, input.id))
     .for("update");
@@ -78,7 +80,7 @@ async function requirePendingRequest(
   if (request.supervisor_status && request.supervisor_status !== "pending") {
     throw new Error("This request has already been reviewed.");
   }
-  return { created_by: request.created_by };
+  return { created_by: request.created_by, department: request.department };
 }
 
 async function enforceSupervisorEligibility(
@@ -119,13 +121,17 @@ async function enforceSupervisorEligibility(
   }
 }
 
-export async function reviewSupervisorRequestAction(input: SupervisorReviewInput): Promise<void> {
+export async function reviewSupervisorRequestAction(input: SupervisorReviewInput): Promise<ActionResult<void>> {
+  return runAction(() => reviewSupervisorRequest(input));
+}
+
+async function reviewSupervisorRequest(input: SupervisorReviewInput): Promise<void> {
   const { user, role } = await requireSupervisorReviewer();
   const rejectionComment = validateInput(input);
   const db = getDb();
   const reviewedAt = new Date().toISOString();
 
-  await db.transaction(async (tx) => {
+  const department = await db.transaction(async (tx) => {
     const request = await requirePendingRequest(tx, input);
     await enforceSupervisorEligibility(tx, input, role, request.created_by);
 
@@ -154,5 +160,8 @@ export async function reviewSupervisorRequestAction(input: SupervisorReviewInput
       )
       .returning({ id: table.id });
     if (!updated) throw new Error("This request has already been reviewed.");
+    return request.department;
   });
+
+  await publishRequestChanged({ type: input.type, action: "updated", id: input.id, department });
 }

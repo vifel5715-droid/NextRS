@@ -17,12 +17,17 @@ import DateRangeFilter from "@shared/components/DateRangeFilter";
 import { copyToClipboard, formatItemForRegistration } from "@shared/utils/clipboard";
 import type { ItemCatalogEntry, OptionListEntry } from "@shared/types";
 import {
-  createItemCatalogEntryAction,
-  deleteItemCatalogEntryAction,
+  createItemCatalogEntryAction as createItemCatalogEntryResult,
+  deleteItemCatalogEntryAction as deleteItemCatalogEntryResult,
   getItemCatalogAction,
   getOptionListAction,
-  updateItemCatalogEntryAction,
+  updateItemCatalogEntryAction as updateItemCatalogEntryResult,
 } from "@server/actions/reference-data";
+import { throwOnError } from "@shared/utils/actionResult";
+
+const createItemCatalogEntryAction = throwOnError(createItemCatalogEntryResult);
+const updateItemCatalogEntryAction = throwOnError(updateItemCatalogEntryResult);
+const deleteItemCatalogEntryAction = throwOnError(deleteItemCatalogEntryResult);
 
 /** Human-readable labels for the two approval_level values — see db/schema.ts's itemCatalog. */
 const APPROVAL_LEVEL_LABELS: Record<string, string> = {

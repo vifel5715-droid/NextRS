@@ -24,8 +24,8 @@ export const usePurchasePaymentItems = (isAuthenticated = true) => {
     try {
       const res = await itemRequestAPI.getPurchasePaymentItems();
       setItems(res.data);
-    } catch {
-      // silently ignore — summary tiles are non-critical
+    } catch (error) {
+      console.error("Failed to load purchase/urgent items:", error);
     }
   }, [isAuthenticated]);
 
@@ -39,8 +39,8 @@ export const usePurchasePaymentItems = (isAuthenticated = true) => {
         if (!cancelled) {
           setItems(res.data);
         }
-      } catch {
-        // silently ignore — summary tiles are non-critical
+      } catch (error) {
+        console.error("Failed to load purchase/urgent items:", error);
       }
     };
 

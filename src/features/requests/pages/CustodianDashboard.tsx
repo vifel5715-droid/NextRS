@@ -20,6 +20,7 @@ import { useMachineCodeOptions } from "@features/item-catalog/hooks/useMachineCo
 import { useAuth } from "@app/providers/AuthProvider";
 import { makeRequestKey } from "@shared/utils/requestKey";
 import { itemRequestAPI } from "../../../services/api";
+import { openAttachment } from "@shared/utils/openAttachment";
 import { UOM_OPTIONS } from "../../../constants/uom";
 import type { ItemAudit, ItemRow, ServiceRow, RequestRow, FieldValue } from "@shared/types";
 import IssuanceHistory from "@features/requests/components/IssuanceHistory";
@@ -255,16 +256,7 @@ const CustodianDashboard: React.FC = () => {
     setTimeout(() => setCopiedKey((k) => (k === key ? null : k)), 1500);
   };
 
-  const handleDownloadAttachment = async (id: number, _filename: string) => {
-    try {
-      const response = await itemRequestAPI.downloadAttachment(id);
-      const url = window.URL.createObjectURL(new Blob([response.data], { type: "application/pdf" }));
-      window.open(url, "_blank", "noopener,noreferrer");
-      setTimeout(() => window.URL.revokeObjectURL(url), 60000);
-    } catch {
-      alert("Failed to open attachment");
-    }
-  };
+  const handleDownloadAttachment = (id: number, _filename: string) => openAttachment(itemRequestAPI.attachmentUrl(id));
 
   const renderSummaryRow = (row: RequestRow) => (
     <div

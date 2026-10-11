@@ -139,7 +139,10 @@ export interface ItemRequest {
   id: number;
   serial: string;
   created_at: string;
+  /** Display name of the creator. */
   created_by: string;
+  /** UUID of the creator — use this (not created_by) for ownership checks. */
+  created_by_id?: string;
   created_by_role?: string;
   requested_by?: string;
   department: string;
@@ -445,8 +448,10 @@ export interface RequestDetail {
   created_at?: string;
   department?: string;
   requested_by?: string;
-  /** UUID of the creator — used to check request ownership (e.g. staff editing their own request). */
+  /** Display name of the creator (the server resolves the UUID to a name). */
   created_by?: string;
+  /** UUID of the creator — used to check request ownership (e.g. staff editing their own request). */
+  created_by_id?: string;
   created_by_role?: string;
   purpose?: string;
   remarks?: string;

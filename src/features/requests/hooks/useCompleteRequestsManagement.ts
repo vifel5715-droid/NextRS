@@ -1,7 +1,8 @@
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { debounceByKey } from "@shared/utils/debounce";
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from "../../../services/api";
 import { getRequestListsAction } from "@server/actions/request-lists";
-import { updateRequestItemAction } from "@server/actions/update-request-item";
+import { updateRequestItemAction as updateRequestItemResult } from "@server/actions/update-request-item";
 import type { ItemRequest, ServiceRequest, RequestDetail, ItemRow, ServiceRow, RequestTab, FieldValue } from "@shared/types";
 import { useRequestsChanged, type RequestChangedPayload } from "@shared/hooks/useRequestsChanged";
 import { upsertById, removeById } from "@shared/utils/reconcileRequests";
@@ -11,6 +12,9 @@ import { createLogger } from "@shared/utils/logger";
 import { diffItemRow } from "@features/adjustments/utils/adjustmentSlip";
 import { useDateRangeContext } from "@app/providers/DateRangeProvider";
 import { filterByDateRange } from "@shared/utils/dateRange";
+import { throwOnError } from "@shared/utils/actionResult";
+
+const updateRequestItemAction = throwOnError(updateRequestItemResult);
 
 const log = createLogger("useCompleteRequestsManagement");
 
@@ -101,6 +105,15 @@ export const useCompleteRequestsManagement = () => {
     load.finally(() => setLoading(false));
   }, [activeTab, loadItemRequests, loadServiceRequests]);
 
+  // Realtime events carry ids only, so the affected list is refetched (debounced).
+  const listLoadersRef = useRef({ loadItemRequests, loadServiceRequests });
+  useEffect(() => { listLoadersRef.current = { loadItemRequests, loadServiceRequests }; }, [loadItemRequests, loadServiceRequests]);
+  const debouncedListReload = useRef(
+    debounceByKey((key: string) => {
+      void (key === "item" ? listLoadersRef.current.loadItemRequests() : listLoadersRef.current.loadServiceRequests());
+    }, 500)
+  ).current;
+
   const handleRequestChanged = useCallback((payload: RequestChangedPayload) => {
     // This hook only manages item/service request lists — an Urgent Request
     // or Reimbursement Request change (separate workflows) is handled by
@@ -125,13 +138,15 @@ export const useCompleteRequestsManagement = () => {
         const isFinished = (payload.data as ServiceRequest).pr_status === "finish";
         setServiceRequests((prev) => isFinished ? upsertById(prev, payload.data!) : removeById(prev, payload.id));
       }
+    } else {
+      debouncedListReload(payload.type);
     }
 
     if (requestDetails.has(key)) {
       const fetcher = payload.type === "item" ? itemRequestAPI.getById(payload.id) : serviceRequestAPI.getById(payload.id);
       fetcher.then((res) => setRequestDetails((prev) => new Map(prev).set(key, res.data))).catch(() => {});
     }
-  }, [requestDetails]);
+  }, [requestDetails, debouncedListReload]);
 
   useRequestsChanged(handleRequestChanged);
 

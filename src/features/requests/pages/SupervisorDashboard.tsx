@@ -26,6 +26,146 @@ import styles from "./Dashboard.module.css";
 
 const log = createLogger("SupervisorDashboard");
 
+const tabClass = (active: boolean) => `dash-tab ${active ? "active" : ""}`;
+
+const formatDateOrNull = (date?: string | null): string | null =>
+  date ? new Date(date).toLocaleDateString() : null;
+
+/** Makes a clickable row div keyboard-accessible (Enter/Space toggles it). */
+const toggleRowProps = (expanded: boolean, onToggle: () => void) => ({
+  role: "button",
+  tabIndex: 0,
+  "aria-expanded": expanded,
+  onClick: onToggle,
+  onKeyDown: (e: React.KeyboardEvent) => {
+    if (e.key === "Enter" || e.key === " ") {
+      e.preventDefault();
+      onToggle();
+    }
+  },
+});
+
+interface HoldStatusBadgeProps {
+  status?: string;
+  hasHeldItem: boolean;
+  heldItemEdited: boolean;
+  heldItemCount?: number;
+  services?: ServiceRow[];
+}
+
+// Display-only — a Held item never touches the underlying `status`, so this
+// overlays "ON HOLD"/"RELEASE ON HOLD" without disturbing the real
+// supervisor/custodian approval shown once expanded. A rejected request stays
+// "rejected" even with a stale HOLD item.
+const HoldStatusBadge: React.FC<HoldStatusBadgeProps> = ({ status, hasHeldItem, heldItemEdited, heldItemCount, services }) => {
+  if (status !== "rejected") {
+    if (hasHeldItem) {
+      return (
+        <span className="badge bg-danger">
+          {heldItemEdited ? "RELEASE ON HOLD" : "ON HOLD"}{heldItemCount ? ` (${heldItemCount})` : ""}
+        </span>
+      );
+    }
+    const heldServiceCount = getHeldServiceCount({ services });
+    if (heldServiceCount > 0) {
+      return (
+        <span className="badge bg-danger">
+          {hasEditedHeldService({ services }) ? "RELEASE ON HOLD" : "ON HOLD"}
+          {` (${heldServiceCount})`}
+        </span>
+      );
+    }
+  }
+  return <span className={`badge ${getBsStatusBadgeClass(status)}`}>{formatStatusLabel(status)}</span>;
+};
+
+const ApprovalAction: React.FC<{ evaluated: boolean; canApprove: boolean; onProcess: () => void }> = ({ evaluated, canApprove, onProcess }) => {
+  if (evaluated) return <span className="badge bg-secondary">Already Evaluated</span>;
+  if (!canApprove) return <span className="badge bg-secondary">Awaiting manager approval</span>;
+  return (
+    <button onClick={onProcess} className="btn btn-sm btn-primary w-100">
+      <i className="bi bi-check2-circle me-1"></i>Process Approval
+    </button>
+  );
+};
+
+const getUrgentDeliveryBadge = (deliveryStatus?: string | null, quantityDelivered?: number | null) => {
+  if (deliveryStatus === "delivered") return { className: "bg-success", label: "Delivered" };
+  if (deliveryStatus === "partial_delivered") return { className: "bg-warning text-dark", label: `Partial (${quantityDelivered ?? 0})` };
+  return { className: "bg-secondary", label: "Pending" };
+};
+
+const ListStatusMessage: React.FC<{ loading: boolean; empty: boolean; loadingText: string; emptyText: string }> = ({ loading, empty, loadingText, emptyText }) => {
+  if (loading) return <div className="p-3 text-muted">{loadingText}</div>;
+  if (empty) return <div className="p-3 text-muted">{emptyText}</div>;
+  return null;
+};
+
+const detailLabelCellStyle: React.CSSProperties = { width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" };
+const detailValueCellStyle: React.CSSProperties = { padding: "8px 12px", border: "none", color: "#212529" };
+const detailRowStyle: React.CSSProperties = { borderBottom: "1px solid #dee2e6" };
+
+// Read-only — delivery, PR, and issuance tracking are custodian actions, not
+// supervisor edits. Same data and layout as the other dashboards' Details
+// column, so "who received it and when" is visible everywhere the item is.
+const ItemDeliveryDetails: React.FC<{ item: ItemRow; showPrNumber: boolean }> = ({ item, showPrNumber }) => {
+  if (!item.delivery_status) return <span className="text-muted">-</span>;
+  const isPrOrUrgent = item.delivery_status === "PURCHASE REQUEST" || item.delivery_status === "URGENT";
+  const isUrgent = item.delivery_status === "URGENT";
+  const historyIsUrgent = (item.pr_type || item.delivery_status) === "URGENT";
+  const showQtyDelivered = item.delivery_status === "PARTIAL DELIVERED" || (isPrOrUrgent && item.pr_status === "DELIVERED PARTIAL");
+  return (
+    <div className="table-responsive">
+      <table className="table table-sm mb-0" style={{ borderCollapse: "separate", borderSpacing: "0", border: "1px solid #dee2e6", borderRadius: "6px", overflow: "hidden", backgroundColor: "#fafbfc" }}>
+        <tbody>
+          {item.delivery_status === "OUT" && (
+            <>
+              <tr style={detailRowStyle}>
+                <td style={detailLabelCellStyle}>Issuance No.</td>
+                <td style={detailValueCellStyle}>{item.issuance_number || "Not issued yet"}</td>
+              </tr>
+              <tr style={detailRowStyle}>
+                <td style={detailLabelCellStyle}>Qty Out</td>
+                <td style={detailValueCellStyle}>{item.quantity_out ?? 0} / {item.quantity}</td>
+              </tr>
+            </>
+          )}
+          {isPrOrUrgent && (
+            <tr style={detailRowStyle}>
+              <td style={detailLabelCellStyle}>{isUrgent ? "Date Needed" : "PR Number"}</td>
+              <td style={detailValueCellStyle}>{(isUrgent ? formatDateOrNull(item.date_needed) : item.pr_number) || "N/A"}</td>
+            </tr>
+          )}
+          {isPrOrUrgent && item.pr_status && (
+            <tr style={detailRowStyle}>
+              <td style={detailLabelCellStyle}>Order Status</td>
+              <td style={detailValueCellStyle}>{item.pr_status}</td>
+            </tr>
+          )}
+          {item.audits && item.audits.length > 0 && (
+            <tr>
+              <td colSpan={2} style={{ padding: "0", border: "none" }}>
+                <IssuanceHistory
+                  audits={item.audits}
+                  prNumber={historyIsUrgent ? formatDateOrNull(item.date_needed) : item.pr_number}
+                  prNumberLabel={historyIsUrgent ? "Date Needed" : "PR Number"}
+                  showPrNumber={showPrNumber}
+                />
+              </td>
+            </tr>
+          )}
+          {showQtyDelivered && (
+            <tr style={detailRowStyle}>
+              <td style={detailLabelCellStyle}>Qty Delivered</td>
+              <td style={detailValueCellStyle}>{item.quantity_delivered || "N/A"}</td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </div>
+  );
+};
+
 const SupervisorDashboard: React.FC = () => {
   const { user } = useAuth();
   const itemCatalogNames = useItemCatalogNames();
@@ -74,6 +214,7 @@ const SupervisorDashboard: React.FC = () => {
     canApproveReimbursementAsSupervisor,
     expandedReimbursementIds,
     toggleReimbursementRow,
+    reloadReimbursementRequests,
   } = useReimbursementRequests();
   const [activeUrgentTab, setActiveUrgentTab] = React.useState(false);
   const [activeReimbursementTab, setActiveReimbursementTab] = React.useState(false);
@@ -83,6 +224,8 @@ const SupervisorDashboard: React.FC = () => {
   const isItemTab = activeTab === "item";
   const rows = isItemTab ? filteredItemRequests : filteredServiceRequests;
   const totalCount = isItemTab ? itemRequests.length : serviceRequests.length;
+  const showRequestTabs = !activeUrgentTab && !activeReimbursementTab;
+  const isAdmin = user?.role?.toLowerCase().trim() === "admin";
 
   useEffect(() => {
     log.info("Mounted — user:", user?.email, `(${user?.role})`);
@@ -99,34 +242,30 @@ const SupervisorDashboard: React.FC = () => {
       <div className="dash-toolbar">
         <div className="dash-tabs">
           <button
-            className={`dash-tab ${!activeUrgentTab && !activeReimbursementTab && isItemTab ? "active" : ""}`}
+            className={tabClass(showRequestTabs && isItemTab)}
             onClick={() => { log.info("Tab switched to: item"); setActiveUrgentTab(false); setActiveReimbursementTab(false); setActiveTab("item"); }}
           >
-            Item Requests
-            <span className="dash-tab-badge">{filteredItemRequests.length}</span>
+            Item Requests<span className="dash-tab-badge">{filteredItemRequests.length}</span>
           </button>
           <button
-            className={`dash-tab ${!activeUrgentTab && !activeReimbursementTab && !isItemTab ? "active" : ""}`}
+            className={tabClass(showRequestTabs && !isItemTab)}
             onClick={() => { log.info("Tab switched to: service"); setActiveUrgentTab(false); setActiveReimbursementTab(false); setActiveTab("service"); }}
           >
-            Service Requests
-            <span className="dash-tab-badge">{filteredServiceRequests.length}</span>
+            Service Requests<span className="dash-tab-badge">{filteredServiceRequests.length}</span>
           </button>
           <button
-            className={`dash-tab ${activeUrgentTab ? "active" : ""}`}
+            className={tabClass(activeUrgentTab)}
             onClick={() => { setActiveReimbursementTab(false); setActiveUrgentTab(true); }}
           >
-            Urgent Requests
-            <span className="dash-tab-badge">
+            Urgent Requests<span className="dash-tab-badge">
               {urgentRequests.filter((r) => r.supervisor_status === "pending").length}
             </span>
           </button>
           <button
-            className={`dash-tab ${activeReimbursementTab ? "active" : ""}`}
+            className={tabClass(activeReimbursementTab)}
             onClick={() => { setActiveUrgentTab(false); setActiveReimbursementTab(true); }}
           >
-            Reimbursement Requests
-            <span className="dash-tab-badge">
+            Reimbursement Requests<span className="dash-tab-badge">
               {reimbursementRequests.filter((r) => r.supervisor_status === "pending").length}
             </span>
           </button>
@@ -147,13 +286,13 @@ const SupervisorDashboard: React.FC = () => {
         </div>
       </div>
 
-      {!activeUrgentTab && !activeReimbursementTab && (
+      {showRequestTabs && (
       <div className="mb-3">
         <DateRangeFilter />
       </div>
       )}
 
-      {!activeUrgentTab && !activeReimbursementTab && (
+      {showRequestTabs && (
       <div className={styles.requestListFrame}>
         <div className={styles.requestListHeader}>
 
@@ -174,11 +313,12 @@ const SupervisorDashboard: React.FC = () => {
           const details = requestDetails.get(key);
           const evaluated = !!(details?.supervisor_status && details.supervisor_status !== "pending");
           const expanded = expandedRows.has(key);
+          const heldDetailItems = ((details as { items?: ItemRow[] } | undefined)?.items ?? []).filter((i) => i.delivery_status === "HOLD");
           return (
             <div key={row.id} className={styles.requestCard}>
               <div
                 className={`${styles.requestCardRow} ${expanded ? styles.requestCardRowExpanded : ""}`}
-                onClick={() => handleRowClick(row)}
+                {...toggleRowProps(expanded, () => handleRowClick(row))}
               >
                 <div className="text-center">
                   <i className={`bi bi-chevron-${expanded ? "down" : "right"}`}></i>
@@ -189,22 +329,13 @@ const SupervisorDashboard: React.FC = () => {
                 <div className="hide-sm" data-label="Dept">{row.department}</div>
                 <div data-label="Purpose">{row.purpose}</div>
                 <div>
-                  {/* Display-only — a Held item never touches the underlying `status`,
-                      so this overlays "ON HOLD"/"RELEASE ON HOLD" without disturbing
-                      the real supervisor/custodian approval shown once expanded. A
-                      rejected request stays "rejected" even with a stale HOLD item. */}
-                  {row.has_held_item && row.status !== "rejected" ? (
-                    <span className="badge bg-danger">
-                      {row.has_edited_held_item ? "RELEASE ON HOLD" : "ON HOLD"}{row.held_item_count ? ` (${row.held_item_count})` : ""}
-                    </span>
-                  ) : getHeldServiceCount(row as { services?: ServiceRow[] }) > 0 && row.status !== "rejected" ? (
-                    <span className="badge bg-danger">
-                      {hasEditedHeldService(row as { services?: ServiceRow[] }) ? "RELEASE ON HOLD" : "ON HOLD"}
-                      {` (${getHeldServiceCount(row as { services?: ServiceRow[] })})`}
-                    </span>
-                  ) : (
-                    <span className={`badge ${getBsStatusBadgeClass(row.status)}`}>{formatStatusLabel(row.status)}</span>
-                  )}
+                  <HoldStatusBadge
+                    status={row.status}
+                    hasHeldItem={!!row.has_held_item}
+                    heldItemEdited={!!row.has_edited_held_item}
+                    heldItemCount={row.held_item_count}
+                    services={(row as { services?: ServiceRow[] }).services}
+                  />
                 </div>
               </div>
               <div className={`${styles.expandWrapper} ${expanded ? styles.expandWrapperOpen : ""}`}>
@@ -230,21 +361,13 @@ const SupervisorDashboard: React.FC = () => {
                         </div>
                         <div className="col-12 col-sm-6 col-md">
                           <div className="text-muted" style={{ fontSize: "0.75rem" }}>Status</div>
-                          {/* Display-only — see the summary-row comment above for why this
-                              doesn't touch the underlying `status`. */}
-                          {(details as { items?: ItemRow[] }).items?.some((i) => i.delivery_status === "HOLD") && details.status !== "rejected" ? (
-                            <span className="badge bg-danger">
-                              {(details as { items?: ItemRow[] }).items?.some((i) => i.delivery_status === "HOLD" && i.hold_edited) ? "RELEASE ON HOLD" : "ON HOLD"}
-                              {` (${(details as { items?: ItemRow[] }).items?.filter((i) => i.delivery_status === "HOLD").length})`}
-                            </span>
-                          ) : getHeldServiceCount(details as { services?: ServiceRow[] }) > 0 && details.status !== "rejected" ? (
-                            <span className="badge bg-danger">
-                              {hasEditedHeldService(details as { services?: ServiceRow[] }) ? "RELEASE ON HOLD" : "ON HOLD"}
-                              {` (${getHeldServiceCount(details as { services?: ServiceRow[] })})`}
-                            </span>
-                          ) : (
-                            <span className={`badge ${getBsStatusBadgeClass(details.status)}`}>{formatStatusLabel(details.status)}</span>
-                          )}
+                          <HoldStatusBadge
+                            status={details.status}
+                            hasHeldItem={heldDetailItems.length > 0}
+                            heldItemEdited={heldDetailItems.some((i) => i.hold_edited)}
+                            heldItemCount={heldDetailItems.length}
+                            services={details.services}
+                          />
                         </div>
                         <div className="col-12 col-sm-6 col-md">
                           <div className="text-muted" style={{ fontSize: "0.75rem" }}>Remarks</div>
@@ -268,15 +391,11 @@ const SupervisorDashboard: React.FC = () => {
                         </div>
                       </div>
                       <div>
-                        {evaluated ? (
-                          <span className="badge bg-secondary">Already Evaluated</span>
-                        ) : canApproveRequest(details) ? (
-                          <button onClick={() => handleStatusClick(row)} className="btn btn-sm btn-primary w-100">
-                            <i className="bi bi-check2-circle me-1"></i>Process Approval
-                          </button>
-                        ) : (
-                          <span className="badge bg-secondary">Awaiting manager approval</span>
-                        )}
+                        <ApprovalAction
+                          evaluated={evaluated}
+                          canApprove={canApproveRequest(details)}
+                          onProcess={() => handleStatusClick(row)}
+                        />
                       </div>
                     </div>
                     {isItemTab ? (
@@ -293,10 +412,10 @@ const SupervisorDashboard: React.FC = () => {
                             </thead>
                             <tbody>
                               {((editableItems.get(key) || []) as ItemRow[]).map((item: ItemRow, idx: number) => (
-                                <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? "#ffffff" : "#f8f9fa", borderBottom: "1px solid #e0e0e6" }}>
+                                <tr key={item.id ?? `new-${idx}`} style={{ backgroundColor: idx % 2 === 0 ? "#ffffff" : "#f8f9fa", borderBottom: "1px solid #e0e0e6" }}>
                                   <td data-label="#" style={{ padding: "12px", border: "none" }}>{idx + 1}</td>
                                   <td data-label="Item Name" style={{ padding: "12px", border: "none" }}><input type="text" value={item.item_name || ""} className="form-control form-control-sm" onChange={(e) => updateItem(row.id, idx, "item_name", e.target.value)} /></td>
-                                  <td data-label="Qty" style={{ padding: "12px", border: "none" }}><input type="number" min="1" value={item.quantity || 1} className="form-control form-control-sm" onChange={(e) => updateItem(row.id, idx, "quantity", Math.max(1, parseInt(e.target.value) || 1))} /></td>
+                                  <td data-label="Qty" style={{ padding: "12px", border: "none" }}><input type="number" min="1" value={item.quantity || 1} className="form-control form-control-sm" onChange={(e) => updateItem(row.id, idx, "quantity", Math.max(1, Number.parseInt(e.target.value, 10) || 1))} /></td>
                                   <td data-label="UoM" style={{ padding: "12px", border: "none" }}><input type="text" value={item.uom || ""} className="form-control form-control-sm" onChange={(e) => updateItem(row.id, idx, "uom", e.target.value)} /></td>
                                   <td data-label="Remarks" style={{ padding: "12px", border: "none" }}><input type="text" value={item.remarks || ""} className="form-control form-control-sm" onChange={(e) => updateItem(row.id, idx, "remarks", e.target.value)} /></td>
                                   <td data-label="Machine Code" style={{ padding: "12px", border: "none" }}>
@@ -310,10 +429,6 @@ const SupervisorDashboard: React.FC = () => {
                                       noResultsText="No record found"
                                     />
                                   </td>
-                                  {/* Balance/Status/Details are read-only here — delivery, PR, and
-                                      issuance tracking are custodian actions, not supervisor edits.
-                                      Same data and layout as the other dashboards' Details column, so
-                                      "who received it and when" is visible everywhere the item is. */}
                                   <td data-label="Balance" style={{ padding: "12px", border: "none" }}>
                                     {getItemBalance(item)}
                                   </td>
@@ -326,53 +441,7 @@ const SupervisorDashboard: React.FC = () => {
                                     </span>
                                   </td>
                                   <td data-label="Details" style={{ padding: "12px", border: "none" }}>
-                                    {item.delivery_status ? (
-                                      <div className="table-responsive">
-                                        <table className="table table-sm mb-0" style={{ borderCollapse: "separate", borderSpacing: "0", border: "1px solid #dee2e6", borderRadius: "6px", overflow: "hidden", backgroundColor: "#fafbfc" }}>
-                                          <tbody>
-                                            {item.delivery_status === "OUT" && (
-                                              <>
-                                                <tr style={{ borderBottom: "1px solid #dee2e6" }}>
-                                                  <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Issuance No.</td>
-                                                  <td style={{ padding: "8px 12px", border: "none", color: "#212529" }}>{item.issuance_number || "Not issued yet"}</td>
-                                                </tr>
-                                                <tr style={{ borderBottom: "1px solid #dee2e6" }}>
-                                                  <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Qty Out</td>
-                                                  <td style={{ padding: "8px 12px", border: "none", color: "#212529" }}>{item.quantity_out ?? 0} / {item.quantity}</td>
-                                                </tr>
-                                              </>
-                                            )}
-                                            {(item.delivery_status === "PURCHASE REQUEST" || item.delivery_status === "URGENT") && (
-                                              <tr style={{ borderBottom: "1px solid #dee2e6" }}>
-                                                <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>{item.delivery_status === "URGENT" ? "Date Needed" : "PR Number"}</td>
-                                                <td style={{ padding: "8px 12px", border: "none", color: "#212529" }}>{item.delivery_status === "URGENT" ? (item.date_needed ? new Date(item.date_needed).toLocaleDateString() : "N/A") : (item.pr_number || "N/A")}</td>
-                                              </tr>
-                                            )}
-                                            {(item.delivery_status === "PURCHASE REQUEST" || item.delivery_status === "URGENT") && item.pr_status && (
-                                              <tr style={{ borderBottom: "1px solid #dee2e6" }}>
-                                                <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Order Status</td>
-                                                <td style={{ padding: "8px 12px", border: "none", color: "#212529" }}>{item.pr_status}</td>
-                                              </tr>
-                                            )}
-                                            {item.audits && item.audits.length > 0 && (
-                                              <tr>
-                                                <td colSpan={2} style={{ padding: "0", border: "none" }}>
-                                                  <IssuanceHistory audits={item.audits} prNumber={(item.pr_type || item.delivery_status) === "URGENT" ? (item.date_needed ? new Date(item.date_needed).toLocaleDateString() : null) : item.pr_number} prNumberLabel={(item.pr_type || item.delivery_status) === "URGENT" ? "Date Needed" : "PR Number"} showPrNumber={user?.role?.toLowerCase().trim() === "admin"} />
-                                                </td>
-                                              </tr>
-                                            )}
-                                            {(item.delivery_status === "PARTIAL DELIVERED" || ((item.delivery_status === "PURCHASE REQUEST" || item.delivery_status === "URGENT") && item.pr_status === "DELIVERED PARTIAL")) && (
-                                              <tr style={{ borderBottom: "1px solid #dee2e6" }}>
-                                                <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Qty Delivered</td>
-                                                <td style={{ padding: "8px 12px", border: "none", color: "#212529" }}>{item.quantity_delivered || "N/A"}</td>
-                                              </tr>
-                                            )}
-                                          </tbody>
-                                        </table>
-                                      </div>
-                                    ) : (
-                                      <span className="text-muted">-</span>
-                                    )}
+                                    <ItemDeliveryDetails item={item} showPrNumber={isAdmin} />
                                   </td>
                                   <td data-label="Action" style={{ padding: "12px", border: "none" }} className="text-center">
                                     <button className="btn btn-sm btn-outline-danger" onClick={() => deleteItem(row.id, idx)}>
@@ -406,7 +475,7 @@ const SupervisorDashboard: React.FC = () => {
                               </thead>
                               <tbody>
                                 {(details.services || []).map((service: ServiceRow, idx: number) => (
-                                  <tr key={idx} style={{ backgroundColor: idx % 2 === 0 ? "#ffffff" : "#f8f9fa", borderBottom: "1px solid #e0e0e6" }}>
+                                  <tr key={service.id ?? idx} style={{ backgroundColor: idx % 2 === 0 ? "#ffffff" : "#f8f9fa", borderBottom: "1px solid #e0e0e6" }}>
                                     <td data-label="#" style={{ padding: "12px", border: "none" }}>{idx + 1}</td>
                                     <td data-label="Description" style={{ padding: "12px", border: "none" }}>{sanitizeUserInput(service.description || "")}</td>
                                   </tr>
@@ -440,17 +509,14 @@ const SupervisorDashboard: React.FC = () => {
           </div>
 
           <div>
-            {loadingUrgentRequests && <div className="p-3 text-muted">Loading urgent requests...</div>}
-            {!loadingUrgentRequests && urgentRequests.length === 0 && (
-              <div className="p-3 text-muted">No urgent requests.</div>
-            )}
+            <ListStatusMessage loading={loadingUrgentRequests} empty={urgentRequests.length === 0} loadingText="Loading urgent requests..." emptyText="No urgent requests." />
             {urgentRequests.map((row) => {
               const expanded = expandedUrgentIds.has(row.id);
               return (
                 <div key={row.id} className={styles.requestCard}>
                   <div
                     className={`${styles.urgentListRow} ${expanded ? styles.urgentListRowExpanded : ""}`}
-                    onClick={() => toggleUrgentRow(row.id)}
+                    {...toggleRowProps(expanded, () => toggleUrgentRow(row.id))}
                   >
                     <div className="text-center">
                       <i className={`bi bi-chevron-${expanded ? "down" : "right"}`}></i>
@@ -502,8 +568,8 @@ const SupervisorDashboard: React.FC = () => {
                                         <span className="text-muted">—</span>
                                       ) : (
                                         <>
-                                          <span className={`badge ${item.delivery_status === "delivered" ? "bg-success" : item.delivery_status === "partial_delivered" ? "bg-warning text-dark" : "bg-secondary"}`}>
-                                            {item.delivery_status === "delivered" ? "Delivered" : item.delivery_status === "partial_delivered" ? `Partial (${item.quantity_delivered ?? 0})` : "Pending"}
+                                          <span className={`badge ${getUrgentDeliveryBadge(item.delivery_status, item.quantity_delivered).className}`}>
+                                            {getUrgentDeliveryBadge(item.delivery_status, item.quantity_delivered).label}
                                           </span>
                                           {item.delivered_by_name && (
                                             <div className="small text-muted mt-1">
@@ -576,17 +642,14 @@ const SupervisorDashboard: React.FC = () => {
           </div>
 
           <div>
-            {loadingReimbursementRequests && <div className="p-3 text-muted">Loading reimbursement requests...</div>}
-            {!loadingReimbursementRequests && reimbursementRequests.length === 0 && (
-              <div className="p-3 text-muted">No reimbursement requests.</div>
-            )}
+            <ListStatusMessage loading={loadingReimbursementRequests} empty={reimbursementRequests.length === 0} loadingText="Loading reimbursement requests..." emptyText="No reimbursement requests." />
             {reimbursementRequests.map((row) => {
               const expanded = expandedReimbursementIds.has(row.id);
               return (
                 <div key={row.id} className={styles.requestCard}>
                   <div
                     className={`${styles.urgentListRow} ${styles.urgentListRowAmount} ${expanded ? styles.urgentListRowExpanded : ""}`}
-                    onClick={() => toggleReimbursementRow(row.id)}
+                    {...toggleRowProps(expanded, () => toggleReimbursementRow(row.id))}
                   >
                     <div className="text-center">
                       <i className={`bi bi-chevron-${expanded ? "down" : "right"}`}></i>
@@ -622,6 +685,8 @@ const SupervisorDashboard: React.FC = () => {
                               requestId={row.id}
                               attachmentName={row.attachment_name}
                               attachmentSize={row.attachment_size}
+                              request={row}
+                              onReplaced={() => void reloadReimbursementRequests()}
                             />
 
                             <table className="table table-sm mt-2 mb-3">
@@ -704,7 +769,7 @@ const SupervisorDashboard: React.FC = () => {
         title="Decline Urgent Request"
         onClose={() => setUrgentDeclineTarget(null)}
         onConfirm={(reason) => {
-          if (urgentDeclineTarget !== null) reviewUrgentRequestAsSupervisor(urgentDeclineTarget, "rejected", reason);
+          if (urgentDeclineTarget !== null) void reviewUrgentRequestAsSupervisor(urgentDeclineTarget, "rejected", reason);
           setUrgentDeclineTarget(null);
         }}
       />
@@ -714,7 +779,7 @@ const SupervisorDashboard: React.FC = () => {
         title="Decline Reimbursement Request"
         onClose={() => setReimbursementDeclineTarget(null)}
         onConfirm={(reason) => {
-          if (reimbursementDeclineTarget !== null) reviewReimbursementAsSupervisor(reimbursementDeclineTarget, "rejected", reason);
+          if (reimbursementDeclineTarget !== null) void reviewReimbursementAsSupervisor(reimbursementDeclineTarget, "rejected", reason);
           setReimbursementDeclineTarget(null);
         }}
       />
@@ -736,8 +801,9 @@ const SupervisorDashboard: React.FC = () => {
         </div>
 
         <div className="mb-3">
-          <label className="form-label">Purpose</label>
+          <label className="form-label" htmlFor="editPurpose">Purpose</label>
           <input
+            id="editPurpose"
             type="text"
             className="form-control"
             value={editFormData.purpose}
@@ -747,8 +813,9 @@ const SupervisorDashboard: React.FC = () => {
         </div>
 
         <div className="mb-3">
-          <label className="form-label">Remarks</label>
+          <label className="form-label" htmlFor="editRemarks">Remarks</label>
           <textarea
+            id="editRemarks"
             className="form-control"
             rows={3}
             value={editFormData.remarks}
@@ -759,8 +826,8 @@ const SupervisorDashboard: React.FC = () => {
 
         {!editMode && (
           <div className="mb-3">
-            <label className="form-label">Decision</label>
-            <div className="d-flex gap-4 p-3" style={{ border: "1px solid #e5e7eb", borderRadius: "8px" }}>
+            <div className="form-label" id="decisionLabel">Decision</div>
+            <div className="d-flex gap-4 p-3" role="radiogroup" aria-labelledby="decisionLabel" style={{ border: "1px solid #e5e7eb", borderRadius: "8px" }}>
               <div className="form-check">
                 <input className="form-check-input" type="radio" name="statusRadio" id="approveRadio" value="approved" checked={newStatus === "approved"} onChange={(e) => setNewStatus(e.target.value)} />
                 <label className="form-check-label fw-bold" style={{ color: "#15803d" }} htmlFor="approveRadio">Approve</label>
@@ -775,8 +842,9 @@ const SupervisorDashboard: React.FC = () => {
 
         {!editMode && newStatus === "rejected" && (
           <div className="mb-3">
-            <label className="form-label" style={{ color: "#b91c1c" }}>Decline Reason (Required)</label>
+            <label className="form-label" style={{ color: "#b91c1c" }} htmlFor="declineReason">Decline Reason (Required)</label>
             <textarea
+              id="declineReason"
               className="form-control"
               rows={2}
               value={rejectionComment}

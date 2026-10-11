@@ -4,6 +4,9 @@ import { escapeHTML } from '@shared/utils/escapeHTML';
 interface PrintableItem {
   item_name?: string;
   quantity?: string | number;
+  /** Server-computed quantity still to be released (quantity - quantity_out). */
+  qty_balance?: number;
+  quantity_out?: number;
   uom?: string;
   remarks?: string;
   machine_code?: string;
@@ -50,8 +53,21 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
     rows = details.services || [];
   }
   
+  // The IRS purchase slip prints what is still outstanding — the item's
+  // remaining balance (requested minus already released), not the original
+  // requested quantity — and drops rows with nothing left to purchase.
+  // qty_balance comes from the server; the fallback recomputes the same
+  // figure for any caller that hands in a row without it. Printing never
+  // writes anything back.
+  const remainingBalance = (item: PrintableItem) => {
+    if (typeof item.qty_balance === 'number') return Math.max(0, item.qty_balance);
+    return Math.max(0, Number(item.quantity ?? 0) - Number(item.quantity_out ?? 0));
+  };
   const printableRows = isItem
-    ? (rows as PrintableItem[]).filter((item: PrintableItem) => item.delivery_status !== 'OUT' && item.delivery_status !== 'HOLD')
+    ? (rows as PrintableItem[])
+        .filter((item: PrintableItem) => item.delivery_status !== 'OUT' && item.delivery_status !== 'HOLD')
+        .filter((item: PrintableItem) => remainingBalance(item) > 0)
+        .map((item: PrintableItem) => ({ ...item, quantity: remainingBalance(item) }))
     : (rows as PrintableService[]);
 
   const headers = isItem

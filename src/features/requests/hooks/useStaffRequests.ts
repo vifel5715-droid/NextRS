@@ -3,16 +3,16 @@ import type React from 'react';
 import { useSearchParams } from '@shared/next-router';
 import { useAuth } from "@app/providers/AuthProvider";
 import { itemRequestAPI, serviceRequestAPI } from '../../../services/api';
-import { reviewSupervisorRequestAction } from "@server/actions/supervisor-review";
+import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@server/actions/supervisor-review";
 import { getStaffRequestsAction } from "@server/actions/staff-requests";
-import { createItemRequestAction } from "@server/actions/create-item-request";
-import { createServiceRequestAction } from "@server/actions/create-service-request";
+import { createItemRequestAction as createItemRequestResult } from "@server/actions/create-item-request";
+import { createServiceRequestAction as createServiceRequestResult } from "@server/actions/create-service-request";
 import { fetchWithRetry } from '@shared/utils/fetchWithRetry';
 import { createLogger } from '@shared/utils/logger';
 import { makeRequestKey } from "@shared/utils/requestKey";
 import { useRequestsChanged, type RequestChangedPayload } from '@shared/hooks/useRequestsChanged';
 import { upsertById, removeById } from "@shared/utils/reconcileRequests";
-import { debounceByKey } from '@shared/utils/debounce';
+import { debounce, debounceByKey } from '@shared/utils/debounce';
 import { getErrorMessage } from '@shared/utils/errorMessage';
 import { getCompositeStatus } from "@shared/utils/status";
 import { diffItemRow, type AdjustmentChange } from '@features/adjustments/utils/adjustmentSlip';
@@ -32,6 +32,11 @@ import type {
   RequestDetail,
   FieldValue,
 } from '@shared/types';
+import { throwOnError } from "@shared/utils/actionResult";
+
+const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
+const createItemRequestAction = throwOnError(createItemRequestResult);
+const createServiceRequestAction = throwOnError(createServiceRequestResult);
 
 interface RequestRow {
   created_by_role?: string;
@@ -222,6 +227,11 @@ export const useStaffRequests = () => {
     }, 400)
   ).current;
 
+  // Realtime events carry ids only, so the list is refetched (debounced).
+  const loadRequestsRef = useRef(loadRequests);
+  useEffect(() => { loadRequestsRef.current = loadRequests; }, [loadRequests]);
+  const debouncedListReload = useRef(debounce(() => { void loadRequestsRef.current(true); }, 500)).current;
+
   const handleRequestChanged = useCallback((payload: RequestChangedPayload) => {
     // This hook only manages item/service request lists — an Urgent Request
     // or Reimbursement Request change (separate workflows) is handled by
@@ -248,6 +258,8 @@ export const useStaffRequests = () => {
         const data = payload.data as ServiceRequest;
         setServiceRequests(prev => data.pr_status === "finish" ? removeById(prev, payload.id) : upsertById(prev, payload.data!));
       }
+    } else {
+      debouncedListReload();
     }
 
     requestCache.current.delete(`${payload.type === 'item' ? 'items' : 'services'}-${user?.department}-${user?.name}`);
@@ -255,7 +267,7 @@ export const useStaffRequests = () => {
     if (requestDetailsRef.current.has(key)) {
       debouncedDetailRefetch(key, payload.type, payload.id);
     }
-  }, [debouncedDetailRefetch, user?.department, user?.name]);
+  }, [debouncedDetailRefetch, debouncedListReload, user?.department, user?.name]);
 
   useRequestsChanged(handleRequestChanged);
 
@@ -305,7 +317,7 @@ export const useStaffRequests = () => {
     // scopes results to the named requester, so without this the request
     // shows up in that staff member's own list but they can't edit it.
     if (userRole === "staff") {
-      const isCreator = !!details.created_by && details.created_by === user?.id;
+      const isCreator = !!details.created_by_id && details.created_by_id === user?.id;
       const isNamedRequester =
         !!details.requested_by && !!user?.name &&
         details.requested_by.trim().toUpperCase() === user.name.trim().toUpperCase();

@@ -2,9 +2,9 @@ import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from '@shared/next-router';
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from '../../../services/api';
 import { getRequestListsAction } from "@server/actions/request-lists";
-import { reviewSupervisorRequestAction } from "@server/actions/supervisor-review";
-import { reviewCustodianRequestAction } from "@server/actions/custodian-review";
-import { updateRequestItemAction } from "@server/actions/update-request-item";
+import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@server/actions/supervisor-review";
+import { reviewCustodianRequestAction as reviewCustodianRequestResult } from "@server/actions/custodian-review";
+import { updateRequestItemAction as updateRequestItemResult } from "@server/actions/update-request-item";
 import { fetchWithSimpleRetry } from '@shared/utils/fetchWithRetry';
 import { diffItemRow } from '@features/adjustments/utils/adjustmentSlip';
 import { createLogger } from '@shared/utils/logger';
@@ -24,6 +24,11 @@ import type {
   ItemAudit,
   FieldValue,
 } from '@shared/types';
+import { throwOnError } from "@shared/utils/actionResult";
+
+const updateRequestItemAction = throwOnError(updateRequestItemResult);
+const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
+const reviewCustodianRequestAction = throwOnError(reviewCustodianRequestResult);
 
 const log = createLogger("useRequestManagement");
 
@@ -202,6 +207,16 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
     }, 400)
   ).current;
 
+  // Realtime events carry ids only (no row data), so the affected list is
+  // refetched — debounced per list so a burst of saves is one reload.
+  const listLoadersRef = useRef({ loadItemRequests, loadServiceRequests });
+  useEffect(() => { listLoadersRef.current = { loadItemRequests, loadServiceRequests }; }, [loadItemRequests, loadServiceRequests]);
+  const debouncedListReload = useRef(
+    debounceByKey((key: string) => {
+      void (key === "item" ? listLoadersRef.current.loadItemRequests() : listLoadersRef.current.loadServiceRequests());
+    }, 500)
+  ).current;
+
   const handleRequestChanged = useCallback((payload: RequestChangedPayload) => {
     // This hook only manages item/service request lists — an Urgent Request
     // or Reimbursement Request change (separate workflows) is handled by
@@ -234,13 +249,15 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
         const shouldShow = isApprovedForThisList && (payload.data as ServiceRequest).pr_status !== "finish";
         setServiceRequests(prev => shouldShow ? upsertById(prev, payload.data!) : removeById(prev, payload.id));
       }
+    } else {
+      debouncedListReload(payload.type);
     }
 
     // Keep an already-open detail panel live instead of showing stale approval state.
     if (requestDetailsRef.current.has(key)) {
       debouncedDetailRefetch(key, payload.type, payload.id);
     }
-  }, [debouncedDetailRefetch, supervisorApprovedOnly]);
+  }, [debouncedDetailRefetch, debouncedListReload, supervisorApprovedOnly]);
 
   useRequestsChanged(handleRequestChanged);
 

@@ -3,6 +3,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { hashPassword } from "@shared/utils/password";
 import type { UserRecord } from "@shared/types";
+import { runAction, type ActionResult } from "../action-result";
 import { getCurrentUser } from "../auth/session";
 import { getDb } from "../db";
 import { roles, users } from "../db/schema";
@@ -24,7 +25,11 @@ async function requireUsersManagementPermission(): Promise<void> {
   }
 }
 
-export async function saveAdminUserAction(input: SaveAdminUserInput): Promise<UserRecord> {
+export async function saveAdminUserAction(input: SaveAdminUserInput): Promise<ActionResult<UserRecord>> {
+  return runAction(() => saveAdminUser(input));
+}
+
+async function saveAdminUser(input: SaveAdminUserInput): Promise<UserRecord> {
   await requireUsersManagementPermission();
 
   if (!input || typeof input !== "object") throw new Error("Invalid user details.");

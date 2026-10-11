@@ -2,7 +2,9 @@
 
 import { like, sql } from "drizzle-orm";
 import type { ServiceFormData, ServiceRow } from "@shared/types";
+import { runAction, type ActionResult } from "../action-result";
 import { getCurrentUser } from "../auth/session";
+import { publishRequestChanged } from "../realtime";
 import { getDb } from "../db";
 import { serviceItems, serviceRequests } from "../db/schema";
 
@@ -17,7 +19,11 @@ function requiredText(value: unknown, field: string, maxLength: number): string 
   return normalized;
 }
 
-export async function createServiceRequestAction(input: CreateServiceRequestInput): Promise<void> {
+export async function createServiceRequestAction(input: CreateServiceRequestInput): Promise<ActionResult<void>> {
+  return runAction(() => createServiceRequest(input));
+}
+
+async function createServiceRequest(input: CreateServiceRequestInput): Promise<void> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Authentication required.");
   if (!user.permissions.includes("create_request")) throw new Error("Permission denied.");
@@ -66,7 +72,7 @@ export async function createServiceRequestAction(input: CreateServiceRequestInpu
   const year = new Date().getFullYear();
   const serialPrefix = `SRS-00-${year}-`;
 
-  await db.transaction(async (tx) => {
+  const createdId = await db.transaction(async (tx) => {
     await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${`service-request-serial-${year}`}))`);
 
     const existingSerials = await tx
@@ -104,5 +110,8 @@ export async function createServiceRequestAction(input: CreateServiceRequestInpu
         description,
       }))
     );
+    return request.id;
   });
+
+  await publishRequestChanged({ type: "service", action: "created", id: createdId, department });
 }

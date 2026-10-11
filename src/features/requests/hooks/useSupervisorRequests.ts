@@ -3,17 +3,20 @@ import { useNavigate } from '@shared/next-router';
 import { useAuth } from "@app/providers/AuthProvider";
 import { itemRequestAPI, serviceRequestAPI } from '../../../services/api';
 import { getRequestListsAction } from "@server/actions/request-lists";
-import { reviewSupervisorRequestAction } from "@server/actions/supervisor-review";
+import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@server/actions/supervisor-review";
 import { sanitizeUserInput } from '@shared/utils/sanitize';
 import { createLogger } from '@shared/utils/logger';
 import { makeRequestKey } from "@shared/utils/requestKey";
 import { useRequestsChanged, type RequestChangedPayload } from '@shared/hooks/useRequestsChanged';
 import { upsertById, removeById } from "@shared/utils/reconcileRequests";
-import { debounceByKey } from '@shared/utils/debounce';
+import { debounce, debounceByKey } from '@shared/utils/debounce';
 import { useDateRangeContext } from "@app/providers/DateRangeProvider";
 import { filterByDateRange } from '@shared/utils/dateRange';
 import { useItemCatalogEntries } from '@features/item-catalog/hooks/useItemCatalogEntries';
 import type { ItemRequest, ServiceRequest, RequestTab, CacheEntry, ItemRow, ServiceRow, RequestDetail, FieldValue } from '@shared/types';
+import { throwOnError } from "@shared/utils/actionResult";
+
+const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
 
 const log = createLogger("useSupervisorRequests");
 
@@ -145,6 +148,11 @@ export const useSupervisorRequests = () => {
     }, 400)
   ).current;
 
+  // Realtime events carry ids only, so the list is refetched (debounced).
+  const loadPendingRef = useRef(loadPendingRequests);
+  useEffect(() => { loadPendingRef.current = loadPendingRequests; }, [loadPendingRequests]);
+  const debouncedListReload = useRef(debounce(() => { void loadPendingRef.current(true); }, 500)).current;
+
   const handleRequestChanged = useCallback((payload: RequestChangedPayload) => {
     // This hook only manages item/service request lists — an Urgent Request
     // or Reimbursement Request change (separate workflows) is handled by
@@ -163,6 +171,8 @@ export const useSupervisorRequests = () => {
     if (payload.data) {
       if (payload.type === 'item') setItemRequests(prev => upsertById(prev, payload.data!));
       else setServiceRequests(prev => upsertById(prev, payload.data!));
+    } else {
+      debouncedListReload();
     }
 
     // Invalidate the TTL cache so a later non-forced loadPendingRequests()
@@ -174,7 +184,7 @@ export const useSupervisorRequests = () => {
     if (requestDetailsRef.current.has(key)) {
       debouncedDetailRefetch(key, payload.type, payload.id);
     }
-  }, [debouncedDetailRefetch]);
+  }, [debouncedDetailRefetch, debouncedListReload]);
 
   useRequestsChanged(handleRequestChanged);
 
