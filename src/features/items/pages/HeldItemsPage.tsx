@@ -58,7 +58,11 @@ const HeldItemsPage: React.FC = () => {
   const role = user?.role?.toLowerCase().trim() ?? "";
   const isAdmin = role === "admin";
   const isCustodian = role === "custodian";
-  const canResolveHold = role === "secretary" || role === "supervisor" || role === "manager";
+  const isStaff = role === "staff";
+  // Staff may correct their own held rows too — their list only contains
+  // their own requests, and the server re-checks ownership. Deleting a held
+  // row stays with Secretary/Supervisor/Manager/custodian.
+  const canResolveHold = role === "secretary" || role === "supervisor" || role === "manager" || isStaff;
   const itemCatalogEntries = useItemCatalogEntries();
   const itemCatalogNames = useMemo(
     () => Array.from(new Set(itemCatalogEntries.map((entry) => entry.item_name))).sort(),
@@ -211,15 +215,13 @@ const HeldItemsPage: React.FC = () => {
         </p>
         <p className="page-subtitle">
           {activeTab === "item"
-            ? canResolveHold
+            ? isStaff
+              ? "Your request items on HOLD — fix the item name, quantity, UoM, remarks, or machine code, then save. The item stays on HOLD until the custodian reviews and releases it."
+              : canResolveHold
               ? "Items on HOLD in your department — fix the item name, quantity, UoM, remarks, or machine code, then save. The item stays on HOLD until the custodian reviews and releases it."
               : isCustodian
               ? "Read-only — items on HOLD can only be edited by Secretary, Supervisor, or Manager."
-              : role === "staff"
-              ? "Your request items currently on HOLD. Your Secretary, Supervisor, or Manager will correct them, then the custodian releases them."
               : "Items currently on HOLD."
-            : role === "staff"
-            ? "Your request services currently marked ON HOLD."
             : "Services currently marked ON HOLD."}
         </p>
       </div>
@@ -467,7 +469,7 @@ const HeldItemsPage: React.FC = () => {
                                       <i className="bi bi-save"></i> Save
                                     </button>
                                   )}
-                                  {canEdit && item.id !== undefined && (
+                                  {canEdit && !isStaff && item.id !== undefined && (
                                     <button
                                       className="btn btn-sm btn-danger"
                                       disabled={(item.quantity_out || 0) > 0}
@@ -587,7 +589,7 @@ const HeldItemsPage: React.FC = () => {
                               {/* Same per-row Holded scoping as the Description edit above —
                                   Secretary/Supervisor/Manager may only delete the specific
                                   Holded line, custodian/admin can delete any line here. */}
-                              {(isAdmin || isCustodian || (canResolveHold && service.delivery_status === "holded")) && service.id !== undefined && (
+                              {(isAdmin || isCustodian || (canResolveHold && !isStaff && service.delivery_status === "holded")) && service.id !== undefined && (
                                 <button
                                   className="btn btn-sm btn-danger"
                                   title="Delete Service"

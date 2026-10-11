@@ -191,7 +191,14 @@ export async function updateServiceItemAction(serviceId: number, value: unknown)
       const [service] = await tx.select().from(serviceItems).where(eq(serviceItems.id, serviceId)).for("update");
       if (!service) throw new Error("Service item not found.");
       const [request] = await tx
-        .select({ id: serviceRequests.id, serial: serviceRequests.serial, department: serviceRequests.department, pr_status: serviceRequests.pr_status })
+        .select({
+          id: serviceRequests.id,
+          serial: serviceRequests.serial,
+          department: serviceRequests.department,
+          pr_status: serviceRequests.pr_status,
+          created_by: serviceRequests.created_by,
+          requested_by: serviceRequests.requested_by,
+        })
         .from(serviceRequests)
         .where(eq(serviceRequests.id, service.service_request_id))
         .for("update");
@@ -205,7 +212,13 @@ export async function updateServiceItemAction(serviceId: number, value: unknown)
         pr_status: prStatus !== undefined && !sameValue(prStatus, service.pr_status),
       };
 
-      if (isHoldResolver(user)) {
+      // Staff may fix the description of a Holded line on their own request.
+      const staffOwner = user.roleKey === "staff";
+      if (isHoldResolver(user) || staffOwner) {
+        if (staffOwner) {
+          requireDepartmentAccess(user, request.department);
+          if (!isRequestOwner(user, request)) throw new Error("You can only correct held services on your own request.");
+        }
         // Save Service Updates resends every line; untouched siblings pass.
         if (changed.delivery_status || changed.receiving_report_no || changed.pr_number || changed.pr_status) {
           throw new Error("You can only change the description of a Holded service.");
@@ -235,7 +248,7 @@ export async function updateServiceItemAction(serviceId: number, value: unknown)
         // Blanking an RR No. undoes the "completed" state it backed.
         if (!receivingReportNo && service.receiving_report_no) patch.delivery_status = "pending";
       }
-      if (isHoldResolver(user) && service.delivery_status === "holded") patch.hold_edited = true;
+      if ((isHoldResolver(user) || staffOwner) && service.delivery_status === "holded") patch.hold_edited = true;
 
       await tx.update(serviceItems).set(patch).where(eq(serviceItems.id, serviceId));
 

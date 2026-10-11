@@ -5,6 +5,7 @@ import { isMachineCodeEnabled } from "@shared/utils/machineCodeValidation";
 import { runAction, type ActionResult } from "../action-result";
 import {
   isHoldResolver,
+  isRequestOwner,
   requireDepartmentAccess,
   requirePermission,
   requireUser,
@@ -133,8 +134,8 @@ const differs = (before: string | number | null | undefined, after: string | num
  *  - "custodian"/"admin": the full Pending Requests editor. A custodian is
  *    locked out of a HOLD item's details (only its status may change) —
  *    that's the hand-off to Secretary/Supervisor/Manager.
- *  - "hold": Secretary/Supervisor/Manager on the Held Items page. Only a row
- *    that is on HOLD, only name/qty/UoM/remarks/machine code, never the
+ *  - "hold": Secretary/Supervisor/Manager on the Held Items page — or Staff,
+ *    on their own request only. Only a row that is on HOLD, only name/qty/UoM/remarks/machine code, never the
  *    status or any custodian bookkeeping field. Saving keeps the item on
  *    HOLD and flags it hold_edited ("RELEASE ON HOLD") for the custodian.
  */
@@ -142,8 +143,9 @@ function resolveEditMode(
   user: AuthorizedUser,
   item: ExistingItem,
   input: ItemUpdateValues,
-  department: string
+  request: { department: string; created_by: string; requested_by: string | null }
 ): "custodian" | "hold" {
+  const { department } = request;
   if (user.roleKey === "admin") return "custodian";
 
   if (user.roleKey === "custodian") {
@@ -156,9 +158,16 @@ function resolveEditMode(
     return "custodian";
   }
 
-  if (isHoldResolver(user)) {
-    requirePermission(user, ["held_items"]);
-    if (user.roleKey === "secretary") requireDepartmentAccess(user, department);
+  const isOwnStaffRequest = user.roleKey === "staff";
+  if (isHoldResolver(user) || isOwnStaffRequest) {
+    if (isOwnStaffRequest) {
+      requirePermission(user, ["create_request"]);
+      requireDepartmentAccess(user, department);
+      if (!isRequestOwner(user, request)) throw new Error("You can only correct held items on your own request.");
+    } else {
+      requirePermission(user, ["held_items"]);
+      if (user.roleKey === "secretary") requireDepartmentAccess(user, department);
+    }
     if (item.delivery_status !== "HOLD") {
       throw new Error("You can only act on an item that is currently on HOLD.");
     }
@@ -208,13 +217,15 @@ export async function updateRequestItemAction(itemId: number, value: unknown): P
           serial: itemRequests.serial,
           department: itemRequests.department,
           supervisor_status: itemRequests.supervisor_status,
+          created_by: itemRequests.created_by,
+          requested_by: itemRequests.requested_by,
         })
         .from(itemRequests)
         .where(eq(itemRequests.id, item.request_id))
         .limit(1);
       if (!request) throw new Error("Request not found.");
 
-      const mode = resolveEditMode(user, item, input, request.department);
+      const mode = resolveEditMode(user, item, input, request);
       if (mode === "custodian") {
         if (request.supervisor_status !== "approved") {
           throw new Error("Only supervisor-approved requests can be updated by the custodian.");
