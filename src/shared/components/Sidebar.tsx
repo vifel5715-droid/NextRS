@@ -84,6 +84,9 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
   const { entries: adjustmentEntries } = useAdjustmentLog(hasPermission("adjustment_history"));
   const adjustmentHistoryCount = adjustmentEntries.length;
   const isAdmin = user?.role?.toLowerCase().trim() === "admin";
+  // Supervisor/Manager keep the supervisor_dashboard permission (server
+  // actions rely on it for approvals) but don't get the sidebar link.
+  const hideSupervisorDashboardLink = ["supervisor", "manager"].includes(user?.role?.toLowerCase().trim() ?? "");
 
   useEffect(() => {
     log.info("Mounted — user:", user?.email, `role: ${user?.role}`);
@@ -177,7 +180,7 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
             </li>
           )}
           {pendingRequestsItem && renderMenuItem(pendingRequestsItem)}
-          {hasPermission("supervisor_dashboard") && (
+          {hasPermission("supervisor_dashboard") && !hideSupervisorDashboardLink && (
             <li className="sidebar-item">
               <button
                 className={`sidebar-link ${location.pathname === "/dashboard/supervisor" ? "active" : ""}`}
