@@ -24,6 +24,8 @@ import { formatMilitaryTime } from "@shared/utils/format";
 import DateRangeFilter from "@shared/components/DateRangeFilter";
 import ListToolbar from "@shared/components/ListToolbar";
 import { exportToExcel } from "@shared/utils/exportExcel";
+import { useDateRangeContext } from "@app/providers/DateRangeProvider";
+import type { UrgentRequest, ReimbursementRequest } from "@shared/types";
 import styles from "./Dashboard.module.css";
 
 const CompleteRequestsPage: React.FC = () => {
@@ -40,6 +42,9 @@ const CompleteRequestsPage: React.FC = () => {
     loading,
     filteredItemRequests,
     filteredServiceRequests,
+    filteredUrgentRequests,
+    filteredReimbursementRequests,
+    handleDeleteInRange,
     searchQuery,
     setSearchQuery,
     expandedRows,
@@ -72,13 +77,98 @@ const CompleteRequestsPage: React.FC = () => {
     [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 20);
   const visibleItemRequests = byMostRecent(filteredItemRequests);
   const visibleServiceRequests = byMostRecent(filteredServiceRequests);
+  const visibleUrgentRequests = byMostRecent(filteredUrgentRequests);
+  const visibleReimbursementRequests = byMostRecent(filteredReimbursementRequests);
+
+  const { startDate, endDate } = useDateRangeContext();
+  const TAB_LABELS = { item: "Item", service: "Service", urgent: "Urgent", reimbursement: "Reimbursement" } as const;
+  const activeFilteredRows: { id: number }[] =
+    activeTab === "item" ? filteredItemRequests :
+    activeTab === "service" ? filteredServiceRequests :
+    activeTab === "urgent" ? filteredUrgentRequests :
+    filteredReimbursementRequests;
+  const [deletingInRange, setDeletingInRange] = useState(false);
+
+  // Admin-only bulk delete of the active tab's completed requests in the
+  // chosen Start/End Date range. Both dates are required so an empty range
+  // ("all time") can never wipe the whole list by accident.
+  const confirmDeleteInRange = async () => {
+    if (!startDate || !endDate) {
+      alert("Set both Start Date and End Date before deleting.");
+      return;
+    }
+    const count = activeFilteredRows.length;
+    if (count === 0) return;
+    const label = `${TAB_LABELS[activeTab]} Request${count === 1 ? "" : "s"}`;
+    const typed = window.prompt(
+      `This will PERMANENTLY delete ${count} completed ${label} created from ${startDate} to ${endDate}` +
+      (searchQuery.trim() ? ` matching "${searchQuery.trim()}"` : "") +
+      `, including all of their items and history. This cannot be undone.\n\nType DELETE to confirm.`
+    );
+    if (typed?.trim().toUpperCase() !== "DELETE") return;
+    setDeletingInRange(true);
+    try {
+      await handleDeleteInRange();
+    } finally {
+      setDeletingInRange(false);
+    }
+  };
+
+  // Urgent/Reimbursement rows carry their items inline, so expanding one is
+  // purely local — no detail fetch like item/service rows.
+  const [expandedSpecial, setExpandedSpecial] = useState<string | null>(null);
+  const toggleSpecial = (key: string) => setExpandedSpecial((prev) => (prev === key ? null : key));
 
   // Full filtered set, sorted the same way as the capped on-screen list —
   // so the export always matches what's currently visible, just uncapped.
   const sortByDate = <T extends { created_at: string }>(rows: T[]): T[] =>
     [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at));
 
+  const exportSpecial = () =>
+    activeTab === "urgent"
+      ? exportToExcel(
+          "complete-urgent-requests",
+          [
+            { key: "serial", label: "Serial" },
+            { key: "date", label: "Date" },
+            { key: "requested_by", label: "Requested By" },
+            { key: "department", label: "Department" },
+            { key: "purpose", label: "Purpose" },
+            { key: "items", label: "Items" },
+          ],
+          sortByDate(filteredUrgentRequests).map((req) => ({
+            serial: req.serial || "",
+            date: req.created_at ? new Date(req.created_at).toISOString().split("T")[0] : "",
+            requested_by: req.requested_by || req.created_by || "",
+            department: req.department || "",
+            purpose: req.purpose || "",
+            items: req.items.map((i) => `${i.item_description} (${i.quantity ?? ""} ${i.uom ?? ""})`.trim()).join("; "),
+          }))
+        )
+      : exportToExcel(
+          "complete-reimbursement-requests",
+          [
+            { key: "serial", label: "Serial" },
+            { key: "date", label: "Date" },
+            { key: "requested_by", label: "Requested By" },
+            { key: "department", label: "Department" },
+            { key: "supplier", label: "Supplier" },
+            { key: "purpose", label: "Purpose" },
+            { key: "total", label: "Total Cost" },
+          ],
+          sortByDate(filteredReimbursementRequests).map((req) => ({
+            serial: req.serial || "",
+            date: req.created_at ? new Date(req.created_at).toISOString().split("T")[0] : "",
+            requested_by: req.requested_by || req.created_by || "",
+            department: req.department || "",
+            supplier: req.supplier || "",
+            purpose: req.purpose || "",
+            total: req.total_cost,
+          }))
+        );
+
   const handleExport = () =>
+    activeTab === "urgent" || activeTab === "reimbursement" ? exportSpecial() :
     activeTab === "item"
       ? exportToExcel(
           "complete-item-requests",
@@ -853,7 +943,128 @@ const CompleteRequestsPage: React.FC = () => {
     );
   };
 
-  const isEmpty = activeTab === "item" ? visibleItemRequests.length === 0 : visibleServiceRequests.length === 0;
+  const renderSpecialRow = (
+    type: "urgent" | "reimbursement",
+    req: UrgentRequest | ReimbursementRequest,
+    status: string,
+    body: React.ReactNode
+  ) => {
+    const key = `${type}-${req.id}`;
+    const isExpanded = expandedSpecial === key;
+    return (
+      <div key={key} className={styles.requestCard}>
+        <div
+          className={`${styles.requestCardRow} ${isExpanded ? styles.requestCardRowExpanded : ""}`}
+          onClick={() => toggleSpecial(key)}
+        >
+          <div className="text-center">
+            <i className={`bi bi-chevron-${isExpanded ? "down" : "right"}`}></i>
+          </div>
+          <div className="fw-medium" data-label="Serial">{req.serial}</div>
+          <div className="text-muted" data-label="Date">
+            {req.created_at ? new Date(req.created_at).toISOString().split("T")[0] : ""}
+          </div>
+          <div className="hide-sm" data-label="By">{req.requested_by || req.created_by}</div>
+          <div className="hide-sm" data-label="Dept">{req.department}</div>
+          <div data-label="Purpose">{req.purpose}</div>
+          <div>
+            <span className="badge bg-success">{status}</span>
+          </div>
+        </div>
+        <div className={`${styles.expandWrapper} ${isExpanded ? styles.expandWrapperOpen : ""}`}>
+          <div className={styles.expandInner}>
+            {isExpanded && (
+              <div className={styles.requestCardBody}>
+                <div className="p-3">{body}</div>
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderUrgentRow = (req: UrgentRequest) =>
+    renderSpecialRow("urgent", req, "DELIVERED", (
+      <div className="table-responsive">
+        <table className="table table-sm table-bordered mb-0">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Item Description</th>
+              <th>Qty</th>
+              <th>UoM</th>
+              <th>Inventoriable</th>
+              <th>Qty Delivered</th>
+              <th>Delivered By</th>
+            </tr>
+          </thead>
+          <tbody>
+            {req.items.map((item, index) => (
+              <tr key={item.id ?? index}>
+                <td>{index + 1}</td>
+                <td>{item.item_description}</td>
+                <td>{item.quantity ?? ""}</td>
+                <td>{item.uom ?? ""}</td>
+                <td>{item.is_inventoriable ? "Yes" : "No"}</td>
+                <td>{item.is_inventoriable ? "—" : item.quantity_delivered ?? ""}</td>
+                <td>{item.delivered_by_name ?? ""}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+    ));
+
+  const renderReimbursementRow = (req: ReimbursementRequest) =>
+    renderSpecialRow("reimbursement", req, "CLOSED", (
+      <>
+        <p className="mb-2"><strong>Supplier:</strong> {req.supplier}</p>
+        <div className="table-responsive">
+          <table className="table table-sm table-bordered mb-0">
+            <thead>
+              <tr>
+                <th>#</th>
+                <th>Item Description</th>
+                <th>Qty</th>
+                <th>UoM</th>
+                <th className="text-end">Amount</th>
+              </tr>
+            </thead>
+            <tbody>
+              {req.items.map((item, index) => (
+                <tr key={item.id ?? index}>
+                  <td>{index + 1}</td>
+                  <td>{item.item_description}</td>
+                  <td>{item.quantity ?? ""}</td>
+                  <td>{item.uom ?? ""}</td>
+                  <td className="text-end">{Number(item.amount).toFixed(2)}</td>
+                </tr>
+              ))}
+              <tr>
+                <td colSpan={4} className="text-end fw-semibold">Total</td>
+                <td className="text-end fw-semibold">{req.total_cost}</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </>
+    ));
+
+  const visibleCounts = {
+    item: visibleItemRequests.length,
+    service: visibleServiceRequests.length,
+    urgent: visibleUrgentRequests.length,
+    reimbursement: visibleReimbursementRequests.length,
+  };
+  const isEmpty = visibleCounts[activeTab] === 0;
+  const emptyMessages = {
+    item: "No completed item requests found.",
+    service: "No finished service requests found.",
+    urgent: "No delivered urgent requests found.",
+    reimbursement: "No closed reimbursement requests found.",
+  };
+  const statusHeaders = { item: "IRS Status", service: "SRS Status", urgent: "Urgent Status", reimbursement: "Reimbursement Status" };
 
   return (
     <Layout>
@@ -861,7 +1072,7 @@ const CompleteRequestsPage: React.FC = () => {
         <div className="flex justify-between items-center gap-4">
           <div>
             <h1 className="page-title">Complete Requests</h1>
-            <p className="page-subtitle">Fully served item requests and finished service requests</p>
+            <p className="page-subtitle">Fully served item requests, finished service requests, delivered urgent requests and closed reimbursement requests</p>
           </div>
         </div>
       </div>
@@ -876,6 +1087,14 @@ const CompleteRequestsPage: React.FC = () => {
             Service Requests
             <span className="dash-tab-badge">{visibleServiceRequests.length}</span>
           </button>
+          <button className={`dash-tab ${activeTab === "urgent" ? "active" : ""}`} onClick={() => setActiveTab("urgent")}>
+            Urgent Requests
+            <span className="dash-tab-badge">{visibleUrgentRequests.length}</span>
+          </button>
+          <button className={`dash-tab ${activeTab === "reimbursement" ? "active" : ""}`} onClick={() => setActiveTab("reimbursement")}>
+            Reimbursement Requests
+            <span className="dash-tab-badge">{visibleReimbursementRequests.length}</span>
+          </button>
         </div>
       </div>
 
@@ -884,11 +1103,23 @@ const CompleteRequestsPage: React.FC = () => {
         onSearchChange={setSearchQuery}
         searchPlaceholder="Search by Serial, Purpose, PR Number..."
         onExport={handleExport}
-        exportDisabled={(activeTab === "item" ? filteredItemRequests : filteredServiceRequests).length === 0}
+        exportDisabled={activeFilteredRows.length === 0}
       />
 
-      <div className="mb-4">
+      <div className="mb-4 d-flex justify-content-between align-items-end flex-wrap gap-2">
         <DateRangeFilter />
+        {isAdmin && (
+          <button
+            type="button"
+            className="btn btn-danger btn-sm"
+            onClick={confirmDeleteInRange}
+            disabled={deletingInRange || !startDate || !endDate || activeFilteredRows.length === 0}
+            title={!startDate || !endDate ? "Set Start Date and End Date first" : undefined}
+          >
+            <i className="bi bi-trash me-1"></i>
+            {deletingInRange ? "Deleting..." : `Delete ${activeFilteredRows.length} in Date Range`}
+          </button>
+        )}
       </div>
 
       {loading ? (
@@ -898,7 +1129,7 @@ const CompleteRequestsPage: React.FC = () => {
       ) : isEmpty ? (
         <div className="text-center py-5" style={{ color: "#9ca3af" }}>
           <i className="bi bi-check2-circle" style={{ fontSize: "2rem", display: "block", marginBottom: "0.5rem" }}></i>
-          {activeTab === "item" ? "No completed item requests found." : "No finished service requests found."}
+          {emptyMessages[activeTab]}
         </div>
       ) : (
         <div className={styles.requestListFrame}>
@@ -909,11 +1140,12 @@ const CompleteRequestsPage: React.FC = () => {
             <div>Created By</div>
             <div>Department</div>
             <div>Purpose</div>
-            <div>{activeTab === "item" ? "IRS Status" : "SRS Status"}</div>
+            <div>{statusHeaders[activeTab]}</div>
           </div>
-          {activeTab === "item"
-            ? visibleItemRequests.map((req) => renderItemRow(req))
-            : visibleServiceRequests.map((req) => renderServiceRow(req))}
+          {activeTab === "item" && visibleItemRequests.map((req) => renderItemRow(req))}
+          {activeTab === "service" && visibleServiceRequests.map((req) => renderServiceRow(req))}
+          {activeTab === "urgent" && visibleUrgentRequests.map((req) => renderUrgentRow(req))}
+          {activeTab === "reimbursement" && visibleReimbursementRequests.map((req) => renderReimbursementRow(req))}
         </div>
       )}
 

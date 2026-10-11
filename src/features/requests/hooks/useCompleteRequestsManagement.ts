@@ -2,8 +2,10 @@ import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { debounceByKey } from "@shared/utils/debounce";
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from "../../../services/api";
 import { getRequestListsAction } from "@server/actions/request-lists";
+import { getReimbursementRequestsAction, getUrgentRequestsAction } from "@server/actions/special-requests";
+import { deleteCompleteRequestsAction } from "@server/actions/complete-request-deletions";
 import { updateRequestItemAction as updateRequestItemResult } from "@server/actions/update-request-item";
-import type { ItemRequest, ServiceRequest, RequestDetail, ItemRow, ServiceRow, RequestTab, FieldValue } from "@shared/types";
+import type { ItemRequest, ServiceRequest, RequestDetail, ItemRow, ServiceRow, RequestTab, FieldValue, UrgentRequest, ReimbursementRequest } from "@shared/types";
 import { useRequestsChanged, type RequestChangedPayload } from "@shared/hooks/useRequestsChanged";
 import { upsertById, removeById } from "@shared/utils/reconcileRequests";
 import { makeRequestKey } from "@shared/utils/requestKey";
@@ -15,6 +17,16 @@ import { filterByDateRange } from "@shared/utils/dateRange";
 import { throwOnError } from "@shared/utils/actionResult";
 
 const updateRequestItemAction = throwOnError(updateRequestItemResult);
+const deleteCompleteRequests = throwOnError(deleteCompleteRequestsAction);
+
+export type CompleteRequestsTab = RequestTab | "urgent" | "reimbursement";
+
+/** Same rule as PurchaserDashboard's "Delivered" label — only Not
+ * Inventoriable items track delivery, and every one of them must be delivered. */
+export const isUrgentRequestComplete = (request: UrgentRequest): boolean => {
+  const tracked = request.items.filter((item) => !item.is_inventoriable);
+  return tracked.length > 0 && tracked.every((item) => item.delivery_status === "delivered");
+};
 
 const log = createLogger("useCompleteRequestsManagement");
 
@@ -32,9 +44,11 @@ const ADJUSTMENT_TRACKED_FIELDS = new Set(["item_name", "quantity", "uom", "rema
  */
 export const useCompleteRequestsManagement = () => {
   const { startDate, endDate } = useDateRangeContext();
-  const [activeTab, setActiveTab] = useState<RequestTab>("item");
+  const [activeTab, setActiveTab] = useState<CompleteRequestsTab>("item");
   const [itemRequests, setItemRequests] = useState<ItemRequest[]>([]);
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
+  const [urgentRequests, setUrgentRequests] = useState<UrgentRequest[]>([]);
+  const [reimbursementRequests, setReimbursementRequests] = useState<ReimbursementRequest[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
   const [expandedRows, setExpandedRows] = useState<Set<string>>(new Set());
@@ -75,6 +89,33 @@ export const useCompleteRequestsManagement = () => {
     );
   }, [serviceRequests, searchQuery, startDate, endDate]);
 
+  const filteredUrgentRequests = useMemo(() => {
+    const inRange = filterByDateRange(urgentRequests, startDate, endDate, "created_at");
+    if (!searchQuery.trim()) return inRange;
+    const q = searchQuery.toLowerCase();
+    return inRange.filter((row) =>
+      (row.serial?.toLowerCase() || "").includes(q) ||
+      (row.created_at?.toLowerCase() || "").includes(q) ||
+      (row.purpose?.toLowerCase() || "").includes(q) ||
+      (row.remarks?.toLowerCase() || "").includes(q) ||
+      (row.requested_by?.toLowerCase() || "").includes(q)
+    );
+  }, [urgentRequests, searchQuery, startDate, endDate]);
+
+  const filteredReimbursementRequests = useMemo(() => {
+    const inRange = filterByDateRange(reimbursementRequests, startDate, endDate, "created_at");
+    if (!searchQuery.trim()) return inRange;
+    const q = searchQuery.toLowerCase();
+    return inRange.filter((row) =>
+      (row.serial?.toLowerCase() || "").includes(q) ||
+      (row.created_at?.toLowerCase() || "").includes(q) ||
+      (row.purpose?.toLowerCase() || "").includes(q) ||
+      (row.remarks?.toLowerCase() || "").includes(q) ||
+      (row.supplier?.toLowerCase() || "").includes(q) ||
+      (row.requested_by?.toLowerCase() || "").includes(q)
+    );
+  }, [reimbursementRequests, searchQuery, startDate, endDate]);
+
   const loadItemRequests = useCallback(async () => {
     log.info("Loading complete item requests");
     try {
@@ -99,26 +140,57 @@ export const useCompleteRequestsManagement = () => {
     }
   }, []);
 
+  // Roles without access to these workflows get a permission error from the
+  // read action — treated as an empty list rather than a failure.
+  const loadUrgentRequests = useCallback(async () => {
+    try {
+      const data = (await getUrgentRequestsAction()).filter(isUrgentRequestComplete);
+      setUrgentRequests(data);
+    } catch (error) {
+      log.warn("Complete urgent requests unavailable:", error);
+      setUrgentRequests([]);
+    }
+  }, []);
+
+  const loadReimbursementRequests = useCallback(async () => {
+    try {
+      const data = (await getReimbursementRequestsAction()).filter((r) => r.ap_status === "closed");
+      setReimbursementRequests(data);
+    } catch (error) {
+      log.warn("Complete reimbursement requests unavailable:", error);
+      setReimbursementRequests([]);
+    }
+  }, []);
+
+  const loadTab = useCallback((tab: string) => {
+    if (tab === "item") return loadItemRequests();
+    if (tab === "service") return loadServiceRequests();
+    if (tab === "urgent") return loadUrgentRequests();
+    return loadReimbursementRequests();
+  }, [loadItemRequests, loadServiceRequests, loadUrgentRequests, loadReimbursementRequests]);
+
   useEffect(() => {
     setLoading(true);
-    const load = activeTab === "item" ? loadItemRequests() : loadServiceRequests();
-    load.finally(() => setLoading(false));
-  }, [activeTab, loadItemRequests, loadServiceRequests]);
+    loadTab(activeTab).finally(() => setLoading(false));
+  }, [activeTab, loadTab]);
 
   // Realtime events carry ids only, so the affected list is refetched (debounced).
-  const listLoadersRef = useRef({ loadItemRequests, loadServiceRequests });
-  useEffect(() => { listLoadersRef.current = { loadItemRequests, loadServiceRequests }; }, [loadItemRequests, loadServiceRequests]);
+  const loadTabRef = useRef(loadTab);
+  useEffect(() => { loadTabRef.current = loadTab; }, [loadTab]);
   const debouncedListReload = useRef(
-    debounceByKey((key: string) => {
-      void (key === "item" ? listLoadersRef.current.loadItemRequests() : listLoadersRef.current.loadServiceRequests());
-    }, 500)
+    debounceByKey((key: string) => { void loadTabRef.current(key); }, 500)
   ).current;
 
   const handleRequestChanged = useCallback((payload: RequestChangedPayload) => {
-    // This hook only manages item/service request lists — an Urgent Request
-    // or Reimbursement Request change (separate workflows) is handled by
-    // useUrgentRequests.ts/useReimbursementRequests.ts instead.
-    if (payload.type === "urgent" || payload.type === "reimbursement") return;
+    if (payload.type === "urgent" || payload.type === "reimbursement") {
+      if (payload.action === "deleted") {
+        if (payload.type === "urgent") setUrgentRequests((prev) => removeById(prev, payload.id));
+        else setReimbursementRequests((prev) => removeById(prev, payload.id));
+      } else {
+        debouncedListReload(payload.type);
+      }
+      return;
+    }
     const key = makeRequestKey(payload.type, payload.id);
 
     if (payload.action === "deleted") {
@@ -151,6 +223,7 @@ export const useCompleteRequestsManagement = () => {
   useRequestsChanged(handleRequestChanged);
 
   const handleRowClick = useCallback(async (row: ItemRequest | ServiceRequest) => {
+    if (activeTab !== "item" && activeTab !== "service") return;
     const key = makeRequestKey(activeTab, row.id);
     const newExpandedRows = new Set<string>();
     if (!expandedRows.has(key)) {
@@ -412,12 +485,44 @@ export const useCompleteRequestsManagement = () => {
     }
   };
 
+  /**
+   * Admin-only: deletes every completed request of the active tab that the
+   * current Start/End Date range (and search) matches. The server re-checks
+   * each id is still complete before deleting it.
+   */
+  const handleDeleteInRange = async (): Promise<void> => {
+    const rows: { id: number }[] =
+      activeTab === "item" ? filteredItemRequests :
+      activeTab === "service" ? filteredServiceRequests :
+      activeTab === "urgent" ? filteredUrgentRequests :
+      filteredReimbursementRequests;
+    if (rows.length === 0) return;
+    log.info("Deleting", rows.length, activeTab, "complete requests in range");
+    try {
+      const result = await deleteCompleteRequests(activeTab, rows.map((r) => r.id));
+      alert(
+        `Deleted ${result.deleted} request(s).` +
+        (result.skipped > 0 ? ` ${result.skipped} skipped because they are no longer complete.` : "")
+      );
+    } catch (error: unknown) {
+      const reason = getErrorMessage(error, "Failed to delete requests");
+      log.error("Failed to delete complete requests", reason);
+      alert("Failed to delete requests: " + reason);
+    } finally {
+      setExpandedRows(new Set());
+      await loadTab(activeTab);
+    }
+  };
+
   return {
     activeTab,
     setActiveTab,
     loading,
     filteredItemRequests,
     filteredServiceRequests,
+    filteredUrgentRequests,
+    filteredReimbursementRequests,
+    handleDeleteInRange,
     searchQuery,
     setSearchQuery,
     expandedRows,
