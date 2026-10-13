@@ -1,5 +1,5 @@
-import { formatMilitaryTime } from "@shared/utils/format";
-import type { ItemAudit } from "@shared/types";
+import { formatMilitaryTime } from "@/lib/utils/format";
+import type { ItemAudit } from "@/types";
 
 /**
  * Issuance history for a request item, split into the three transaction types

@@ -1,5 +1,5 @@
-import logo from '../../../assets/svg.svg'; // Ensure this resolves to a string URL, or pass a public path '/STPL.sv
-import { escapeHTML } from '@shared/utils/escapeHTML';
+import logo from '@/assets/svg.svg'; // Ensure this resolves to a string URL, or pass a public path '/STPL.sv
+import { escapeHTML } from '@/lib/utils/escapeHTML';
 
 interface PrintableItem {
   item_name?: string;

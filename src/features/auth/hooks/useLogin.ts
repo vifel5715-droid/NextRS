@@ -1,23 +1,22 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { createLogger } from '@shared/utils/logger';
-import { getErrorMessage, getErrorStatus } from '@shared/utils/errorMessage';
+import { createLogger } from '@/lib/client-logger';
 
 const log = createLogger("useLogin");
 import type React from 'react';
-import { useNavigate } from '@shared/next-router';
-import { useAuth } from "@app/providers/AuthProvider";
-import { loginAction } from "@server/actions/auth";
+import { useNavigate } from '@/lib/next-router';
+import { useAuth } from "@/components/providers/AuthProvider";
+import { loginAction } from "@/features/auth/actions/auth";
 
 const ROLE_REDIRECT_MAP: Record<string, string> = {
-  staff: '/dashboard/staff',
-  secretary: '/dashboard/staff',
-  supervisor: '/dashboard/staff',
-  manager: '/dashboard/staff',
-  custodian: '/dashboard/custodian',
-  admin: '/dashboard/admin',
-  director: '/dashboard/overview',
-  purchaser: '/dashboard/purchaser',
-  ap_officer: '/dashboard/ap-officer',
+  staff: '/requests',
+  secretary: '/requests',
+  supervisor: '/requests',
+  manager: '/requests',
+  custodian: '/approvals/custodian',
+  admin: '/settings',
+  director: '/dashboard',
+  purchaser: '/approvals/purchaser',
+  ap_officer: '/approvals/ap-officer',
 };
 
 let globalLoginLock = false;
@@ -42,7 +41,7 @@ export const useLogin = () => {
   // parsed sessionStorage blob — there is no client-side copy any more.
   useEffect(() => {
     if (!authLoading && isAuthenticated && user) {
-      navigate(ROLE_REDIRECT_MAP[user.role] || '/dashboard/staff');
+      navigate(ROLE_REDIRECT_MAP[user.role] || '/requests');
     }
   }, [authLoading, isAuthenticated, user, navigate]);
 
@@ -79,9 +78,11 @@ export const useLogin = () => {
       const response = await loginAction(formData.email, formData.password);
       if (!response.success) {
         setError(
-          response.error === "INVALID_CREDENTIALS"
-            ? "Invalid username or password."
-            : "Enter a valid username and password."
+          response.error === "RATE_LIMITED"
+            ? response.message
+            : response.error === "INVALID_CREDENTIALS"
+              ? "Invalid username or password."
+              : "Enter a valid username and password."
         );
         return;
       }
@@ -91,17 +92,11 @@ export const useLogin = () => {
       login(loggedIn);
       navigate(ROLE_REDIRECT_MAP[loggedIn.role] || '/dashboard');
     } catch (err: unknown) {
-      const status = getErrorStatus(err);
-      log.warn("Login failed — HTTP status:", status ?? "no response");
-      if (status === 401 || status === 403) {
-        setError(getErrorMessage(err, 'Invalid email or password.'));
-      } else if (status === 429) {
-        setError('Too many login attempts. Please try again later.');
-      } else if (!status) {
-        setError('Unable to reach the server. Please check your connection.');
-      } else {
-        setError('Server error. Please try again later.');
-      }
+      // Credential and throttling failures come back as data above; reaching
+      // here means the request itself failed (network, or a server error
+      // whose details Next.js withholds from the client).
+      log.warn("Login request failed:", err);
+      setError('Unable to sign in right now. Please check your connection and try again.');
     } finally {
       globalLoginLock = false;
       setLoading(false);

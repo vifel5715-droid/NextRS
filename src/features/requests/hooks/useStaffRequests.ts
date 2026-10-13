@@ -1,23 +1,22 @@
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import type React from 'react';
-import { useSearchParams } from '@shared/next-router';
-import { useAuth } from "@app/providers/AuthProvider";
-import { itemRequestAPI, serviceRequestAPI } from '../../../services/api';
-import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@server/actions/supervisor-review";
-import { getStaffRequestsAction } from "@server/actions/staff-requests";
-import { createItemRequestAction as createItemRequestResult } from "@server/actions/create-item-request";
-import { createServiceRequestAction as createServiceRequestResult } from "@server/actions/create-service-request";
-import { fetchWithRetry } from '@shared/utils/fetchWithRetry';
-import { createLogger } from '@shared/utils/logger';
-import { makeRequestKey } from "@shared/utils/requestKey";
-import { useRequestsChanged, type RequestChangedPayload } from '@shared/hooks/useRequestsChanged';
-import { upsertById, removeById } from "@shared/utils/reconcileRequests";
-import { debounce, debounceByKey } from '@shared/utils/debounce';
-import { getErrorMessage } from '@shared/utils/errorMessage';
-import { getCompositeStatus } from "@shared/utils/status";
-import { diffItemRow, type AdjustmentChange } from '@features/adjustments/utils/adjustmentSlip';
-import { useDateRangeContext } from "@app/providers/DateRangeProvider";
-import { filterByDateRange } from '@shared/utils/dateRange';
+import { useSearchParams } from '@/lib/next-router';
+import { useAuth } from "@/components/providers/AuthProvider";
+import { itemRequestAPI, serviceRequestAPI } from '@/lib/api';
+import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@/features/approvals/actions/supervisor-review";
+import { getStaffRequestsAction } from "@/features/requests/actions/staff-requests";
+import { createItemRequestAction as createItemRequestResult } from "@/features/requests/actions/create-item-request";
+import { createServiceRequestAction as createServiceRequestResult } from "@/features/requests/actions/create-service-request";
+import { createLogger } from '@/lib/client-logger';
+import { makeRequestKey } from "@/lib/utils/requestKey";
+import { useRequestsChanged, type RequestChangedPayload } from '@/hooks/useRequestsChanged';
+import { upsertById, removeById } from "@/lib/utils/reconcileRequests";
+import { debounce, debounceByKey } from '@/lib/utils/debounce';
+import { getErrorMessage } from '@/lib/utils/errorMessage';
+import { getCompositeStatus } from "@/lib/utils/status";
+import { diffItemRow, type AdjustmentChange } from '@/features/reports/utils/adjustmentSlip';
+import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
+import { filterByDateRange } from '@/lib/utils/dateRange';
 
 import type {
   ItemRequest,
@@ -31,8 +30,8 @@ import type {
   CacheEntry,
   RequestDetail,
   FieldValue,
-} from '@shared/types';
-import { throwOnError } from "@shared/utils/actionResult";
+} from '@/types';
+import { throwOnError } from "@/lib/utils/actionResult";
 
 const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
 const createItemRequestAction = throwOnError(createItemRequestResult);
@@ -399,9 +398,15 @@ export const useStaffRequests = () => {
       return updated;
     });
 
-  // Submit handlers
+  // Submit handlers. A submit already in flight ignores further clicks; the
+  // server separately rejects a repeat of the same request (see
+  // create-item-request.ts / create-service-request.ts).
+  const submittingRef = useRef(false);
+
   const handleItemSubmit = async (e: React.FormEvent, attachment?: File | null) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     log.info("Submitting item request — department:", itemFormData.department, "items:", itemTableData.length);
     try {
       const items = itemTableData.map(row => ({
@@ -421,25 +426,31 @@ export const useStaffRequests = () => {
       if (attachment) formData.append('attachment', attachment);
 
       if (attachment) setItemAttachmentUploadProgress(0);
-      await createItemRequestAction(formData);
-      log.info("Item request created successfully");
+      const created = await createItemRequestAction(formData);
+      log.info("Item request created successfully:", created.serial);
       setShowItemModal(false);
       setItemTableData([{ item_name: '', quantity: 1, uom: '', remarks: '' }]);
+      setItemFormData(prev => ({ ...prev, purpose: '', remarks: '' }));
       loadRequests(true);
+      alert(`Item request submitted successfully.
+Serial No.: ${created.serial}`);
     } catch (error: unknown) {
       const reason = getErrorMessage(error);
       log.error("Failed to create item request:", reason);
       alert('Error submitting request: ' + reason);
     } finally {
+      submittingRef.current = false;
       setItemAttachmentUploadProgress(null);
     }
   };
 
   const handleServiceSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (submittingRef.current) return;
+    submittingRef.current = true;
     log.info("Submitting service request — department:", serviceFormData.department, "services:", serviceTableData.length);
     try {
-      await createServiceRequestAction({
+      const created = await createServiceRequestAction({
         ...serviceFormData,
         purpose: serviceFormData.purpose.toUpperCase(),
         remarks: serviceFormData.remarks.toUpperCase(),
@@ -448,14 +459,19 @@ export const useStaffRequests = () => {
           description: row.description.toUpperCase(),
         })),
       });
-      log.info("Service request created successfully");
+      log.info("Service request created successfully:", created.serial);
       setShowServiceModal(false);
       setServiceTableData([{ description: '' }]);
+      setServiceFormData(prev => ({ ...prev, purpose: '', remarks: '' }));
       loadRequests(true);
+      alert(`Service request submitted successfully.
+Serial No.: ${created.serial}`);
     } catch (error: unknown) {
       const reason = getErrorMessage(error);
       log.error("Failed to create service request:", reason);
       alert('Error submitting request: ' + reason);
+    } finally {
+      submittingRef.current = false;
     }
   };
 
@@ -467,7 +483,7 @@ export const useStaffRequests = () => {
       newExpandedRows.add(key);
       if (!requestDetails.has(key)) {
         try {
-          const response = await fetchWithRetry(() =>
+          const response = await (
             activeTab === 'item' ? itemRequestAPI.getById(row.id) : serviceRequestAPI.getById(row.id)
           );
           setRequestDetails(prev => new Map(prev).set(key, response.data));
@@ -686,7 +702,7 @@ export const useStaffRequests = () => {
         });
       }
       log.info("Request #" + editingRequestId, "updated successfully");
-      const response = await fetchWithRetry(() =>
+      const response = await (
         editingRequestType === 'item'
           ? itemRequestAPI.getById(editingRequestId)
           : serviceRequestAPI.getById(editingRequestId)

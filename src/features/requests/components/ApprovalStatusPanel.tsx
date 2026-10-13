@@ -1,6 +1,6 @@
 import React from "react";
-import { getBsStatusBadgeClass, formatStatusLabel } from "@shared/utils/status";
-import { sanitizeUserInput } from "@shared/utils/sanitize";
+import { getBsStatusBadgeClass, formatStatusLabel } from "@/lib/utils/status";
+import { sanitizeUserInput } from "@/lib/utils/sanitize";
 
 const formatIsoDateOnly = (value?: string | null): string =>
   value ? new Date(value).toISOString().split("T")[0] : "—";

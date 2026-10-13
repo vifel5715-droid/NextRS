@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@app/providers/AuthProvider";
-import { reimbursementRequestAPI } from "../../../services/api";
-import { getReimbursementRequestsAction } from "@server/actions/special-requests";
-import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@server/actions/supervisor-review";
-import { createLogger } from "@shared/utils/logger";
-import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
-import { getErrorMessage } from "@shared/utils/errorMessage";
-import type { ReimbursementRequest, ReimbursementRequestItem } from "@shared/types";
-import { throwOnError } from "@shared/utils/actionResult";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { reimbursementRequestAPI } from "@/lib/api";
+import { getReimbursementRequestsAction } from "@/features/requests/actions/special-requests";
+import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@/features/approvals/actions/supervisor-review";
+import { createLogger } from "@/lib/client-logger";
+import { useRequestsChanged } from "@/hooks/useRequestsChanged";
+import { getErrorMessage } from "@/lib/utils/errorMessage";
+import type { ReimbursementRequest, ReimbursementRequestItem } from "@/types";
+import { throwOnError } from "@/lib/utils/actionResult";
 
 const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
 

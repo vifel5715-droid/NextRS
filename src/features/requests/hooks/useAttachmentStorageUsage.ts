@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { itemRequestAPI } from "../../../services/api";
+import { itemRequestAPI } from "@/lib/api";
 
 /** Total attachment storage used across every request — see lib/attachmentStorage.ts server-side. */
 export const useAttachmentStorageUsage = () => {

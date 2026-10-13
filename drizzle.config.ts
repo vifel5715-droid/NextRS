@@ -1,8 +1,8 @@
 import type { Config } from "drizzle-kit";
-import { env } from "./src/config/env.js";
+import { env } from "./src/lib/env";
 
 export default {
-  schema: "./src/server/db/schema.ts",
+  schema: "./src/db/schema.ts",
   out: "./drizzle",
   dialect: "postgresql",
   dbCredentials: {

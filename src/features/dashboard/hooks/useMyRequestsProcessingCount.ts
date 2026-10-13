@@ -1,10 +1,10 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getMyRequestListsAction } from "@server/actions/request-lists";
-import { getCompositeStatus } from "@shared/utils/status";
-import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
-import { debounce } from "@shared/utils/debounce";
-import { filterByDateRange } from "@shared/utils/dateRange";
-import type { ItemRequest, ServiceRequest } from "@shared/types";
+import { getMyRequestListsAction } from "@/features/requests/actions/request-lists";
+import { getCompositeStatus } from "@/lib/utils/status";
+import { useRequestsChanged } from "@/hooks/useRequestsChanged";
+import { debounce } from "@/lib/utils/debounce";
+import { filterByDateRange } from "@/lib/utils/dateRange";
+import type { ItemRequest, ServiceRequest } from "@/types";
 
 // Polling stays as a fallback in case a socket event is missed (e.g. a brief
 // disconnect); realtime updates via useRequestsChanged handle the common case.

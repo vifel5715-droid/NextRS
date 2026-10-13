@@ -1,18 +1,17 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
-import { useSearchParams } from '@shared/next-router';
-import { itemRequestAPI, serviceRequestAPI, statusAPI } from '../../../services/api';
-import { getRequestListsAction } from "@server/actions/request-lists";
-import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@server/actions/supervisor-review";
-import { reviewCustodianRequestAction as reviewCustodianRequestResult } from "@server/actions/custodian-review";
-import { updateRequestItemAction as updateRequestItemResult } from "@server/actions/update-request-item";
-import { fetchWithSimpleRetry } from '@shared/utils/fetchWithRetry';
-import { diffItemRow } from '@features/adjustments/utils/adjustmentSlip';
-import { createLogger } from '@shared/utils/logger';
-import { makeRequestKey } from "@shared/utils/requestKey";
-import { useRequestsChanged, type RequestChangedPayload } from '@shared/hooks/useRequestsChanged';
-import { upsertById, removeById } from "@shared/utils/reconcileRequests";
-import { debounceByKey } from '@shared/utils/debounce';
-import { getErrorMessage } from '@shared/utils/errorMessage';
+import { useSearchParams } from '@/lib/next-router';
+import { itemRequestAPI, serviceRequestAPI, statusAPI } from '@/lib/api';
+import { getRequestListsAction } from "@/features/requests/actions/request-lists";
+import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@/features/approvals/actions/supervisor-review";
+import { reviewCustodianRequestAction as reviewCustodianRequestResult } from "@/features/approvals/actions/custodian-review";
+import { updateRequestItemAction as updateRequestItemResult } from "@/features/requests/actions/update-request-item";
+import { diffItemRow } from '@/features/reports/utils/adjustmentSlip';
+import { createLogger } from '@/lib/client-logger';
+import { makeRequestKey } from "@/lib/utils/requestKey";
+import { useRequestsChanged, type RequestChangedPayload } from '@/hooks/useRequestsChanged';
+import { upsertById, removeById } from "@/lib/utils/reconcileRequests";
+import { debounceByKey } from '@/lib/utils/debounce';
+import { getErrorMessage } from '@/lib/utils/errorMessage';
 import type {
   ItemRequest,
   ServiceRequest,
@@ -23,8 +22,8 @@ import type {
   ItemRow,
   ItemAudit,
   FieldValue,
-} from '@shared/types';
-import { throwOnError } from "@shared/utils/actionResult";
+} from '@/types';
+import { throwOnError } from "@/lib/utils/actionResult";
 
 const updateRequestItemAction = throwOnError(updateRequestItemResult);
 const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
@@ -268,7 +267,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
       newExpandedRows.add(key);
       if (!requestDetails.has(key)) {
         try {
-          const response = await fetchWithSimpleRetry(() =>
+          const response = await (
             activeTab === 'item' ? itemRequestAPI.getById(row.id) : serviceRequestAPI.getById(row.id)
           );
           setRequestDetails(prev => new Map(prev).set(key, response.data));
@@ -320,7 +319,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
       // keep working on it (e.g. setting item delivery status) right after.
       const statusKey = makeRequestKey(activeTab, selectedRequest.id);
       try {
-        const response = await fetchWithSimpleRetry(() =>
+        const response = await (
           activeTab === 'item' ? itemRequestAPI.getById(selectedRequest.id) : serviceRequestAPI.getById(selectedRequest.id)
         );
         setRequestDetails(prev => new Map(prev).set(statusKey, response.data));
@@ -343,7 +342,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
     if (!details) return;
     try {
       await itemRequestAPI.update(requestId, { purpose: details.purpose, remarks: details.remarks });
-      const refreshed = await fetchWithSimpleRetry(() => itemRequestAPI.getById(requestId));
+      const refreshed = await itemRequestAPI.getById(requestId);
       setRequestDetails(prev => new Map(prev).set(makeRequestKey('item', requestId), refreshed.data));
       log.info("Request info saved for request #" + requestId);
       alert('Request info saved successfully!');
@@ -466,7 +465,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
       const savePayload = buildItemSavePayload(item);
       if (changes.length > 0) savePayload.adjustment_remarks = adjustmentRemarks;
       await updateRequestItemAction(item.id, savePayload);
-      const refreshed = await fetchWithSimpleRetry(() => itemRequestAPI.getById(requestId));
+      const refreshed = await itemRequestAPI.getById(requestId);
       setRequestDetails(prev => new Map(prev).set(makeRequestKey('item', requestId), refreshed.data));
       log.info("Item #" + itemId, "saved");
       setDirtyItemIds(prev => {
@@ -562,7 +561,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
     });
 
     if (succeededIds.size > 0) {
-      const refreshed = await fetchWithSimpleRetry(() => itemRequestAPI.getById(requestId));
+      const refreshed = await itemRequestAPI.getById(requestId);
       setRequestDetails(prev => new Map(prev).set(makeRequestKey('item', requestId), refreshed.data));
       setDirtyItemIds(prev => {
         const next = new Set(prev);
@@ -642,7 +641,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
       // forces delivery_status/pr_status back to pending regardless of what
       // the dropdowns still showed at save time).
       const key = makeRequestKey('service', requestId);
-      const refreshed = await fetchWithSimpleRetry(() => serviceRequestAPI.getById(requestId));
+      const refreshed = await serviceRequestAPI.getById(requestId);
       setRequestDetails(prev => new Map(prev).set(key, refreshed.data));
       setEditableServices(prev => {
         if (!prev.has(requestId)) return prev;
@@ -715,7 +714,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
     )?.id;
     try {
       await statusAPI.deleteIssuanceAudit(auditId, reason);
-      const refreshed = await fetchWithSimpleRetry(() => itemRequestAPI.getById(requestId));
+      const refreshed = await itemRequestAPI.getById(requestId);
       const data = refreshed.data;
       // The Issuance No. box defaults to the item's stored issuance_number so
       // repeat partial releases don't need retyping it — but that number
@@ -745,7 +744,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
       if (requestType === 'item') await statusAPI.resetItemApproval(requestId, target);
       else await statusAPI.resetServiceApproval(requestId, target);
       const key = makeRequestKey(requestType, requestId);
-      const response = await fetchWithSimpleRetry(() =>
+      const response = await (
         requestType === 'item' ? itemRequestAPI.getById(requestId) : serviceRequestAPI.getById(requestId)
       );
       setRequestDetails(prev => new Map(prev).set(key, response.data));
@@ -766,7 +765,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
     try {
       await statusAPI.clearServiceReceivingReport(serviceId, reason);
       const key = makeRequestKey('service', requestId);
-      const response = await fetchWithSimpleRetry(() => serviceRequestAPI.getById(requestId));
+      const response = await serviceRequestAPI.getById(requestId);
       setRequestDetails(prev => new Map(prev).set(key, response.data));
       setEditableServices(prev => {
         if (!prev.has(requestId)) return prev;
@@ -937,7 +936,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
     const details = requestDetails.get(makeRequestKey(requestType, requestId));
     if (details) {
       log.info("Printing", requestType, "slip for request #" + requestId);
-      const { printRequestSlip } = await import('@features/requests/utils/print');
+      const { printRequestSlip } = await import('@/features/requests/utils/print');
       printRequestSlip(details, requestType);
     } else {
       log.warn("Print requested for #" + requestId, "but details not loaded yet");
@@ -948,7 +947,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
     const details = requestDetails.get(makeRequestKey(requestType, requestId));
     if (details) {
       log.info("Printing", requestType, "slip for request #" + requestId);
-      const { printoutslip } = await import("@features/requests/utils/printout");
+      const { printoutslip } = await import("@/features/requests/utils/printout");
       printoutslip(details, requestType);
     } else {
       log.warn("Print requested for #" + requestId, "but details not loaded yet");

@@ -1,8 +1,17 @@
 /**
- * ARCH: Client mirror of server/src/lib/permissionKeys.ts — keep both in
- * sync by hand (no shared package between the two workspaces). This is the
- * fixed set of page/feature permission keys shown as checkboxes when an
- * admin creates or edits a role.
+ * ARCH: The fixed set of page/feature permission keys a role can be granted
+ * (see db/schema.ts's roles/rolePermissions and roles.controller.ts). This
+ * is intentionally NOT itself admin-editable — it's the list of checkboxes
+ * shown when creating/editing a role, and the allow-list permissionMiddleware
+ * validates route-level grants against.
+ *
+ * Each key maps to exactly one sidebar section / page, mirroring the current
+ * hardcoded role arrays in client/src/components/Sidebar.tsx and
+ * client/src/App.tsx's route allowedRoles. Built-in role grants are seeded
+ * in database/seedRoles.ts to reproduce today's access exactly.
+ *
+ * Client mirror: client/src/constants/permissions.ts — keep both in sync by
+ * hand (no shared package between the two workspaces).
  */
 export const PERMISSION_KEYS = [
   "overview",
@@ -49,3 +58,6 @@ export const PERMISSION_LABELS: Record<PermissionKey, string> = {
   users_management: "Users Management",
   submitted_payment_requests: "Submitted Payment Request",
 };
+
+export const isPermissionKey = (value: string): value is PermissionKey =>
+  (PERMISSION_KEYS as readonly string[]).includes(value);

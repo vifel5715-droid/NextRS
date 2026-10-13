@@ -185,7 +185,7 @@ const PaymentRequestFormFields: React.FC<{
         <button
           className="btn btn-outline-secondary"
           onClick={async () => {
-            const { printPaymentRequestForm } = await import("@features/requests/utils/printPaymentRequestForm");
+            const { printPaymentRequestForm } = await import("@/features/requests/utils/printPaymentRequestForm");
             printPaymentRequestForm({ ...form, ...fields }, requestSerial);
           }}
         >

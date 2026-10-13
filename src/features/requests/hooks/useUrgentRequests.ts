@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react";
-import { useAuth } from "@app/providers/AuthProvider";
-import { urgentRequestAPI } from "../../../services/api";
-import { getUrgentRequestsAction } from "@server/actions/special-requests";
-import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@server/actions/supervisor-review";
-import { createLogger } from "@shared/utils/logger";
-import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
-import { getErrorMessage } from "@shared/utils/errorMessage";
-import type { UrgentRequest, UrgentRequestItem, PaymentRequestForm } from "@shared/types";
-import { throwOnError } from "@shared/utils/actionResult";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { urgentRequestAPI } from "@/lib/api";
+import { getUrgentRequestsAction } from "@/features/requests/actions/special-requests";
+import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@/features/approvals/actions/supervisor-review";
+import { createLogger } from "@/lib/client-logger";
+import { useRequestsChanged } from "@/hooks/useRequestsChanged";
+import { getErrorMessage } from "@/lib/utils/errorMessage";
+import type { UrgentRequest, UrgentRequestItem, PaymentRequestForm } from "@/types";
+import { throwOnError } from "@/lib/utils/actionResult";
 
 const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
 

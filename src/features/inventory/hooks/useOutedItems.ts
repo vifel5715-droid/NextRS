@@ -1,0 +1,48 @@
+import { useState, useEffect, useCallback, useRef } from "react";
+import { getOutedItemsAction } from "@/features/reports/actions/history-reads";
+import type { OutedItem } from "@/lib/api";
+import { useRequestsChanged } from "@/hooks/useRequestsChanged";
+import { debounce } from "@/lib/utils/debounce";
+
+export const useOutedItems = (enabled = true) => {
+  const [items, setItems] = useState<OutedItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const fetchItems = useCallback(async () => {
+    if (!enabled) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+
+    try {
+      setItems(await getOutedItemsAction());
+    } catch {
+      // silently ignore
+    } finally {
+      setLoading(false);
+    }
+  }, [enabled]);
+
+  useEffect(() => {
+    if (!enabled) {
+      setItems([]);
+      setLoading(false);
+      return;
+    }
+
+    fetchItems();
+  }, [enabled, fetchItems]);
+
+  const debouncedFetch = useRef(debounce(fetchItems, 400));
+  useEffect(() => {
+    debouncedFetch.current = debounce(fetchItems, 400);
+  }, [fetchItems]);
+
+  const handleChange = useCallback((payload: { type: "item" | "service" | "urgent" | "reimbursement" }) => {
+    if (payload.type === "item") debouncedFetch.current();
+  }, []);
+  useRequestsChanged(handleChange);
+
+  return { items, loading };
+};

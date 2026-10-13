@@ -1,6 +1,6 @@
-import logo from '../../../assets/svg.svg';
-import { escapeHTML } from '@shared/utils/escapeHTML';
-import type { PaymentRequestFormLike } from '@features/requests/components/PaymentRequestFormFields';
+import logo from '@/assets/svg.svg';
+import { escapeHTML } from '@/lib/utils/escapeHTML';
+import type { PaymentRequestFormLike } from '@/features/requests/components/PaymentRequestFormFields';
 
 export const printPaymentRequestForm = (form: PaymentRequestFormLike, requestSerial: string): void => {
   const printWindow = window.open('', '_blank');

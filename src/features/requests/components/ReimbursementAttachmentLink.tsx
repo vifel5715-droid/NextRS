@@ -1,10 +1,10 @@
 import { useRef, useState } from "react";
-import { useAuth } from "@app/providers/AuthProvider";
-import { reimbursementRequestAPI } from "../../../services/api";
-import { formatBytes } from "@shared/utils/formatBytes";
-import { getErrorMessage } from "@shared/utils/errorMessage";
-import { openAttachment } from "@shared/utils/openAttachment";
-import type { ReimbursementRequest } from "@shared/types";
+import { useAuth } from "@/components/providers/AuthProvider";
+import { reimbursementRequestAPI } from "@/lib/api";
+import { formatBytes } from "@/lib/utils/formatBytes";
+import { getErrorMessage } from "@/lib/utils/errorMessage";
+import { openAttachment } from "@/lib/utils/openAttachment";
+import type { ReimbursementRequest } from "@/types";
 
 interface ReimbursementAttachmentLinkProps {
   readonly requestId: number;

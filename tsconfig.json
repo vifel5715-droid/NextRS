@@ -24,26 +24,8 @@
       }
     ],
     "paths": {
-      "@app/*": [
-        "./src/app/*"
-      ],
-      "@features/*": [
-        "./src/features/*"
-      ],
-      "@shared/*": [
-        "./src/shared/*"
-      ],
-      "@services/*": [
-        "./src/services/*"
-      ],
-      "@constants/*": [
-        "./src/constants/*"
-      ],
-      "@config/*": [
-        "./src/config/*"
-      ],
-      "@server/*": [
-        "./src/server/*"
+      "@/*": [
+        "./src/*"
       ]
     }
   },
@@ -55,6 +37,7 @@
     "**/*.tsx"
   ],
   "exclude": [
-    "node_modules"
+    "node_modules",
+    "tests"
   ]
 }

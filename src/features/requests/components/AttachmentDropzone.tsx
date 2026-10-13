@@ -1,6 +1,6 @@
 import React, { useRef, useState } from "react";
-import { formatBytes } from "@shared/utils/formatBytes";
-import styles from "./AttachmentDropzone.module.css";
+import { formatBytes } from "@/lib/utils/formatBytes";
+import styles from "@/features/requests/components/AttachmentDropzone.module.css";
 
 interface AttachmentDropzoneProps {
   id: string;

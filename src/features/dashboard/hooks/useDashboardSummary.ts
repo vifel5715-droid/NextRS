@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
-import { getItemCatalogCountAction } from "@server/actions/dashboard-read";
-import { getDashboardRequestCountsAction } from "@server/actions/request-lists";
-import { getDeletionLogAction } from "@server/actions/history-reads";
-import { useRequestsChanged } from "@shared/hooks/useRequestsChanged";
-import { useDateRangeContext } from "@app/providers/DateRangeProvider";
-import { filterByDateRange } from "@shared/utils/dateRange";
-import { debounce } from "@shared/utils/debounce";
+import { getItemCatalogCountAction } from "@/features/dashboard/actions/dashboard-read";
+import { getDashboardRequestCountsAction } from "@/features/requests/actions/request-lists";
+import { getDeletionLogAction } from "@/features/reports/actions/history-reads";
+import { useRequestsChanged } from "@/hooks/useRequestsChanged";
+import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
+import { filterByDateRange } from "@/lib/utils/dateRange";
+import { debounce } from "@/lib/utils/debounce";
 
 /**
  * Counts for the sidebar sections that don't already have their own
