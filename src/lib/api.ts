@@ -50,6 +50,7 @@ import {
   getPettyCashCustodianNamesAction,
   getPettyCashTransactionsAction,
   setPettyCashCustodianStatusAction,
+  setPettyCashRrNumberAction,
   updatePettyCashTransactionAction,
 } from "@/features/petty-cash/actions/petty-cash";
 import {
@@ -393,6 +394,8 @@ export const pettyCashAPI = {
   getCounts: () => call(getPettyCashCountsAction()),
   setCustodianStatus: (id: number, data: { cash_status?: "received" | "not_received"; item_status?: "delivered" | "pending" }) =>
     call(setPettyCashCustodianStatusAction(id, data)),
+  // Custodian (or admin) only — the server rejects anyone else.
+  setRrNumber: (id: number, rrNumber: string) => call(setPettyCashRrNumberAction(id, { rr_number: rrNumber })),
   create: (data: { po_number: string; total_amount: number }) => call(createPettyCashTransactionAction(data)),
   // PO Number and Total Amount only — the server rejects any other field.
   update: (id: number, data: { po_number?: string; total_amount?: number; expected_updated_at?: string }) =>

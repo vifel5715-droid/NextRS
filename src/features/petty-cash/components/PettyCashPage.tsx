@@ -22,6 +22,55 @@ const thRight: React.CSSProperties = { ...thStyle, textAlign: "right" };
 const td: React.CSSProperties = { padding: "11px 16px" };
 
 /**
+ * Custodian's inline RR No. field — saves on blur or Enter when the value
+ * changed, Escape reverts. Keyed on the saved value by the caller, so the
+ * draft resets whenever the row reloads with a new RR No.
+ */
+const RrNumberInput: React.FC<{ row: PettyCashTransaction; onSave: (row: PettyCashTransaction, value: string) => Promise<boolean> }> = ({
+  row,
+  onSave,
+}) => {
+  const saved = row.rr_number ?? "";
+  const [draft, setDraft] = useState(saved);
+  const [busy, setBusy] = useState(false);
+
+  const commit = async () => {
+    const next = draft.trim().toUpperCase();
+    if (busy || next === saved) {
+      setDraft(saved);
+      return;
+    }
+    setBusy(true);
+    if (!(await onSave(row, next))) setDraft(saved);
+    setBusy(false);
+  };
+
+  return (
+    <input
+      type="text"
+      className="form-control form-control-sm text-uppercase"
+      style={{ width: "140px" }}
+      maxLength={100}
+      placeholder="RR No."
+      aria-label={`RR No. for ${row.serial}`}
+      value={draft}
+      disabled={busy}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={() => void commit()}
+      onKeyDown={(e) => {
+        if (e.key === "Enter") e.currentTarget.blur();
+        if (e.key === "Escape") {
+          const input = e.currentTarget;
+          setDraft(saved);
+          // Blur after the revert renders, so the blur sees nothing to save.
+          requestAnimationFrame(() => input.blur());
+        }
+      }}
+    />
+  );
+};
+
+/**
  * Cash Purchase Based on P.O. (the petty_cash ledger), split into two pages:
  *
  * - Pending Cash Purchase (/petty-cash): Item Status Pending. AP Officer
@@ -78,7 +127,7 @@ const PettyCashPage: React.FC<{ view?: CashPurchaseView }> = ({ view = "pending"
     const q = searchQuery.trim().toLowerCase();
     if (!q) return inRange;
     return inRange.filter((row) =>
-      [row.serial, row.po_number, row.created_by_name, row.receiver_name, row.delivered_by_name].some((field) =>
+      [row.serial, row.po_number, row.created_by_name, row.receiver_name, row.delivered_by_name, row.rr_number].some((field) =>
         (field || "").toLowerCase().includes(q)
       )
     );
@@ -98,6 +147,7 @@ const PettyCashPage: React.FC<{ view?: CashPurchaseView }> = ({ view = "pending"
         { key: "receiver_name", label: "Name of Receiver" },
         { key: "cash_status", label: "Cash Status" },
         { key: "item_status", label: "Item Status" },
+        { key: "rr_number", label: "RR No." },
         ...(isDeliveredView
           ? [
               { key: "delivered_at" as const, label: "Delivered" },
@@ -116,6 +166,7 @@ const PettyCashPage: React.FC<{ view?: CashPurchaseView }> = ({ view = "pending"
         receiver_name: row.receiver_name || "",
         cash_status: row.cash_confirmed_at ? "Received" : "Not Received",
         item_status: row.delivered_at ? "Delivered" : "Pending",
+        rr_number: row.rr_number || "",
         delivered_at: row.delivered_at ? formatDate(row.delivered_at) : "",
         delivered_by: row.delivered_by_name || "",
       }))
@@ -232,10 +283,22 @@ const PettyCashPage: React.FC<{ view?: CashPurchaseView }> = ({ view = "pending"
     }
   };
 
+  // Custodian's RR No. — returns whether it saved, so the field can revert.
+  const saveRrNumber = async (row: PettyCashTransaction, rrNumber: string): Promise<boolean> => {
+    try {
+      await pettyCashAPI.setRrNumber(row.id, rrNumber);
+      await afterChange();
+      return true;
+    } catch (error: unknown) {
+      alert("Error saving RR No.: " + getErrorMessage(error));
+      return false;
+    }
+  };
+
   // Edit + History are AP Officer's; a Custodian works through the status
   // dropdowns instead, so the actions column is dropped for them.
   const showActions = isAPOfficer;
-  const columnCount = 10 + (isDeliveredView ? 2 : 0) + (showActions ? 1 : 0);
+  const columnCount = 11 + (isDeliveredView ? 2 : 0) + (showActions ? 1 : 0);
 
   return (
     <Layout>
@@ -319,6 +382,7 @@ const PettyCashPage: React.FC<{ view?: CashPurchaseView }> = ({ view = "pending"
                   <th style={thStyle}>Name of Receiver</th>
                   <th style={thStyle}>Cash Status</th>
                   <th style={thStyle}>Item Status</th>
+                  <th style={thStyle}>RR No.</th>
                   {isDeliveredView && (
                     <>
                       <th style={thStyle}>Delivered</th>
@@ -428,6 +492,13 @@ const PettyCashPage: React.FC<{ view?: CashPurchaseView }> = ({ view = "pending"
                             <span style={{ color: row.delivered_at ? "#1d4ed8" : "#b45309", fontWeight: 600 }}>
                               {row.delivered_at ? "Delivered" : "Pending"}
                             </span>
+                          )}
+                        </td>
+                        <td style={{ ...td, whiteSpace: "nowrap" }}>
+                          {canConfirmDelivery ? (
+                            <RrNumberInput key={`${row.id}:${row.rr_number ?? ""}`} row={row} onSave={saveRrNumber} />
+                          ) : (
+                            row.rr_number || <span className="text-muted">—</span>
                           )}
                         </td>
                         {isDeliveredView && (

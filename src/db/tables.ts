@@ -470,6 +470,7 @@ export const TABLE_STATEMENTS: Array<{ label: string; sql: string }> = [
         delivered_by UUID,
         cash_confirmed_at TEXT,
         cash_confirmed_by UUID,
+        rr_number TEXT,
         created_by UUID NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL

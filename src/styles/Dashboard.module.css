@@ -589,3 +589,11 @@
 .storageBarFillDanger {
   background: #ef4444;
 }
+
+/* Closed / Cancelled tab (CustodianDashboard): composed with urgentListHeader/
+   urgentListRow for their styling and mobile stacking, one item per row and
+   no expand chevron. Declared after them so these columns win. */
+.closedListGrid {
+  grid-template-columns: minmax(0, 1.3fr) minmax(0, 1.2fr) minmax(0, 1fr) minmax(0, 0.9fr) minmax(0, 1.5fr) minmax(0, 1.6fr) minmax(0, 1.5fr) minmax(0, 0.9fr);
+  column-gap: 8px;
+}

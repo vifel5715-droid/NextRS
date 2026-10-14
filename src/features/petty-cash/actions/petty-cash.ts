@@ -290,6 +290,35 @@ export async function updatePettyCashTransactionAction(id: number, value: unknow
   });
 }
 
+/**
+ * RR No. (Receiving Report number) — Custodian (or admin) only, on Pending and
+ * Delivered purchases alike, since the report usually arrives with the goods.
+ * An empty value clears it. Logged to the History like every other change.
+ */
+export async function setPettyCashRrNumberAction(id: number, value: unknown): Promise<ActionResult<void>> {
+  return runAction(async () => {
+    const user = await requireUser();
+    requirePermission(user, ["petty_cash"]);
+    assertId(id, "transaction ID");
+    if (!canConfirmDelivery(user)) throw new ForbiddenError("Only a Custodian can enter the RR No.");
+    const rrNumber = (optionalString(asRecord(value), "rr_number", 100, "RR No.") ?? "").toUpperCase();
+
+    const changed = await getDb().transaction(async (tx) => {
+      const [row] = await tx.select().from(pettyCashTransactions).where(eq(pettyCashTransactions.id, id)).for("update");
+      if (!row) throw new NotFoundError("Petty Cash transaction not found.");
+      const before = row.rr_number ?? "";
+      if (before === rrNumber) return false;
+      await tx
+        .update(pettyCashTransactions)
+        .set({ rr_number: rrNumber || null, updated_at: new Date().toISOString() })
+        .where(eq(pettyCashTransactions.id, id));
+      await logPettyCash(tx, user, row, "RR No. updated", [["RR No.", before, rrNumber]]);
+      return true;
+    });
+    if (changed) await publishRequestChanged({ type: "petty_cash", action: "updated", id, department: null });
+  });
+}
+
 /** Name of Receiver suggestions — the custodians who hand out petty cash. */
 export async function getPettyCashCustodianNamesAction(): Promise<ActionResult<string[]>> {
   return runAction(async () => {

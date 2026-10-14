@@ -38,6 +38,11 @@ import DateRangeFilter from "@/components/forms/DateRangeFilter";
 import ListToolbar from "@/components/tables/ListToolbar";
 import { exportToExcel } from "@/lib/utils/exportExcel";
 import { getCompositeStatus } from "@/lib/utils/status";
+import { useClosedCancelledItems } from "@/features/approvals/hooks/useClosedCancelledItems";
+import {
+  CLOSED_CANCELLED_LABELS,
+  filterClosedCancelledRows,
+} from "@/features/approvals/utils/closedCancelledItems";
 import styles from "@/styles/Dashboard.module.css";
 
 /** Per-value tint for the delivery-status <select> in the Items table, so the
@@ -133,6 +138,10 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
   // ?tab=urgent (the Dashboard's Urgent Requests card) lands on the Urgent tab.
   const [searchParams] = useSearchParams();
   const [activeUrgentTab, setActiveUrgentTab] = React.useState(!approvalView && searchParams.get("tab") === "urgent");
+  // Closed / Cancelled tab — management view only, like Urgent Requests.
+  const [activeClosedTab, setActiveClosedTab] = React.useState(!approvalView && searchParams.get("tab") === "closed");
+  const { rows: closedCancelledRows, loading: loadingClosedCancelled, error: closedCancelledError } =
+    useClosedCancelledItems({ enabled: !approvalView });
   const [urgentDeclineTarget, setUrgentDeclineTarget] = React.useState<number | null>(null);
 
   // Which item/service is queued for deletion, pending a typed reason —
@@ -1089,10 +1098,56 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
   const visibleItemRequests = byMostRecent(matchingItemRequests).slice(0, 20);
   const visibleServiceRequests = byMostRecent(matchingServiceRequests).slice(0, 20);
 
+  // Closed / Cancelled tab: the same search box, department dropdown and date
+  // range. The badge counts every matching item (one row per item), and the
+  // export uses this same filtered list.
+  const matchingClosedRows = filterClosedCancelledRows(closedCancelledRows, {
+    searchQuery,
+    department: selectedDepartment,
+    startDate,
+    endDate,
+  });
+  const closedTabDepartments = Array.from(
+    new Set(closedCancelledRows.map((row) => row.department).filter(Boolean))
+  ).sort();
+
+  const exportClosedCancelled = () =>
+    exportToExcel(
+      "closed-cancelled-items",
+      [
+        { key: "serial", label: "Serial" },
+        { key: "date", label: "Date" },
+        { key: "created_by", label: "Created By" },
+        { key: "department", label: "Department" },
+        { key: "purpose", label: "Purpose" },
+        { key: "item", label: "Item" },
+        { key: "quantity", label: "Quantity" },
+        { key: "uom", label: "UoM" },
+        { key: "pr_number", label: "PR Number" },
+        { key: "status", label: "Status" },
+        { key: "reason", label: "Reason" },
+      ],
+      matchingClosedRows.map((row) => ({
+        serial: row.serial,
+        date: row.created_at ? new Date(row.created_at).toISOString().split("T")[0] : "",
+        created_by: row.created_by,
+        department: row.department,
+        purpose: row.purpose,
+        item: row.item_name,
+        quantity: row.quantity,
+        uom: row.uom,
+        pr_number: row.pr_number,
+        status: CLOSED_CANCELLED_LABELS[row.status],
+        reason: row.reason,
+      }))
+    );
+
   // Exports the full filtered set for the active tab, not just the 20 rows
   // rendered below it — mirrors HeldItemsPage's export.
   const handleExport = () =>
-    activeTab === "item"
+    activeClosedTab
+      ? exportClosedCancelled()
+      : activeTab === "item"
       ? exportToExcel(
           approvalView ? "approval-item-requests" : "pending-item-requests",
           [
@@ -1144,15 +1199,15 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
       <div className="dash-toolbar">
         <div className="dash-tabs">
           <button
-            className={`dash-tab ${!activeUrgentTab && activeTab === "item" ? "active" : ""}`}
-            onClick={() => { setActiveUrgentTab(false); setActiveTab("item"); }}
+            className={`dash-tab ${!activeUrgentTab && !activeClosedTab && activeTab === "item" ? "active" : ""}`}
+            onClick={() => { setActiveUrgentTab(false); setActiveClosedTab(false); setActiveTab("item"); }}
           >
             Item Requests
             <span className="dash-tab-badge">{matchingItemRequests.length}</span>
           </button>
           <button
-            className={`dash-tab ${!activeUrgentTab && activeTab === "service" ? "active" : ""}`}
-            onClick={() => { setActiveUrgentTab(false); setActiveTab("service"); }}
+            className={`dash-tab ${!activeUrgentTab && !activeClosedTab && activeTab === "service" ? "active" : ""}`}
+            onClick={() => { setActiveUrgentTab(false); setActiveClosedTab(false); setActiveTab("service"); }}
           >
             Service Requests
             <span className="dash-tab-badge">{matchingServiceRequests.length}</span>
@@ -1160,12 +1215,21 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
           {!approvalView && (
           <button
             className={`dash-tab ${activeUrgentTab ? "active" : ""}`}
-            onClick={() => setActiveUrgentTab(true)}
+            onClick={() => { setActiveClosedTab(false); setActiveUrgentTab(true); }}
           >
             Urgent Requests
             <span className="dash-tab-badge">
               {urgentRequests.filter((r) => r.stockroom_status === "pending").length}
             </span>
+          </button>
+          )}
+          {!approvalView && (
+          <button
+            className={`dash-tab ${activeClosedTab ? "active" : ""}`}
+            onClick={() => { setActiveUrgentTab(false); setActiveClosedTab(true); }}
+          >
+            Closed / Cancelled
+            <span className="dash-tab-badge">{matchingClosedRows.length}</span>
           </button>
           )}
 
@@ -1179,7 +1243,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
             onSearchChange={setSearchQuery}
             searchPlaceholder="Search by Serial, Purpose, PR Number..."
             onExport={handleExport}
-            exportDisabled={(activeTab === "item" ? matchingItemRequests : matchingServiceRequests).length === 0}
+            exportDisabled={(activeClosedTab ? matchingClosedRows : activeTab === "item" ? matchingItemRequests : matchingServiceRequests).length === 0}
           />
 
           <div className="mb-4 d-flex align-items-end gap-3 flex-wrap">
@@ -1191,7 +1255,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                 onChange={(e) => setSelectedDepartment(e.target.value)}
               >
                 <option value="all">All Departments</option>
-                {(activeTab === "item" ? getUniqueDepartments(itemRequests) : getUniqueDepartments(serviceRequests)).map((dept) => (
+                {(activeClosedTab ? closedTabDepartments : activeTab === "item" ? getUniqueDepartments(itemRequests) : getUniqueDepartments(serviceRequests)).map((dept) => (
                   <option key={dept} value={dept}>{dept}</option>
                 ))}
               </select>
@@ -1199,6 +1263,59 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
             <DateRangeFilter />
           </div>
 
+          {activeClosedTab ? (
+            <div className={styles.requestListFrame}>
+              <div className={`${styles.urgentListHeader} ${styles.closedListGrid}`}>
+                <div>Serial Number</div>
+                <div>Created Date</div>
+                <div>Created By</div>
+                <div>Department</div>
+                <div>Purpose</div>
+                <div>Item</div>
+                <div>Reason</div>
+                <div>Status</div>
+              </div>
+
+              <div>
+                {loadingClosedCancelled && <div className="p-3 text-muted">Loading closed and cancelled items...</div>}
+                {!loadingClosedCancelled && closedCancelledError && (
+                  <div className="p-3 text-danger" role="alert">{closedCancelledError}</div>
+                )}
+                {!loadingClosedCancelled && !closedCancelledError && matchingClosedRows.length === 0 && (
+                  <div className="p-3 text-muted">
+                    {closedCancelledRows.length === 0
+                      ? "No closed or cancelled items."
+                      : "No closed or cancelled items match the current filters."}
+                  </div>
+                )}
+                {matchingClosedRows.map((row) => (
+                  <div key={row.key} className={styles.requestCard}>
+                    <div className={`${styles.urgentListRow} ${styles.closedListGrid}`} style={{ cursor: "default" }}>
+                      <div className={styles.serialLink} data-label="Serial">{row.serial}</div>
+                      <div className="text-muted" data-label="Date">{row.created_at ? formatMilitaryDateTime(row.created_at) : ""}</div>
+                      <div data-label="Created By">{row.created_by}</div>
+                      <div data-label="Dept">{row.department}</div>
+                      <div data-label="Purpose">{row.purpose}</div>
+                      <div data-label="Item">
+                        {row.item_name}
+                        <span className="text-muted"> · {row.quantity} {row.uom}</span>
+                        {row.pr_number && <div className="small text-muted">PR {row.pr_number}</div>}
+                      </div>
+                      <div data-label="Reason">{row.reason ? sanitizeUserInput(row.reason) : <span className="text-muted">—</span>}</div>
+                      <div data-label="Status">
+                        <span className={`badge ${getBsStatusBadgeClass(row.status === "CLOSE" ? "close" : "cancel")}`}>
+                          {CLOSED_CANCELLED_LABELS[row.status]}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-2 small text-muted">
+                Close and Cancel are set per item, so each row is one item. Service and Urgent Requests have no Closed or Cancelled status.
+              </div>
+            </div>
+          ) : (
           <div className={styles.requestListFrame}>
             {/* Column header bar */}
             <div className={styles.requestListHeader}>
@@ -1241,6 +1358,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
               </div>
             )}
           </div>
+          )}
         </>
       )}
 

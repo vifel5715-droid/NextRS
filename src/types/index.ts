@@ -418,6 +418,8 @@ export interface PettyCashTransaction {
   /** Custodian's Cash Status — set means "Received", null "Not Received". */
   cash_confirmed_at: string | null;
   cash_confirmed_by: string | null;
+  /** Receiving Report number — Custodian/admin-entered, null until set. */
+  rr_number: string | null;
   created_by: string;
   created_by_name: string | null;
   created_at: string;

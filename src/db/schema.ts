@@ -739,6 +739,9 @@ export const pettyCashTransactions = pgTable("petty_cash_transactions", {
   // cash_received amount.
   cash_confirmed_at: text("cash_confirmed_at"),
   cash_confirmed_by: uuid("cash_confirmed_by"),
+  // Receiving Report number for the delivered goods — entered by the
+  // Custodian (or admin) only, see setPettyCashRrNumberAction. Null until set.
+  rr_number: text("rr_number"),
   created_by: uuid("created_by").notNull(),
   created_at: text("created_at").notNull(),
   updated_at: text("updated_at").notNull(),

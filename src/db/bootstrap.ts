@@ -102,6 +102,8 @@ const COLUMN_STATEMENTS = [
   // Nullable, no backfill: existing rows start as Cash Status "Not Received".
   "ALTER TABLE petty_cash_transactions ADD COLUMN IF NOT EXISTS cash_confirmed_at TEXT",
   "ALTER TABLE petty_cash_transactions ADD COLUMN IF NOT EXISTS cash_confirmed_by UUID",
+  // Nullable, no backfill: the Custodian fills in RR No. per purchase.
+  "ALTER TABLE petty_cash_transactions ADD COLUMN IF NOT EXISTS rr_number TEXT",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0",
 ] as const;
 
