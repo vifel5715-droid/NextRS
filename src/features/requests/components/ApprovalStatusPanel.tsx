@@ -2,8 +2,15 @@ import React from "react";
 import { getBsStatusBadgeClass, formatStatusLabel } from "@/lib/utils/status";
 import { sanitizeUserInput } from "@/lib/utils/sanitize";
 
+// Local date (YYYY-MM-DD), so it always agrees with the local time shown
+// beside it — toISOString() would roll back a day for early-morning approvals.
 const formatIsoDateOnly = (value?: string | null): string =>
-  value ? new Date(value).toISOString().split("T")[0] : "—";
+  value ? new Date(value).toLocaleDateString("en-CA") : "—";
+
+const formatTimeOnly = (value?: string | null): string =>
+  value
+    ? new Date(value).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })
+    : "—";
 
 interface ApprovalTierProps {
   status?: string | null;
@@ -14,7 +21,7 @@ interface ApprovalTierProps {
 
 const ApprovalTier: React.FC<ApprovalTierProps> = ({ status, approvedByName, approvedByRole, approvedAt }) => (
   <div className="row g-2">
-    <div className="col-12 col-sm-4">
+    <div className="col-12 col-sm-3">
       <div className="text-muted" style={{ fontSize: "0.72rem" }}>Status</div>
       {status ? (
         <span className={`badge ${getBsStatusBadgeClass(status)}`}>{formatStatusLabel(status)}</span>
@@ -22,16 +29,22 @@ const ApprovalTier: React.FC<ApprovalTierProps> = ({ status, approvedByName, app
         <span className="text-muted">—</span>
       )}
     </div>
-    <div className="col-12 col-sm-4">
-      <div className="text-muted" style={{ fontSize: "0.72rem" }}>Approved By</div>
+    <div className="col-12 col-sm-3">
+      <div className="text-muted" style={{ fontSize: "0.72rem" }}>
+        {status === "rejected" ? "Declined By" : "Approved By"}
+      </div>
       <div>{approvedByName || "—"}</div>
       {approvedByRole && (
         <div className="text-muted" style={{ fontSize: "0.72rem" }}>{formatStatusLabel(approvedByRole)}</div>
       )}
     </div>
-    <div className="col-12 col-sm-4">
-      <div className="text-muted" style={{ fontSize: "0.72rem" }}>Approved Date</div>
+    <div className="col-12 col-sm-3">
+      <div className="text-muted" style={{ fontSize: "0.72rem" }}>Date</div>
       <div>{formatIsoDateOnly(approvedAt)}</div>
+    </div>
+    <div className="col-12 col-sm-3">
+      <div className="text-muted" style={{ fontSize: "0.72rem" }}>Time</div>
+      <div>{formatTimeOnly(approvedAt)}</div>
     </div>
   </div>
 );
@@ -64,6 +77,9 @@ export interface ApprovalStatusPanelProps {
   thirdApprovedByRole?: string | null;
   thirdApprovedAt?: string | null;
   rejectionComment?: string | null;
+  /** Rendered at the bottom of the panel — e.g. SupervisorDashboard's
+   * Approve/Decline button. */
+  children?: React.ReactNode;
 }
 
 /**
@@ -95,6 +111,7 @@ const ApprovalStatusPanel: React.FC<ApprovalStatusPanelProps> = ({
   thirdApprovedByRole,
   thirdApprovedAt,
   rejectionComment,
+  children,
 }) => (
   <div className="border rounded p-3 mb-3">
     <div className="fw-semibold text-secondary small text-uppercase mb-3">Approval Status</div>
@@ -137,6 +154,8 @@ const ApprovalStatusPanel: React.FC<ApprovalStatusPanelProps> = ({
         <div className="text-danger fw-medium">{sanitizeUserInput(rejectionComment)}</div>
       </div>
     )}
+
+    {children && <div className="mt-3">{children}</div>}
   </div>
 );
 

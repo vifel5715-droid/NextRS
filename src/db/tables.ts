@@ -80,6 +80,7 @@ export const TABLE_STATEMENTS: Array<{ label: string; sql: string }> = [
         pr_status TEXT,
         pr_type TEXT,
         hold_edited BOOLEAN NOT NULL DEFAULT FALSE,
+        status_reason TEXT,
         date_needed TEXT,
         purchasing_transaction TEXT,
         amount NUMERIC(12, 2),
@@ -465,6 +466,10 @@ export const TABLE_STATEMENTS: Array<{ label: string; sql: string }> = [
         cash_received NUMERIC(12, 2),
         cash_received_at TEXT,
         receiver_name TEXT,
+        delivered_at TEXT,
+        delivered_by UUID,
+        cash_confirmed_at TEXT,
+        cash_confirmed_by UUID,
         created_by UUID NOT NULL,
         created_at TEXT NOT NULL,
         updated_at TEXT NOT NULL

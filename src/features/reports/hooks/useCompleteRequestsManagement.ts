@@ -15,6 +15,7 @@ import { diffItemRow } from "@/features/reports/utils/adjustmentSlip";
 import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
 import { filterByDateRange } from "@/lib/utils/dateRange";
 import { throwOnError } from "@/lib/utils/actionResult";
+import { getItemStatusText, itemStatusNeedsReason } from "@/lib/utils/status";
 
 const updateRequestItemAction = throwOnError(updateRequestItemResult);
 const deleteCompleteRequests = throwOnError(deleteCompleteRequestsAction);
@@ -253,7 +254,13 @@ export const useCompleteRequestsManagement = () => {
       const detail = prev.get(key);
       if (!detail?.items) return prev;
       const updatedItems = [...detail.items];
-      updatedItems[index] = { ...updatedItems[index], [field]: value };
+      const current = updatedItems[index];
+      // A Cancel/Close reason only belongs to those statuses.
+      const clearedReason =
+        field === "delivery_status" && value !== current?.delivery_status && !itemStatusNeedsReason(String(value ?? ""))
+          ? { status_reason: undefined }
+          : {};
+      updatedItems[index] = { ...current, ...clearedReason, [field]: value };
       return new Map(prev).set(key, { ...detail, items: updatedItems });
     });
     // See useRequestManagement's updateItemField for why this reads the id
@@ -279,6 +286,10 @@ export const useCompleteRequestsManagement = () => {
 
     if (!item.item_name?.trim()) {
       alert("Item Name cannot be blank");
+      return;
+    }
+    if (itemStatusNeedsReason(item.delivery_status) && !item.status_reason?.trim()) {
+      alert(`A reason is required to mark this item as ${getItemStatusText(item)}`);
       return;
     }
 
@@ -311,11 +322,12 @@ export const useCompleteRequestsManagement = () => {
         pr_number: item.pr_number,
         date_needed: item.date_needed ?? undefined,
         delivery_status: item.delivery_status,
+        status_reason: item.status_reason ?? undefined,
         pr_status: item.pr_status,
       };
       const outstandingToDeliver = Math.max(0, (item.quantity || 0) - (item.quantity_delivered || 0));
       const deliveredNow = item.quantity_delivered_now ?? (
-        item.pr_status === "DELIVERED" && outstandingToDeliver > 0 ? outstandingToDeliver : undefined
+        item.delivery_status === "URGENT" && item.pr_status === "DELIVERED" && outstandingToDeliver > 0 ? outstandingToDeliver : undefined
       );
       if (deliveredNow !== undefined && deliveredNow !== null) {
         data.quantity_delivered = deliveredNow;

@@ -1,15 +1,10 @@
 "use server";
 
 import { eq } from "drizzle-orm";
-import { isMachineCodeEnabled } from "@/lib/utils/machineCodeValidation";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { requireUser, type AuthorizedUser } from "@/lib/auth";
-import {
-  isHoldResolver,
-  isRequestOwner,
-  requireDepartmentAccess,
-  requirePermission,
-} from "@/lib/permissions";
+import { requirePermission } from "@/lib/permissions";
+import { getItemStatusText, itemStatusNeedsReason } from "@/lib/utils/status";
 import { logAdjustments } from "@/server/audit/adjustments";
 import { getDb } from "@/lib/db";
 import { publishRequestChanged } from "@/lib/realtime";
@@ -25,6 +20,8 @@ interface ItemUpdateValues {
   pr_number: string | null;
   date_needed: string | null;
   delivery_status: string | null;
+  /** Required (and only kept) for CANCEL / CLOSE. */
+  status_reason: string | null;
   pr_status: string | null;
   quantity_delivered?: number;
   quantity_out?: number;
@@ -76,7 +73,8 @@ function parseInput(value: unknown): ItemUpdateValues {
     "OUT",
     "PURCHASE REQUEST",
     "URGENT",
-    "HOLD",
+    "CANCEL",
+    "CLOSE",
     "DELIVERED",
     "PARTIAL DELIVERED",
   ]);
@@ -98,6 +96,13 @@ function parseInput(value: unknown): ItemUpdateValues {
     throw new Error("Date Needed must use YYYY-MM-DD format.");
   }
   const adjustmentRemarks = optionalText(input, "adjustment_remarks", 5000);
+  const normalizedStatus = deliveryStatus?.toUpperCase() ?? null;
+  const statusReason = optionalText(input, "status_reason", 1000);
+  if (itemStatusNeedsReason(normalizedStatus) && !statusReason) {
+    throw new Error(
+      `A reason is required when marking an item as ${getItemStatusText({ delivery_status: normalizedStatus })}.`
+    );
+  }
 
   return {
     item_name: requiredText(input, "item_name", 500),
@@ -108,7 +113,8 @@ function parseInput(value: unknown): ItemUpdateValues {
     issuance_number: optionalText(input, "issuance_number", 200),
     pr_number: optionalText(input, "pr_number", 200),
     date_needed: dateNeeded,
-    delivery_status: deliveryStatus?.toUpperCase() ?? null,
+    delivery_status: normalizedStatus,
+    status_reason: itemStatusNeedsReason(normalizedStatus) ? statusReason : null,
     pr_status: prStatus,
     quantity_delivered: optionalQuantity(input, "quantity_delivered"),
     quantity_out: optionalQuantity(input, "quantity_out"),
@@ -116,81 +122,19 @@ function parseInput(value: unknown): ItemUpdateValues {
   };
 }
 
-type ExistingItem = typeof itemRequestItems.$inferSelect;
-
-const DETAIL_FIELDS = ["item_name", "quantity", "uom", "remarks", "machine_code"] as const;
-const CUSTODIAN_ONLY_FIELDS = ["delivery_status", "issuance_number", "pr_number", "pr_status", "date_needed"] as const;
-
-const normalized = (value: string | number | null | undefined) =>
-  typeof value === "string" ? value.trim() || null : value ?? null;
-const differs = (before: string | number | null | undefined, after: string | number | null | undefined) =>
-  normalized(before) !== normalized(after);
-
 /**
- * Who may save this row, and how. Ported from the legacy
- * status.service.ts updateRequestItem:
- *
- *  - "custodian"/"admin": the full Pending Requests editor. A custodian is
- *    locked out of a HOLD item's details (only its status may change) —
- *    that's the hand-off to Secretary/Supervisor/Manager.
- *  - "hold": Secretary/Supervisor/Manager on the Held Items page — or Staff,
- *    on their own request only. Only a row that is on HOLD, only name/qty/UoM/remarks/machine code, never the
- *    status or any custodian bookkeeping field. Saving keeps the item on
- *    HOLD and flags it hold_edited ("RELEASE ON HOLD") for the custodian.
+ * Only the custodian (and admin) edit item rows. The old HOLD hand-off — where
+ * Secretary/Supervisor/Manager or the requesting staff could correct a HOLD
+ * item — was retired along with the HOLD status itself (now CANCEL, with a
+ * required reason).
  */
-function resolveEditMode(
-  user: AuthorizedUser,
-  item: ExistingItem,
-  input: ItemUpdateValues,
-  request: { department: string; created_by: string; requested_by: string | null }
-): "custodian" | "hold" {
-  const { department } = request;
-  if (user.roleKey === "admin") return "custodian";
-
+function assertCanEditItem(user: AuthorizedUser): void {
+  if (user.roleKey === "admin") return;
   if (user.roleKey === "custodian") {
-    requirePermission(user, ["pending_items_services", "department_requests", "complete_requests"]);
-    if (item.delivery_status === "HOLD" && DETAIL_FIELDS.some((field) => differs(item[field], input[field]))) {
-      throw new Error(
-        "This item is on HOLD — only its status can be changed until Secretary, Supervisor, or Manager corrects the other details."
-      );
-    }
-    return "custodian";
+    requirePermission(user, ["department_requests", "complete_requests"]);
+    return;
   }
-
-  const isOwnStaffRequest = user.roleKey === "staff";
-  if (isHoldResolver(user) || isOwnStaffRequest) {
-    if (isOwnStaffRequest) {
-      requirePermission(user, ["create_request"]);
-      requireDepartmentAccess(user, department);
-      if (!isRequestOwner(user, request)) throw new Error("You can only correct held items on your own request.");
-    } else {
-      requirePermission(user, ["held_items"]);
-      if (user.roleKey === "secretary") requireDepartmentAccess(user, department);
-    }
-    if (item.delivery_status !== "HOLD") {
-      throw new Error("You can only act on an item that is currently on HOLD.");
-    }
-    if (
-      CUSTODIAN_ONLY_FIELDS.some((field) => differs(item[field], input[field])) ||
-      input.quantity_delivered ||
-      input.quantity_out
-    ) {
-      throw new Error("You can only change the item name, quantity, UoM, remarks, or machine code of a HOLD item.");
-    }
-    if (!isMachineCodeEnabled(department) && differs(item.machine_code, input.machine_code)) {
-      throw new Error("Machine Code only applies to Engineering (ENGG) requests — leave it as N/A.");
-    }
-    return "hold";
-  }
-
   throw new Error("Permission denied.");
-}
-
-function nextHoldEdited(mode: "custodian" | "hold", item: ExistingItem, input: ItemUpdateValues): boolean {
-  if (mode === "hold") return true;
-  // Any explicit status change by custodian/admin starts a fresh HOLD cycle.
-  if (input.delivery_status !== item.delivery_status) return false;
-  return item.hold_edited;
 }
 
 export async function updateRequestItemAction(itemId: number, value: unknown): Promise<ActionResult<void>> {
@@ -224,17 +168,15 @@ export async function updateRequestItemAction(itemId: number, value: unknown): P
         .limit(1);
       if (!request) throw new Error("Request not found.");
 
-      const mode = resolveEditMode(user, item, input, request);
-      if (mode === "custodian") {
-        if (request.supervisor_status !== "approved") {
-          throw new Error("Only supervisor-approved requests can be updated by the custodian.");
-        }
-        if (input.delivery_status === "PURCHASE REQUEST" && (!input.pr_number || !input.pr_status)) {
-          throw new Error("PR Number and PR Status are required.");
-        }
-        if (input.delivery_status === "URGENT" && !input.pr_status) {
-          throw new Error("Status is required for an urgent item.");
-        }
+      assertCanEditItem(user);
+      if (request.supervisor_status !== "approved") {
+        throw new Error("Only supervisor-approved requests can be updated by the custodian.");
+      }
+      if (input.delivery_status === "PURCHASE REQUEST" && !input.pr_number) {
+        throw new Error("PR Number is required.");
+      }
+      if (input.delivery_status === "URGENT" && !input.pr_status) {
+        throw new Error("Status is required for an urgent item.");
       }
 
       const oldDelivered = item.quantity_delivered ?? 0;
@@ -275,12 +217,13 @@ export async function updateRequestItemAction(itemId: number, value: unknown): P
           pr_number: input.pr_number,
           date_needed: input.date_needed,
           delivery_status: input.delivery_status,
+          status_reason: input.status_reason,
           pr_status: input.pr_status,
           pr_type: newPrType,
           quantity_delivered: deliveredNow > 0 ? updatedDelivered : item.quantity_delivered,
           quantity_out: releasedNow > 0 ? updatedOut : item.quantity_out,
           qty_balance: Math.max(0, input.quantity - updatedOut),
-          hold_edited: nextHoldEdited(mode, item, input),
+          hold_edited: false,
         })
         .where(eq(itemRequestItems.id, itemId));
 
@@ -313,20 +256,50 @@ export async function updateRequestItemAction(itemId: number, value: unknown): P
       }
       if (auditRows.length) await tx.insert(itemIssuanceAudits).values(auditRows);
 
-      if (input.adjustment_remarks) {
+      const itemLabel = async () => {
         const siblings = await tx
           .select({ id: itemRequestItems.id })
           .from(itemRequestItems)
           .where(eq(itemRequestItems.request_id, request.id))
           .orderBy(itemRequestItems.id);
         const itemNumber = siblings.findIndex((row) => row.id === item.id) + 1;
+        return `Item #${itemNumber} — ${input.item_name.toUpperCase()}`;
+      };
+
+      // Cancel / Close: the reason goes into Adjustment History too, so it's
+      // still on record after the item is later moved to another status (which
+      // clears status_reason on the item itself).
+      const reasonStatusTouched =
+        itemStatusNeedsReason(item.delivery_status) || itemStatusNeedsReason(input.delivery_status);
+      if (
+        reasonStatusTouched &&
+        (item.delivery_status !== input.delivery_status || (item.status_reason ?? "") !== (input.status_reason ?? ""))
+      ) {
+        const beforeLabel = item.delivery_status ? getItemStatusText(item) : "";
+        const afterLabel = input.delivery_status ? getItemStatusText(input) : "";
         await logAdjustments(tx, {
           user,
           requestId: request.id,
           requestType: "item",
           requestSerial: request.serial,
           department: request.department,
-          itemLabel: `Item #${itemNumber} — ${input.item_name.toUpperCase()}`,
+          itemLabel: await itemLabel(),
+          remarks: input.status_reason ?? `Changed from ${beforeLabel}`,
+          changes: [
+            ["Status", beforeLabel, afterLabel],
+            ["Status Reason", item.status_reason ?? "", input.status_reason ?? ""],
+          ],
+        });
+      }
+
+      if (input.adjustment_remarks) {
+        await logAdjustments(tx, {
+          user,
+          requestId: request.id,
+          requestType: "item",
+          requestSerial: request.serial,
+          department: request.department,
+          itemLabel: await itemLabel(),
           remarks: input.adjustment_remarks,
           changes: [
             ["Item Name", item.item_name, input.item_name],

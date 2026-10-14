@@ -15,6 +15,7 @@ import {
   urgentRequests,
 } from "@/db/schema";
 import { publishRequestChanged } from "@/lib/realtime";
+import { isItemServedOrClosed } from "@/lib/utils/status";
 
 type CompleteRequestType = "item" | "service" | "urgent" | "reimbursement";
 
@@ -48,12 +49,17 @@ export async function deleteCompleteRequestsAction(
           .where(inArray(itemRequests.id, ids))
           .for("update");
         const lines = await tx
-          .select({ request_id: itemRequestItems.request_id, quantity: itemRequestItems.quantity, quantity_out: itemRequestItems.quantity_out })
+          .select({
+            request_id: itemRequestItems.request_id,
+            quantity: itemRequestItems.quantity,
+            quantity_out: itemRequestItems.quantity_out,
+            delivery_status: itemRequestItems.delivery_status,
+          })
           .from(itemRequestItems)
           .where(inArray(itemRequestItems.request_id, ids));
         const complete = headers.filter((header) => {
           const own = lines.filter((line) => line.request_id === header.id);
-          return own.length > 0 && own.every((line) => (line.quantity_out ?? 0) >= line.quantity);
+          return own.length > 0 && own.every(isItemServedOrClosed);
         });
         if (complete.length) await tx.delete(itemRequests).where(inArray(itemRequests.id, complete.map((r) => r.id)));
         return complete;

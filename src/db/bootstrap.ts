@@ -26,6 +26,7 @@ const COLUMN_STATEMENTS = [
   "ALTER TABLE item_request_items ADD COLUMN IF NOT EXISTS pr_status TEXT",
   "ALTER TABLE item_request_items ADD COLUMN IF NOT EXISTS pr_type TEXT",
   "ALTER TABLE item_request_items ADD COLUMN IF NOT EXISTS hold_edited BOOLEAN NOT NULL DEFAULT FALSE",
+  "ALTER TABLE item_request_items ADD COLUMN IF NOT EXISTS status_reason TEXT",
   "ALTER TABLE item_request_items ADD COLUMN IF NOT EXISTS date_needed TEXT",
   "ALTER TABLE item_request_items ADD COLUMN IF NOT EXISTS purchasing_transaction TEXT",
   "ALTER TABLE item_request_items ADD COLUMN IF NOT EXISTS amount NUMERIC(12, 2)",
@@ -95,6 +96,12 @@ const COLUMN_STATEMENTS = [
   "ALTER TABLE petty_cash_transactions ADD COLUMN IF NOT EXISTS serial TEXT",
   "ALTER TABLE petty_cash_transactions ADD COLUMN IF NOT EXISTS cash_received_at TEXT",
   "ALTER TABLE petty_cash_transactions ADD COLUMN IF NOT EXISTS receiver_name TEXT",
+  // Nullable, no backfill: existing rows stay Pending until someone confirms delivery.
+  "ALTER TABLE petty_cash_transactions ADD COLUMN IF NOT EXISTS delivered_at TEXT",
+  "ALTER TABLE petty_cash_transactions ADD COLUMN IF NOT EXISTS delivered_by UUID",
+  // Nullable, no backfill: existing rows start as Cash Status "Not Received".
+  "ALTER TABLE petty_cash_transactions ADD COLUMN IF NOT EXISTS cash_confirmed_at TEXT",
+  "ALTER TABLE petty_cash_transactions ADD COLUMN IF NOT EXISTS cash_confirmed_by UUID",
   "ALTER TABLE users ADD COLUMN IF NOT EXISTS session_version INTEGER NOT NULL DEFAULT 0",
 ] as const;
 
@@ -116,6 +123,20 @@ async function upgradeLegacyUsersTable(pool: Pool): Promise<void> {
 }
 
 async function backfillLegacyData(pool: Pool): Promise<void> {
+  // The Pending Purchase Items & Services / Delivered Purchase Items pages
+  // were removed — drop their grants so the Roles editor doesn't resend them.
+  await pool.query(`
+    DELETE FROM role_permissions
+    WHERE permission_key IN ('pending_items_services', 'delivered_items')
+  `);
+  // "ON HOLD" was retired for items in favour of "CANCEL" (with a reason).
+  await pool.query(`
+    UPDATE item_request_items
+    SET delivery_status = 'CANCEL',
+        status_reason = COALESCE(NULLIF(TRIM(status_reason), ''), 'Converted from On Hold'),
+        hold_edited = FALSE
+    WHERE delivery_status = 'HOLD'
+  `);
   await pool.query(`
     UPDATE item_request_items i
     SET quantity_out = COALESCE((
@@ -181,12 +202,12 @@ async function backfillPettyCashSerials(pool: Pool): Promise<void> {
     try {
       await client.query("LOCK TABLE petty_cash_transactions IN SHARE ROW EXCLUSIVE MODE");
       const { rows: existing } = await client.query<{ serial: string }>(
-        "SELECT serial FROM petty_cash_transactions WHERE serial IS NOT NULL AND serial LIKE 'PC-%'"
+        "SELECT serial FROM petty_cash_transactions WHERE serial IS NOT NULL AND serial LIKE 'CP-%'"
       );
       const sequenceByYear = new Map<number, number>();
 
       for (const { serial } of existing) {
-        const match = serial.match(/^PC-(\d{4})-(\d+)$/);
+        const match = serial.match(/^CP-(\d{4})-(\d+)$/);
         if (!match) continue;
         const year = Number(match[1]);
         sequenceByYear.set(year, Math.max(sequenceByYear.get(year) ?? 0, Number(match[2])));
@@ -205,7 +226,7 @@ async function backfillPettyCashSerials(pool: Pool): Promise<void> {
         sequenceByYear.set(year, next);
         await client.query(
           "UPDATE petty_cash_transactions SET serial = $1 WHERE id = $2",
-          [`PC-${year}-${String(next).padStart(6, "0")}`, id]
+          [`CP-${year}-${String(next).padStart(6, "0")}`, id]
         );
       }
 

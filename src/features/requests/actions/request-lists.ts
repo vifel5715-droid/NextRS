@@ -1,8 +1,14 @@
 "use server";
 
-import { and, asc, desc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, sql } from "drizzle-orm";
 import type { ItemAudit, ItemRequest, ServiceRequest } from "@/types";
 import { getItemBalance } from "@/lib/utils/itemBalance";
+import {
+  isAwaitingCustodianApproval,
+  isAwaitingSupervisorApproval,
+  isFullyApproved,
+  isItemServedOrClosed,
+} from "@/lib/utils/status";
 import { getCurrentUser } from "@/lib/session";
 import { getDb } from "@/lib/db";
 import { NotFoundError } from "@/lib/errors";
@@ -49,7 +55,6 @@ async function loadRequestLists(
   const hasOwnListPermission =
     user.permissions.includes("create_request") ||
     user.permissions.includes("complete_requests") ||
-    user.permissions.includes("pending_items_services") ||
     (allowOverview && user.permissions.includes("overview"));
 
   if (!hasBroadListPermission && !hasOwnListPermission) {
@@ -60,28 +65,16 @@ async function loadRequestLists(
   const globalScope = scope === "all" && GLOBAL_REQUEST_ROLES.has(role);
   const ownScope = scope === "own" || (!globalScope && !hasBroadListPermission);
   const departmentScope = !globalScope && !ownScope && hasBroadListPermission;
-  const itemAccessFilter = ownScope
-    ? and(
-        eq(sql`upper(trim(${itemRequests.department}))`, user.department.trim().toUpperCase()),
-        or(
-          eq(itemRequests.requested_by, user.name),
-          and(isNull(itemRequests.requested_by), eq(itemRequests.created_by, user.id))
-        )
-      )
-    : departmentScope
-      ? eq(sql`upper(trim(${itemRequests.department}))`, user.department.trim().toUpperCase())
-      : undefined;
-  const serviceAccessFilter = ownScope
-    ? and(
-        eq(sql`upper(trim(${serviceRequests.department}))`, user.department.trim().toUpperCase()),
-        or(
-          eq(serviceRequests.requested_by, user.name),
-          and(isNull(serviceRequests.requested_by), eq(serviceRequests.created_by, user.id))
-        )
-      )
-    : departmentScope
-      ? eq(sql`upper(trim(${serviceRequests.department}))`, user.department.trim().toUpperCase())
-      : undefined;
+  // Everyone sees every request from their own department, not just the
+  // ones they filed — editing stays limited to the requester (see
+  // canEditRequest in lib/permissions.ts). Global roles see all departments.
+  const departmentFiltered = ownScope || departmentScope;
+  const itemAccessFilter = departmentFiltered
+    ? eq(sql`upper(trim(${itemRequests.department}))`, user.department.trim().toUpperCase())
+    : undefined;
+  const serviceAccessFilter = departmentFiltered
+    ? eq(sql`upper(trim(${serviceRequests.department}))`, user.department.trim().toUpperCase())
+    : undefined;
   const [itemHeaders, serviceHeaders] = await Promise.all([
     db
       .select({
@@ -277,7 +270,7 @@ async function loadRequestLists(
       attachment_name: request.attachment_name ?? undefined,
       attachment_size: request.attachment_size ?? undefined,
       all_items_served:
-        lines.length > 0 && lines.every((item) => (item.quantity_out ?? 0) >= item.quantity),
+        lines.length > 0 && lines.every(isItemServedOrClosed),
       has_held_item: heldLines.length > 0,
       held_item_count: heldLines.length,
       has_edited_held_item: heldLines.some((item) => item.hold_edited),
@@ -302,6 +295,7 @@ async function loadRequestLists(
         qty_balance: getItemBalance(item),
         audits: auditsByItemId.get(item.id) ?? [],
         hold_edited: item.hold_edited,
+        status_reason: item.status_reason,
         purchasing_transaction: item.purchasing_transaction,
         amount: item.amount,
         is_inventoriable: item.is_inventoriable,
@@ -395,6 +389,12 @@ export interface DashboardRequestCounts {
   completeRequestsCount: number;
   heldItemsCount: number;
   totalRequestsCount: number;
+  /** Approval Requests badge — Supervisor/Manager stage not yet reviewed. */
+  awaitingSupervisorApprovalCount: number;
+  /** Approval Requests badge — Supervisor/Manager approved, Custodian not yet. */
+  awaitingCustodianApprovalCount: number;
+  /** Every item + service request in scope, whatever its state. */
+  allRequestsCount: number;
 }
 
 function isValidTimestamp(value: string | undefined): boolean {
@@ -434,11 +434,22 @@ export async function getDashboardRequestCountsAction(
 
   return {
     completeRequestsCount: completeItems.length + completeServices.length,
-    heldItemsCount: itemsInRange.filter(
-      (request) => !request.all_items_served && request.has_held_item
+    // Items no longer go On Hold (replaced by Cancel), so the Held badge now
+    // counts service requests with a service marked ON HOLD.
+    heldItemsCount: servicesInRange.filter((request) =>
+      (request.services ?? []).some((service) => service.delivery_status === "holded")
     ).length,
+    // Fully approved only — requests still in the approval chain are counted
+    // by the Approval Requests badges below instead.
     totalRequestsCount:
-      itemsInRange.filter((request) => !request.all_items_served).length +
-      servicesInRange.filter((request) => request.pr_status !== "finish").length,
+      itemsInRange.filter((request) => isFullyApproved(request) && !request.all_items_served).length +
+      servicesInRange.filter((request) => isFullyApproved(request) && request.pr_status !== "finish").length,
+    awaitingSupervisorApprovalCount:
+      itemsInRange.filter(isAwaitingSupervisorApproval).length +
+      servicesInRange.filter(isAwaitingSupervisorApproval).length,
+    awaitingCustodianApprovalCount:
+      itemsInRange.filter(isAwaitingCustodianApproval).length +
+      servicesInRange.filter(isAwaitingCustodianApproval).length,
+    allRequestsCount: itemsInRange.length + servicesInRange.length,
   };
 }

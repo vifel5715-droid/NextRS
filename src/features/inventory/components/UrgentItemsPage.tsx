@@ -16,7 +16,7 @@ import type { ItemPaymentRequestForm } from "@/types";
 
 const DELIVERED_STATUSES = ["DELIVERED", "PARTIAL DELIVERED"];
 
-/** Same badge rules as PendingItemsPage.tsx's itemStatusBadge, narrowed to
+/** Item status badge rules, narrowed to
  * this page's rows, which are always pr_type "URGENT". */
 const urgentItemStatusBadge = (status: string, isActive: boolean) => {
   if (isActive) return { label: "PENDING", bg: "#fee2e2", color: "#991b1b" };
@@ -29,7 +29,7 @@ const urgentItemStatusBadge = (status: string, isActive: boolean) => {
  * "Urgent Item From IRS" — a dedicated view of Item Request System (IRS)
  * items flagged pr_type "URGENT" (renamed from the old "PAYMENT REQUEST"
  * classification — see rename-payment-request-to-urgent.ts), pulled out of
- * PendingItemsPage.tsx's mixed Purchase/Urgent items tab into its own
+ * the old mixed Purchase/Urgent items tab into its own
  * sidebar page for Custodian and Purchaser. Not to be confused with the
  * separate Urgent Request workflow (urgent_requests table, its own
  * Supervisor/Stockroom approval chain) — this page covers regular Item

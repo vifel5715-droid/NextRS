@@ -8,10 +8,10 @@ import { useAuth } from "@/components/providers/AuthProvider";
 import { loginAction } from "@/features/auth/actions/auth";
 
 const ROLE_REDIRECT_MAP: Record<string, string> = {
-  staff: '/requests',
-  secretary: '/requests',
-  supervisor: '/requests',
-  manager: '/requests',
+  staff: '/requests/pending',
+  secretary: '/requests/pending',
+  supervisor: '/requests/pending',
+  manager: '/requests/pending',
   custodian: '/approvals/custodian',
   admin: '/settings',
   director: '/dashboard',

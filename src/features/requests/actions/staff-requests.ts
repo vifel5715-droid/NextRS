@@ -1,8 +1,9 @@
 "use server";
 
-import { and, desc, eq, inArray, isNull, or } from "drizzle-orm";
+import { desc, eq, inArray } from "drizzle-orm";
 import type { ItemRequest, ServiceRequest } from "@/types";
 import { getItemBalance } from "@/lib/utils/itemBalance";
+import { isItemServedOrClosed } from "@/lib/utils/status";
 import { getCurrentUser } from "@/lib/session";
 import { getDb } from "@/lib/db";
 import {
@@ -51,15 +52,8 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
       })
       .from(itemRequests)
       .where(
-        canViewAllRequests
-          ? undefined
-          : and(
-              eq(itemRequests.department, user.department),
-              or(
-                eq(itemRequests.requested_by, user.name),
-                and(isNull(itemRequests.requested_by), eq(itemRequests.created_by, user.id))
-              )
-            )
+        // Whole department, not just the user's own requests.
+        canViewAllRequests ? undefined : eq(itemRequests.department, user.department)
       )
       .orderBy(desc(itemRequests.created_at)),
     db
@@ -85,15 +79,7 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
       })
       .from(serviceRequests)
       .where(
-        canViewAllRequests
-          ? undefined
-          : and(
-              eq(serviceRequests.department, user.department),
-              or(
-                eq(serviceRequests.requested_by, user.name),
-                and(isNull(serviceRequests.requested_by), eq(serviceRequests.created_by, user.id))
-              )
-            )
+        canViewAllRequests ? undefined : eq(serviceRequests.department, user.department)
       )
       .orderBy(desc(serviceRequests.created_at)),
   ]);
@@ -152,7 +138,7 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
     const creator = creatorById.get(request.created_by);
     const allItemsServed =
       items.length > 0 &&
-      items.every((item) => (item.quantity_out ?? 0) >= item.quantity);
+      items.every(isItemServedOrClosed);
 
     return {
       ...request,
@@ -192,6 +178,7 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
         quantity_out: item.quantity_out ?? undefined,
         qty_balance: getItemBalance(item),
         hold_edited: item.hold_edited,
+        status_reason: item.status_reason,
       })),
     };
   });

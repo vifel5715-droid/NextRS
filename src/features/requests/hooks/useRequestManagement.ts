@@ -24,6 +24,7 @@ import type {
   FieldValue,
 } from '@/types';
 import { throwOnError } from "@/lib/utils/actionResult";
+import { getItemStatusText, itemStatusNeedsReason } from "@/lib/utils/status";
 
 const updateRequestItemAction = throwOnError(updateRequestItemResult);
 const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
@@ -55,10 +56,12 @@ const withPendingFirst = <T extends Record<string, unknown>>(rows: T[]): T[] =>
 const isSupervisorApproved = (row: { supervisor_status?: string }) =>
   row.supervisor_status?.trim().toLowerCase() === 'approved';
 
-export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean } = {}) => {
-  const { supervisorApprovedOnly = false } = options;
+export const useRequestManagement = (
+  options: { supervisorApprovedOnly?: boolean; initialTab?: RequestTab } = {}
+) => {
+  const { supervisorApprovedOnly = false, initialTab = 'item' } = options;
   const [searchParams] = useSearchParams();
-  const [activeTab, setActiveTab] = useState<RequestTab>('item');
+  const [activeTab, setActiveTab] = useState<RequestTab>(initialTab);
   const [itemRequests, setItemRequests] = useState<ItemRequest[]>([]);
   const [serviceRequests, setServiceRequests] = useState<ServiceRequest[]>([]);
   const [selectedDepartment, setSelectedDepartment] = useState<string>(
@@ -366,11 +369,14 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
     // The number itself (PR Number for Purchase Request,  for
     // Payment Request) is only mandatory for Purchase Request — Payment
     // Request only requires a status.
-    if (item.delivery_status === 'PURCHASE REQUEST' && (!item.pr_number?.trim() || !item.pr_status)) {
-      return 'PR Number and PR Status are required';
+    if (item.delivery_status === 'PURCHASE REQUEST' && !item.pr_number?.trim()) {
+      return 'PR Number is required';
     }
     if (item.delivery_status === 'URGENT' && !item.pr_status) {
       return 'Status is required';
+    }
+    if (itemStatusNeedsReason(item.delivery_status) && !item.status_reason?.trim()) {
+      return `A reason is required to mark this item as ${getItemStatusText(item)}`;
     }
     return null;
   };
@@ -386,6 +392,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
       pr_number: item.pr_number,
       date_needed: item.date_needed ?? undefined,
       delivery_status: item.delivery_status,
+      status_reason: item.status_reason ?? undefined,
       pr_status: item.pr_status,
     };
     // Both are the amount moved in *this* save; the API adds each to its
@@ -408,7 +415,7 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
     // remainder would misrecord it as complete.
     const outstandingToDeliver = Math.max(0, (item.quantity || 0) - (item.quantity_delivered || 0));
     const deliveredNow = item.quantity_delivered_now ?? (
-      item.pr_status === 'DELIVERED' && outstandingToDeliver > 0 ? outstandingToDeliver : undefined
+      item.delivery_status === 'URGENT' && item.pr_status === 'DELIVERED' && outstandingToDeliver > 0 ? outstandingToDeliver : undefined
     );
     if (deliveredNow !== undefined && deliveredNow !== null) {
       data.quantity_delivered = deliveredNow;
@@ -843,6 +850,8 @@ export const useRequestManagement = (options: { supervisorApprovedOnly?: boolean
             issuance_number: undefined,
             quantity_out_now: undefined,
             quantity_delivered_now: undefined,
+            // A Cancel/Close reason only belongs to those statuses.
+            ...(itemStatusNeedsReason(String(value ?? '')) ? {} : { status_reason: undefined }),
           }
         : {};
       updatedItems[index] = { ...current, ...clearedDetails, [field]: value };

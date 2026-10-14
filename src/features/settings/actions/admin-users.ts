@@ -20,7 +20,6 @@ export interface SaveAdminUserInput {
   password?: string;
 }
 
-const MIN_PASSWORD_LENGTH = 8;
 const ADMIN_ROLE = "admin";
 
 async function requireUsersManager(): Promise<AuthorizedUser> {
@@ -66,9 +65,6 @@ function parseUserInput(input: SaveAdminUserInput): ParsedUserInput {
   }
   if (!input.id && !password) {
     throw new ValidationError("Password is required for a new user.");
-  }
-  if (password && password.length < MIN_PASSWORD_LENGTH) {
-    throw new ValidationError(`Password must be at least ${MIN_PASSWORD_LENGTH} characters.`);
   }
   if (input.id && !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(input.id)) {
     throw new ValidationError("Invalid user ID.");

@@ -46,8 +46,10 @@ import {
 } from "@/features/requests/actions/reimbursement-mutations";
 import {
   createPettyCashTransactionAction,
+  getPettyCashCountsAction,
   getPettyCashCustodianNamesAction,
   getPettyCashTransactionsAction,
+  setPettyCashCustodianStatusAction,
   updatePettyCashTransactionAction,
 } from "@/features/petty-cash/actions/petty-cash";
 import {
@@ -387,9 +389,13 @@ export const reimbursementRequestAPI = {
 // Custodian and AP Officer both create/edit po_number/total_amount;
 // cash_received is AP Officer's alone to set (enforced server-side).
 export const pettyCashAPI = {
-  getAll: () => call(getPettyCashTransactionsAction()),
+  getAll: (status?: "pending" | "delivered") => call(getPettyCashTransactionsAction(status)),
+  getCounts: () => call(getPettyCashCountsAction()),
+  setCustodianStatus: (id: number, data: { cash_status?: "received" | "not_received"; item_status?: "delivered" | "pending" }) =>
+    call(setPettyCashCustodianStatusAction(id, data)),
   create: (data: { po_number: string; total_amount: number }) => call(createPettyCashTransactionAction(data)),
-  update: (id: number, data: { po_number?: string; total_amount?: number; cash_received?: number; receiver_name?: string }) =>
+  // PO Number and Total Amount only — the server rejects any other field.
+  update: (id: number, data: { po_number?: string; total_amount?: number; expected_updated_at?: string }) =>
     call(updatePettyCashTransactionAction(id, data)),
   // Name of Receiver's suggestion list — Custodian is who actually hands
   // out petty cash day to day.

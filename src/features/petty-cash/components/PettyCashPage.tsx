@@ -1,57 +1,127 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useState } from "react";
 import Layout from "@/components/layout/Layout";
 import { useAuth } from "@/components/providers/AuthProvider";
+import { useDashboardCounts } from "@/components/providers/DashboardCountsProvider";
+import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
+import DateRangeFilter from "@/components/forms/DateRangeFilter";
+import ListToolbar from "@/components/tables/ListToolbar";
 import { pettyCashAPI } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils/errorMessage";
 import { formatDate } from "@/lib/utils/format";
+import { filterByDateRange } from "@/lib/utils/dateRange";
+import { exportToExcel } from "@/lib/utils/exportExcel";
 import AdjustmentHistoryModal from "@/features/reports/components/AdjustmentHistoryModal";
 import type { PettyCashTransaction } from "@/types";
 
+type CashPurchaseView = "pending" | "delivered";
+
+const peso = (value: string | number) => `₱${Number(value).toFixed(2)}`;
+
+const thStyle: React.CSSProperties = { padding: "12px 16px", textAlign: "left", color: "#065f46", fontWeight: 600 };
+const thRight: React.CSSProperties = { ...thStyle, textAlign: "right" };
+const td: React.CSSProperties = { padding: "11px 16px" };
+
 /**
- * Petty Cash — a simple, independent ledger (no request/approval chain at
- * all, unlike every other page in this app). Custodian and AP Officer both
- * create transactions and can edit PO Number/Total Amount; Cash Received is
- * AP Officer's alone to record — enforced server-side (petty-cash.service.ts's
- * updatePettyCash), gated here client-side too so Custodian never sees an
- * editable field they'd just get a 403 from. Name of Receiver is restricted
- * to the Custodian name list (petty-cash.service.ts's getCustodianNames) —
- * a plain <select>, not a free-typed combobox, since a typed name that isn't
- * a registered Custodian is rejected server-side anyway. Date Received has
- * no input at all — a manually-typed date produced garbled values (e.g.
- * "12/31/1"), so updatePettyCash now sets it automatically to today
- * whenever Cash Received is recorded.
+ * Cash Purchase Based on P.O. (the petty_cash ledger), split into two pages:
+ *
+ * - Pending Cash Purchase (/petty-cash): Item Status Pending. AP Officer
+ *   alone adds transactions and edits them — PO Number and Total Amount only
+ *   (enforced server-side in updatePettyCashTransactionAction). Custodian
+ *   sets Cash Status and Item Status; Item Status Delivered moves the row
+ *   over.
+ * - Delivered Cash Purchase (/petty-cash/delivered): the server rejects
+ *   edits to delivered rows; Custodian can set Item Status back to Pending.
  */
-const PettyCashPage: React.FC = () => {
+const PettyCashPage: React.FC<{ view?: CashPurchaseView }> = ({ view = "pending" }) => {
+  const isDeliveredView = view === "delivered";
   const { user } = useAuth();
-  const isAPOfficer = user?.role?.toLowerCase() === "ap_officer" || user?.role?.toLowerCase() === "admin";
+  const role = user?.role?.toLowerCase();
+  const isAPOfficer = role === "ap_officer" || role === "admin";
+  const canConfirmDelivery = role === "custodian" || role === "admin";
+  const { cashPurchase } = useDashboardCounts();
+  const refreshCounts = cashPurchase.refresh;
+  const { startDate, endDate } = useDateRangeContext();
 
   const [transactions, setTransactions] = useState<PettyCashTransaction[]>([]);
   const [loading, setLoading] = useState(true);
-  const [custodianNames, setCustodianNames] = useState<string[]>([]);
+  const [loadError, setLoadError] = useState<string | null>(null);
+  const [searchQuery, setSearchQuery] = useState("");
 
-  const loadTransactions = async () => {
+  const loadTransactions = useCallback(async () => {
     try {
-      const res = await pettyCashAPI.getAll();
+      const res = await pettyCashAPI.getAll(view);
       setTransactions(res.data);
+      setLoadError(null);
     } catch (error: unknown) {
-      alert("Error loading Petty Cash transactions: " + getErrorMessage(error));
+      setLoadError(getErrorMessage(error, "Failed to load cash purchases."));
     } finally {
       setLoading(false);
     }
-  };
+  }, [view]);
 
+  // Loads on mount, then again whenever the polled badge counts move — so
+  // other users' changes (and the other Cash Purchase page's) show up
+  // without a reload.
   useEffect(() => {
     void loadTransactions();
-  }, []);
+  }, [cashPurchase.pending, cashPurchase.delivered, loadTransactions]);
 
-  useEffect(() => {
-    if (!isAPOfficer) return;
-    pettyCashAPI.getCustodianNames().then((res) => setCustodianNames(res.data)).catch(() => {
-      // silently ignore — the dropdown just stays empty without it
-    });
-  }, [isAPOfficer]);
+  const afterChange = async () => {
+    await loadTransactions();
+    refreshCounts();
+  };
 
-  // New transaction form.
+  // Pending is filtered by when the purchase was recorded, Delivered by when
+  // it was delivered.
+  const visibleRows = useMemo(() => {
+    const inRange = filterByDateRange(transactions, startDate, endDate, isDeliveredView ? "delivered_at" : "created_at");
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return inRange;
+    return inRange.filter((row) =>
+      [row.serial, row.po_number, row.created_by_name, row.receiver_name, row.delivered_by_name].some((field) =>
+        (field || "").toLowerCase().includes(q)
+      )
+    );
+  }, [transactions, startDate, endDate, isDeliveredView, searchQuery]);
+
+  const handleExport = () =>
+    exportToExcel(
+      isDeliveredView ? "delivered-cash-purchase" : "pending-cash-purchase",
+      [
+        { key: "serial", label: "Series" },
+        { key: "po_number", label: "PO Number" },
+        { key: "created", label: "Created" },
+        { key: "created_by", label: "Recorded By" },
+        { key: "total_amount", label: "Total Amount" },
+        { key: "cash_received", label: "Cash Received" },
+        { key: "cash_received_at", label: "Date Received" },
+        { key: "receiver_name", label: "Name of Receiver" },
+        { key: "cash_status", label: "Cash Status" },
+        { key: "item_status", label: "Item Status" },
+        ...(isDeliveredView
+          ? [
+              { key: "delivered_at" as const, label: "Delivered" },
+              { key: "delivered_by" as const, label: "Delivered By" },
+            ]
+          : []),
+      ],
+      visibleRows.map((row) => ({
+        serial: row.serial,
+        po_number: row.po_number,
+        created: formatDate(row.created_at),
+        created_by: row.created_by_name || "",
+        total_amount: Number(row.total_amount).toFixed(2),
+        cash_received: row.cash_received != null ? Number(row.cash_received).toFixed(2) : "",
+        cash_received_at: row.cash_received_at ? new Date(row.cash_received_at).toLocaleDateString() : "",
+        receiver_name: row.receiver_name || "",
+        cash_status: row.cash_confirmed_at ? "Received" : "Not Received",
+        item_status: row.delivered_at ? "Delivered" : "Pending",
+        delivered_at: row.delivered_at ? formatDate(row.delivered_at) : "",
+        delivered_by: row.delivered_by_name || "",
+      }))
+    );
+
+  // New transaction form (Pending page only).
   const [newPoNumber, setNewPoNumber] = useState("");
   const [newTotalAmount, setNewTotalAmount] = useState("");
   const [creating, setCreating] = useState(false);
@@ -70,7 +140,7 @@ const PettyCashPage: React.FC = () => {
       await pettyCashAPI.create({ po_number: newPoNumber.trim().toUpperCase(), total_amount: Number(newTotalAmount) });
       setNewPoNumber("");
       setNewTotalAmount("");
-      await loadTransactions();
+      await afterChange();
     } catch (error: unknown) {
       alert("Error creating Petty Cash transaction: " + getErrorMessage(error));
     } finally {
@@ -81,125 +151,206 @@ const PettyCashPage: React.FC = () => {
   // Adjustment History modal — one transaction's Created/Edited log at a time.
   const [historyId, setHistoryId] = useState<number | null>(null);
 
-  // Inline per-row editor — one row editable at a time.
+  // Inline per-row editor — one row editable at a time (Pending page only).
   const [editingId, setEditingId] = useState<number | null>(null);
   const [draftPoNumber, setDraftPoNumber] = useState("");
   const [draftTotalAmount, setDraftTotalAmount] = useState("");
-  const [draftCashReceived, setDraftCashReceived] = useState("");
-  const [draftReceiverName, setDraftReceiverName] = useState("");
+  // The row's updated_at when editing began — the server rejects the save
+  // if someone else changed the row since.
+  const [editingVersion, setEditingVersion] = useState("");
   const [saving, setSaving] = useState(false);
+  const [updatingStatusId, setUpdatingStatusId] = useState<number | null>(null);
 
   const startEditing = (row: PettyCashTransaction) => {
     setEditingId(row.id);
+    setEditingVersion(row.updated_at);
     setDraftPoNumber(row.po_number);
     setDraftTotalAmount(row.total_amount);
-    setDraftCashReceived(row.cash_received ?? "");
-    setDraftReceiverName(row.receiver_name ?? "");
   };
 
   const cancelEditing = () => {
     setEditingId(null);
+    setEditingVersion("");
     setDraftPoNumber("");
     setDraftTotalAmount("");
-    setDraftCashReceived("");
-    setDraftReceiverName("");
   };
 
+  const editError = !draftPoNumber.trim()
+    ? "Enter a PO Number."
+    : draftTotalAmount === "" || !(Number(draftTotalAmount) >= 0)
+      ? "Enter a valid Total Amount."
+      : null;
+
+  // Only PO Number and Total Amount are editable — the server enforces it too.
   const saveEditing = async () => {
-    if (!editingId) return;
+    if (!editingId || saving) return;
+    if (editError) {
+      alert(editError);
+      return;
+    }
     setSaving(true);
     try {
       await pettyCashAPI.update(editingId, {
         po_number: draftPoNumber.trim().toUpperCase(),
         total_amount: Number(draftTotalAmount),
-        ...(isAPOfficer ? {
-          cash_received: draftCashReceived === "" ? undefined : Number(draftCashReceived),
-          receiver_name: draftReceiverName.trim() === "" ? undefined : draftReceiverName.trim().toUpperCase(),
-        } : {}),
+        expected_updated_at: editingVersion,
       });
       cancelEditing();
-      await loadTransactions();
+      await afterChange();
     } catch (error: unknown) {
-      alert("Error saving Petty Cash transaction: " + getErrorMessage(error));
+      alert("Error saving: " + getErrorMessage(error));
     } finally {
       setSaving(false);
     }
   };
+
+  // Custodian's Cash Status / Item Status dropdowns.
+  const setCustodianStatus = async (
+    row: PettyCashTransaction,
+    change: { cash_status?: "received" | "not_received"; item_status?: "delivered" | "pending" }
+  ) => {
+    if (change.cash_status === "received" &&
+      !confirm(`Set ${row.serial} (PO ${row.po_number}) Cash Status to Received? Date Received (today) and Name of Receiver (you) will be filled in, and this can't be changed afterwards.`)) {
+      return;
+    }
+    if (change.item_status === "delivered" &&
+      !confirm(`Mark ${row.serial} (PO ${row.po_number}) as Delivered? It will move to Delivered Cash Purchase.`)) {
+      return;
+    }
+    if (change.item_status === "pending" &&
+      !confirm(`Set ${row.serial} (PO ${row.po_number}) back to Pending? It will move to Pending Cash Purchase.`)) {
+      return;
+    }
+    setUpdatingStatusId(row.id);
+    try {
+      await pettyCashAPI.setCustodianStatus(row.id, change);
+      await afterChange();
+    } catch (error: unknown) {
+      alert("Error updating status: " + getErrorMessage(error));
+    } finally {
+      setUpdatingStatusId(null);
+    }
+  };
+
+  // Edit + History are AP Officer's; a Custodian works through the status
+  // dropdowns instead, so the actions column is dropped for them.
+  const showActions = isAPOfficer;
+  const columnCount = 10 + (isDeliveredView ? 2 : 0) + (showActions ? 1 : 0);
 
   return (
     <Layout>
       <div className="dash-container">
         <div className="dash-header">
           <div>
-            <h1 className="dash-title">Petty Cash</h1>
+            <h1 className="dash-title">{isDeliveredView ? "Delivered Cash Purchase" : "Pending Cash Purchase"}</h1>
             <p className="dash-subtitle" style={{ color: "#065f46" }}>
-              PO Number, Total Amount, and Cash Received — {isAPOfficer ? "you can record Cash Received here." : "only AP Officer can record Cash Received."}
+              {isDeliveredView
+                ? "Cash purchases based on P.O. that have been confirmed as delivered."
+                : `Cash purchases based on P.O. awaiting delivery — ${isAPOfficer ? "you can add transactions and edit their PO Number and Total Amount" : "only AP Officer can add and edit transactions"}${canConfirmDelivery ? "; mark each one delivered once its items arrive." : "."}`}
             </p>
           </div>
         </div>
 
-        <div className="row g-2 mb-3 align-items-end">
-          <div className="col-12 col-md-4">
-            <label className="form-label">PO Number</label>
-            <input
-              type="text"
-              className="form-control text-uppercase"
-              value={newPoNumber}
-              onChange={(e) => setNewPoNumber(e.target.value)}
-              placeholder="PO Number…"
-            />
+        {!isDeliveredView && isAPOfficer && (
+          <div className="row g-2 mb-3 align-items-end">
+            <div className="col-12 col-md-4">
+              <label className="form-label">PO Number</label>
+              <input
+                type="text"
+                className="form-control text-uppercase"
+                value={newPoNumber}
+                onChange={(e) => setNewPoNumber(e.target.value)}
+                placeholder="PO Number…"
+              />
+            </div>
+            <div className="col-12 col-md-3">
+              <label className="form-label">Total Amount</label>
+              <input
+                type="number"
+                min="0"
+                step="0.01"
+                className="form-control"
+                value={newTotalAmount}
+                onChange={(e) => setNewTotalAmount(e.target.value)}
+                placeholder="0.00"
+              />
+            </div>
+            <div className="col-12 col-md-2">
+              <button className="btn btn-primary" disabled={creating} onClick={createTransaction}>
+                {creating ? "Adding…" : "Add Transaction"}
+              </button>
+            </div>
           </div>
-          <div className="col-12 col-md-3">
-            <label className="form-label">Total Amount</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              className="form-control"
-              value={newTotalAmount}
-              onChange={(e) => setNewTotalAmount(e.target.value)}
-              placeholder="0.00"
-            />
-          </div>
-          <div className="col-12 col-md-2">
-            <button className="btn btn-primary" disabled={creating} onClick={createTransaction}>
-              {creating ? "Adding…" : "Add Transaction"}
-            </button>
-          </div>
+        )}
+
+        <ListToolbar
+          searchQuery={searchQuery}
+          onSearchChange={setSearchQuery}
+          searchPlaceholder="Search by Series, PO Number, Recorded By, Receiver..."
+          onExport={handleExport}
+          exportDisabled={visibleRows.length === 0}
+        />
+
+        <div className="mb-4">
+          <DateRangeFilter />
         </div>
 
+        {loadError && (
+          <div className="alert alert-warning d-flex align-items-center gap-2">
+            <span>{loadError}</span>
+            <button className="btn btn-sm btn-outline-warning" onClick={() => void loadTransactions()}>
+              Retry
+            </button>
+          </div>
+        )}
+
         <div style={{ border: "1px solid #a7f3d0", borderRadius: "10px", overflow: "hidden" }}>
-          {loading ? (
-            <div style={{ padding: "48px", textAlign: "center", color: "#9ca3af" }}>Loading...</div>
-          ) : transactions.length === 0 ? (
-            <div style={{ padding: "48px", textAlign: "center", color: "#9ca3af" }}>
-              <i className="bi bi-cash-stack" style={{ fontSize: "2.5rem", display: "block", marginBottom: "12px" }}></i>
-              <p style={{ margin: 0, fontSize: "0.95rem" }}>No Petty Cash transactions yet.</p>
-            </div>
-          ) : (
-            <div style={{ overflowX: "auto" }}>
-              <table className="simple-list-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
-                <thead>
-                  <tr style={{ background: "#d1fae5", borderBottom: "2px solid #a7f3d0" }}>
-                    <th style={{ padding: "12px 16px", textAlign: "left", color: "#065f46", fontWeight: 600 }}>Series</th>
-                    <th style={{ padding: "12px 16px", textAlign: "left", color: "#065f46", fontWeight: 600 }}>PO Number</th>
-                    <th style={{ padding: "12px 16px", textAlign: "left", color: "#065f46", fontWeight: 600 }}>Created</th>
-                    <th style={{ padding: "12px 16px", textAlign: "left", color: "#065f46", fontWeight: 600 }}>Created By</th>
-                    <th style={{ padding: "12px 16px", textAlign: "right", color: "#065f46", fontWeight: 600 }}>Total Amount</th>
-                    <th style={{ padding: "12px 16px", textAlign: "right", color: "#065f46", fontWeight: 600 }}>Cash Received</th>
-                    <th style={{ padding: "12px 16px", textAlign: "left", color: "#065f46", fontWeight: 600 }}>Date Received</th>
-                    <th style={{ padding: "12px 16px", textAlign: "left", color: "#065f46", fontWeight: 600 }}>Name of Receiver</th>
-                    <th style={{ padding: "12px 16px", textAlign: "left", color: "#065f46", fontWeight: 600 }}>Status</th>
-                    <th style={{ padding: "12px 16px", textAlign: "left", color: "#065f46", fontWeight: 600 }}></th>
+          <div style={{ overflowX: "auto" }}>
+            <table className="simple-list-table" style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.88rem" }}>
+              <thead>
+                <tr style={{ background: "#d1fae5", borderBottom: "2px solid #a7f3d0" }}>
+                  <th style={thStyle}>Series</th>
+                  <th style={thStyle}>PO Number</th>
+                  <th style={thStyle}>Created</th>
+                  <th style={thStyle}>Recorded By</th>
+                  <th style={thRight}>Total Amount</th>
+                  <th style={thRight}>Cash Received</th>
+                  <th style={thStyle}>Date Received</th>
+                  <th style={thStyle}>Name of Receiver</th>
+                  <th style={thStyle}>Cash Status</th>
+                  <th style={thStyle}>Item Status</th>
+                  {isDeliveredView && (
+                    <>
+                      <th style={thStyle}>Delivered</th>
+                      <th style={thStyle}>Delivered By</th>
+                    </>
+                  )}
+                  {showActions && <th style={thStyle}></th>}
+                </tr>
+              </thead>
+              <tbody>
+                {loading && transactions.length === 0 ? (
+                  <tr>
+                    <td colSpan={columnCount} style={{ padding: "48px", textAlign: "center", color: "#9ca3af" }}>Loading...</td>
                   </tr>
-                </thead>
-                <tbody>
-                  {transactions.map((row, i) => {
-                    const isEditing = editingId === row.id;
+                ) : visibleRows.length === 0 ? (
+                  <tr>
+                    <td colSpan={columnCount} style={{ padding: "48px", textAlign: "center", color: "#9ca3af" }}>
+                      <i className="bi bi-cash-stack" style={{ fontSize: "2.5rem", display: "block", marginBottom: "12px" }}></i>
+                      {transactions.length === 0
+                        ? isDeliveredView
+                          ? "No delivered cash purchases yet."
+                          : "No pending cash purchases."
+                        : "No cash purchases match your search or date range."}
+                    </td>
+                  </tr>
+                ) : (
+                  visibleRows.map((row, i) => {
+                    const isEditing = !isDeliveredView && editingId === row.id;
                     return (
                       <tr key={row.id} style={{ borderBottom: "1px solid #a7f3d0", background: i % 2 === 0 ? "#ecfdf5" : "#fff" }}>
-                        <td style={{ padding: "11px 16px", fontWeight: 600, whiteSpace: "nowrap" }}>{row.serial}</td>
-                        <td style={{ padding: "11px 16px" }}>
+                        <td style={{ ...td, fontWeight: 600, whiteSpace: "nowrap" }}>{row.serial}</td>
+                        <td style={td}>
                           {isEditing ? (
                             <input
                               type="text"
@@ -211,9 +362,9 @@ const PettyCashPage: React.FC = () => {
                             row.po_number
                           )}
                         </td>
-                        <td style={{ padding: "11px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{formatDate(row.created_at)}</td>
-                        <td style={{ padding: "11px 16px" }}>{row.created_by_name || <span className="text-muted">—</span>}</td>
-                        <td style={{ padding: "11px 16px", textAlign: "right" }}>
+                        <td style={{ ...td, color: "#6b7280", whiteSpace: "nowrap" }}>{formatDate(row.created_at)}</td>
+                        <td style={td}>{row.created_by_name || <span className="text-muted">—</span>}</td>
+                        <td style={{ ...td, textAlign: "right" }}>
                           {isEditing ? (
                             <input
                               type="number"
@@ -225,92 +376,103 @@ const PettyCashPage: React.FC = () => {
                               onChange={(e) => setDraftTotalAmount(e.target.value)}
                             />
                           ) : (
-                            `₱${Number(row.total_amount).toFixed(2)}`
+                            peso(row.total_amount)
                           )}
                         </td>
-                        <td style={{ padding: "11px 16px", textAlign: "right" }}>
-                          {isEditing && isAPOfficer ? (
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              className="form-control form-control-sm"
-                              style={{ width: "120px", marginLeft: "auto" }}
-                              value={draftCashReceived}
-                              onChange={(e) => setDraftCashReceived(e.target.value)}
-                              placeholder="0.00"
-                            />
-                          ) : row.cash_received != null ? (
-                            `₱${Number(row.cash_received).toFixed(2)}`
-                          ) : (
-                            <span className="text-muted">Not yet recorded</span>
-                          )}
+                        <td style={{ ...td, textAlign: "right" }}>
+                          {row.cash_received != null ? peso(row.cash_received) : <span className="text-muted">Not yet recorded</span>}
                         </td>
-                        <td style={{ padding: "11px 16px", whiteSpace: "nowrap" }}>
-                          {row.cash_received_at ? (
-                            new Date(row.cash_received_at).toLocaleDateString()
-                          ) : isEditing && isAPOfficer ? (
-                            <span className="text-muted">Set to today on Save</span>
-                          ) : (
-                            <span className="text-muted">—</span>
-                          )}
+                        <td style={{ ...td, whiteSpace: "nowrap" }}>
+                          {row.cash_received_at ? new Date(row.cash_received_at).toLocaleDateString() : <span className="text-muted">—</span>}
                         </td>
-                        <td style={{ padding: "11px 16px" }}>
-                          {isEditing && isAPOfficer ? (
+                        <td style={td}>{row.receiver_name || <span className="text-muted">—</span>}</td>
+                        <td style={td}>
+                          {/* Received is final — the dropdown only shows while it's still Not Received. */}
+                          {canConfirmDelivery && !row.cash_confirmed_at ? (
                             <select
                               className="form-select form-select-sm"
-                              style={{ width: "200px" }}
-                              value={draftReceiverName}
-                              onChange={(e) => setDraftReceiverName(e.target.value)}
+                              style={{ width: "150px" }}
+                              aria-label={`Cash Status for ${row.serial}`}
+                              value="not_received"
+                              disabled={updatingStatusId === row.id}
+                              onChange={(e) =>
+                                void setCustodianStatus(row, { cash_status: e.target.value as "received" | "not_received" })
+                              }
                             >
-                              <option value="">— Select Custodian —</option>
-                              {custodianNames.map((name) => (
-                                <option key={name} value={name}>
-                                  {name}
-                                </option>
-                              ))}
+                              <option value="not_received">Not Received</option>
+                              <option value="received">Received</option>
                             </select>
-                          ) : row.receiver_name ? (
-                            row.receiver_name
                           ) : (
-                            <span className="text-muted">—</span>
+                            <span style={{ color: row.cash_confirmed_at ? "#047857" : "#b45309", fontWeight: 600 }}>
+                              {row.cash_confirmed_at ? "Received" : "Not Received"}
+                            </span>
                           )}
                         </td>
-                        <td style={{ padding: "11px 16px" }}>
-                          {row.cash_received != null ? (
-                            <span style={{ color: "#047857", fontWeight: 600 }}>Received</span>
+                        <td style={td}>
+                          {canConfirmDelivery ? (
+                            <select
+                              className="form-select form-select-sm"
+                              style={{ width: "130px" }}
+                              aria-label={`Item Status for ${row.serial}`}
+                              value={row.delivered_at ? "delivered" : "pending"}
+                              disabled={updatingStatusId === row.id || (!row.delivered_at && !row.cash_confirmed_at)}
+                              title={!row.delivered_at && !row.cash_confirmed_at ? "Set Cash Status to Received first" : undefined}
+                              onChange={(e) =>
+                                void setCustodianStatus(row, { item_status: e.target.value as "delivered" | "pending" })
+                              }
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="delivered">Delivered</option>
+                            </select>
                           ) : (
-                            <span style={{ color: "#b45309", fontWeight: 600 }}>Pending</span>
+                            <span style={{ color: row.delivered_at ? "#1d4ed8" : "#b45309", fontWeight: 600 }}>
+                              {row.delivered_at ? "Delivered" : "Pending"}
+                            </span>
                           )}
                         </td>
-                        <td style={{ padding: "11px 16px" }}>
+                        {isDeliveredView && (
+                          <>
+                            <td style={{ ...td, whiteSpace: "nowrap" }}>{row.delivered_at ? formatDate(row.delivered_at) : "—"}</td>
+                            <td style={td}>{row.delivered_by_name || <span className="text-muted">—</span>}</td>
+                          </>
+                        )}
+                        {showActions && (
+                        <td style={td}>
                           {isEditing ? (
-                            <div className="d-flex gap-2">
-                              <button className="btn btn-sm btn-success" disabled={saving} onClick={saveEditing}>
-                                Save
+                            <div className="d-flex gap-2 flex-wrap">
+                              <button
+                                className="btn btn-sm btn-success"
+                                disabled={saving || editError !== null}
+                                title={editError ?? undefined}
+                                onClick={() => void saveEditing()}
+                              >
+                                {saving ? "Saving…" : "Save"}
                               </button>
-                              <button className="btn btn-sm btn-outline-secondary" onClick={cancelEditing}>
+                              <button className="btn btn-sm btn-outline-secondary" disabled={saving} onClick={cancelEditing}>
                                 Cancel
                               </button>
                             </div>
                           ) : (
-                            <div className="d-flex gap-2">
-                              <button className="btn btn-sm btn-link text-decoration-none p-0" onClick={() => startEditing(row)}>
-                                Edit
-                              </button>
+                            <div className="d-flex gap-2 align-items-center flex-wrap">
+                              {!isDeliveredView && isAPOfficer && (
+                                <button className="btn btn-sm btn-link text-decoration-none p-0" onClick={() => startEditing(row)}>
+                                  Edit
+                                </button>
+                              )}
                               <button className="btn btn-sm btn-link text-decoration-none p-0" onClick={() => setHistoryId(row.id)}>
                                 History
                               </button>
                             </div>
                           )}
                         </td>
+                        )}
                       </tr>
                     );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
+                  })
+                )}
+              </tbody>
+            </table>
+          </div>
         </div>
       </div>
 

@@ -26,11 +26,13 @@ export const useDashboardSummary = (canSeeDeleted = true) => {
   const [heldItemsCount, setHeldItemsCount] = useState(0);
   const [itemListCount, setItemListCount] = useState(0);
   const [deletedCount, setDeletedCount] = useState(0);
-  // Every item + service request, any status — the same total the
+  // Fully approved, unfinished item + service requests — what the
   // Custodian/Admin "Pending Requests" dashboard (CustodianDashboard.tsx)
-  // shows across its two tabs, so the sidebar badge for that same page can
-  // never disagree with what's actually on it.
+  // lists once a request has left Approval Requests.
   const [totalRequestsCount, setTotalRequestsCount] = useState(0);
+  const [awaitingSupervisorApprovalCount, setAwaitingSupervisorApprovalCount] = useState(0);
+  const [awaitingCustodianApprovalCount, setAwaitingCustodianApprovalCount] = useState(0);
+  const [allRequestsCount, setAllRequestsCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
   const fetchSummary = useCallback(async () => {
@@ -47,6 +49,9 @@ export const useDashboardSummary = (canSeeDeleted = true) => {
       setDeletedCount(filterByDateRange(deletedEntries, startDate, endDate, "deleted_at").length);
       setItemListCount(catalogCount);
       setTotalRequestsCount(requestCounts.totalRequestsCount);
+      setAwaitingSupervisorApprovalCount(requestCounts.awaitingSupervisorApprovalCount);
+      setAwaitingCustodianApprovalCount(requestCounts.awaitingCustodianApprovalCount);
+      setAllRequestsCount(requestCounts.allRequestsCount);
     } catch {
       // silently ignore — dashboard summary is non-critical
     } finally {
@@ -69,7 +74,27 @@ export const useDashboardSummary = (canSeeDeleted = true) => {
   useRequestsChanged(handleChange);
 
   return useMemo(
-    () => ({ completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount, loading }),
-    [completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount, loading]
+    () => ({
+      completeRequestsCount,
+      heldItemsCount,
+      itemListCount,
+      deletedCount,
+      totalRequestsCount,
+      awaitingSupervisorApprovalCount,
+      awaitingCustodianApprovalCount,
+      allRequestsCount,
+      loading,
+    }),
+    [
+      completeRequestsCount,
+      heldItemsCount,
+      itemListCount,
+      deletedCount,
+      totalRequestsCount,
+      awaitingSupervisorApprovalCount,
+      awaitingCustodianApprovalCount,
+      allRequestsCount,
+      loading,
+    ]
   );
 };

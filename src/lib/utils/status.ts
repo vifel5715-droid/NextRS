@@ -45,6 +45,65 @@ export const formatStatusLabel = (status?: string | null): string => {
   return status || '';
 };
 
+/**
+ * Which approval stage a still-pending request is waiting on — the
+ * Supervisor/Manager stage until supervisor_status is approved, then the
+ * Custodian stage.
+ */
+export const getForApprovalLabel = (row: {
+  supervisor_status?: unknown;
+  custodian_status?: unknown;
+} = {}): string =>
+  normalize(row.supervisor_status) === 'approved'
+    ? 'For Approval (Custodian)'
+    : 'For Approval (Supervisor/Manager)';
+
+// ---------------------------------------------------------------------------
+// Item Cancel / Close
+// ---------------------------------------------------------------------------
+/** Item delivery statuses that need a reason (item_request_items.status_reason). */
+export const REASON_REQUIRED_ITEM_STATUSES: ReadonlySet<string> = new Set(['CANCEL', 'CLOSE']);
+
+export const itemStatusNeedsReason = (status?: string | null): boolean =>
+  REASON_REQUIRED_ITEM_STATUSES.has((status ?? '').trim().toUpperCase());
+
+/**
+ * An item counts toward its request being Complete once it is On Hand (every
+ * unit released to the requester) or Closed. A Cancelled item does not — it
+ * keeps the request open until the custodian moves it to another status.
+ */
+export const isItemServedOrClosed = (item: {
+  quantity: number;
+  quantity_out?: number | null;
+  delivery_status?: string | null;
+}): boolean =>
+  (item.quantity_out ?? 0) >= item.quantity || (item.delivery_status ?? '').toUpperCase() === 'CLOSE';
+
+// ---------------------------------------------------------------------------
+// Approval Requests vs Pending Requests
+// ---------------------------------------------------------------------------
+type ApprovalStages = { supervisor_status?: unknown; custodian_status?: unknown };
+
+/**
+ * Custodian approval is the last stage of the item/service chain — once it
+ * lands the request leaves every "Approval Requests" list and shows in the
+ * Pending Item/Service Requests lists instead.
+ */
+export const isFullyApproved = (row: ApprovalStages): boolean =>
+  normalize(row.custodian_status) === 'approved';
+
+/** Still waiting on the Supervisor/Manager stage (not reviewed yet). */
+export const isAwaitingSupervisorApproval = (row: ApprovalStages): boolean => {
+  const supervisor = normalize(row.supervisor_status);
+  return supervisor === '' || supervisor === 'pending';
+};
+
+/** Supervisor/Manager approved, Custodian hasn't reviewed yet. */
+export const isAwaitingCustodianApproval = (row: ApprovalStages): boolean => {
+  const custodian = normalize(row.custodian_status);
+  return normalize(row.supervisor_status) === 'approved' && (custodian === '' || custodian === 'pending');
+};
+
 // ---------------------------------------------------------------------------
 // Badge Helpers
 // ---------------------------------------------------------------------------
@@ -64,6 +123,12 @@ export const getStatusBadgeClass = (status?: string): string => {
 
     case 'in_progress':
       return 'in-progress';
+
+    // Item Cancel / Close statuses.
+    case 'cancel':
+      return 'rejected';
+    case 'close':
+      return 'approved';
 
     case 'not_required':
       return 'pending';
@@ -104,7 +169,11 @@ export const getBsStatusBadgeClass = (status?: string): string => {
 
     case 'held':
     case 'holded':
+    case 'cancel':
       return 'bg-danger';
+
+    case 'close':
+      return 'bg-dark';
 
     // Urgent Requests, Stockroom stage — see formatStatusLabel's note.
     case 'not_required':
@@ -133,15 +202,17 @@ export const getBsStatusBadgeClass = (status?: string): string => {
 // ---------------------------------------------------------------------------
 type DeliveryStatusItem = { delivery_status?: string | null; hold_edited?: boolean } | null | undefined;
 
+const ITEM_STATUS_LABELS: Record<string, string> = {
+  OUT: 'ON HAND',
+  CANCEL: 'CANCELLED',
+  CLOSE: 'CLOSED',
+};
+
 export const getItemStatusText = (item: DeliveryStatusItem): string =>
-  item?.delivery_status === 'HOLD'
-    ? (item.hold_edited ? 'RELEASE ON HOLD' : 'ON HOLD')
-    : item?.delivery_status === 'OUT'
-      ? 'ON HAND'
-    : (item?.delivery_status || 'pending');
+  ITEM_STATUS_LABELS[item?.delivery_status ?? ''] ?? (item?.delivery_status || 'pending');
 
 export const getItemStatusBadgeClass = (item: DeliveryStatusItem): string =>
-  item?.delivery_status === 'HOLD' ? 'held' : getStatusBadgeClass(item?.delivery_status ?? undefined);
+  getStatusBadgeClass(item?.delivery_status ?? undefined);
 
 // ---------------------------------------------------------------------------
 // Held services — unlike items, a service request's `services` array is
@@ -178,7 +249,7 @@ export const getCompositeStatus = (
   // since the request is finished rather than merely approved.
   if (row.all_items_served) {
     return {
-      text: 'ALL ITEM ARE FULLY SERVED',
+      text: 'Complete',
       class: 'approved',
     };
   }
@@ -316,7 +387,7 @@ export const getCompositeStatus = (
     custodianStatus === 'pending'
   ) {
     return {
-      text: 'Pending',
+      text: getForApprovalLabel(row),
       class: 'pending',
     };
   }

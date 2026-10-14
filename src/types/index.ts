@@ -113,6 +113,8 @@ export interface ItemRow {
    * review/release.
    */
   hold_edited?: boolean;
+  /** Reason entered when delivery_status is "CANCEL" or "CLOSE". */
+  status_reason?: string | null;
   audits?: ItemAudit[];
 }
 
@@ -162,7 +164,7 @@ export interface ItemRequest {
   custodian_approved_at?: string;
   rejection_comment?: string;
   pr_numbers?: string;
-  /** Server-computed: every item has nothing left to release. */
+  /** Server-computed: every item is On Hand (fully released) or Closed — the request is Complete. */
   all_items_served?: boolean;
   /** Server-computed: at least one item's delivery_status is "HOLD" — powers the Held Items page. */
   has_held_item?: boolean;
@@ -399,7 +401,7 @@ export interface ReimbursementRequest {
  * server-side, see petty-cash.service.ts's updatePettyCash). */
 export interface PettyCashTransaction {
   id: number;
-  /** Generated serial ("PC-2026-000001"), distinct from the free-typed po_number. */
+  /** Generated serial ("CP-2026-000001"), distinct from the free-typed po_number. */
   serial: string;
   po_number: string;
   total_amount: string;
@@ -409,6 +411,13 @@ export interface PettyCashTransaction {
   cash_received_at: string | null;
   /** Who actually received the cash — same AP-Officer-only restriction. */
   receiver_name: string | null;
+  /** Set once delivery is confirmed — null means Pending Cash Purchase. */
+  delivered_at: string | null;
+  delivered_by: string | null;
+  delivered_by_name: string | null;
+  /** Custodian's Cash Status — set means "Received", null "Not Received". */
+  cash_confirmed_at: string | null;
+  cash_confirmed_by: string | null;
   created_by: string;
   created_by_name: string | null;
   created_at: string;

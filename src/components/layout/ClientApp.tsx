@@ -6,10 +6,7 @@ import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { AuthProvider, useAuth } from "@/components/providers/AuthProvider";
 import { DateRangeProvider } from "@/components/providers/DateRangeProvider";
 import { DashboardCountsProvider } from "@/components/providers/DashboardCountsProvider";
-import { DeliveredItemsProvider } from "@/components/providers/DeliveredItemsProvider";
 import { OutedItemsProvider } from "@/components/providers/OutedItemsProvider";
-import { PendingItemsProvider } from "@/components/providers/PendingItemsProvider";
-import { PendingServicesProvider } from "@/components/providers/PendingServicesProvider";
 import LoadingScreen from "@/components/layout/LoadingScreen";
 import { ShellLayout } from "@/components/layout/Layout";
 import type { User } from "@/types";
@@ -28,17 +25,26 @@ const APOfficerDashboard = dynamic(() => import("@/features/approvals/components
 const PettyCashPage = dynamic(() => import("@/features/petty-cash/components/PettyCashPage"));
 const CustodianDashboard = dynamic(() => import("@/features/approvals/components/CustodianDashboard"));
 const AdminDashboard = dynamic(() => import("@/features/settings/components/AdminDashboard"));
-const PendingItemsPage = dynamic(() => import("@/features/purchase-requests/components/PendingItemsPage"));
-const DeliveredItemsPage = dynamic(() => import("@/features/purchase-requests/components/DeliveredItemsPage"));
 const UrgentItemsPage = dynamic(() => import("@/features/inventory/components/UrgentItemsPage"));
 const PendingItemEntryPage = dynamic(() => import("@/features/inventory/components/PendingItemEntryPage"));
 const NewItemListPage = dynamic(() => import("@/features/inventory/components/NewItemListPage"));
 const CompleteRequestsPage = dynamic(() => import("@/features/reports/components/CompleteRequestsPage"));
+const SummaryRequestsPage = dynamic(() => import("@/features/reports/components/SummaryRequestsPage"));
 const DeletedItemsPage = dynamic(() => import("@/features/reports/components/DeletedItemsPage"));
 const ItemsHubPage = dynamic(() => import("@/features/inventory/components/ItemsHubPage"));
 const AdjustmentHistoryPage = dynamic(() => import("@/features/reports/components/AdjustmentHistoryPage"));
 const SubmittedPaymentRequestsPage = dynamic(() => import("@/features/purchase-requests/components/SubmittedPaymentRequestsPage"));
 const MainDashboardPage = dynamic(() => import("@/features/dashboard/components/MainDashboardPage"));
+
+// "Approval Requests" screens — the same pages in their approval mode, which
+// list only requests not yet fully approved (see each page's approvalView).
+const StaffApprovalRequests = () => <StaffDashboard approvalView />;
+const CustodianApprovalRequests = () => <CustodianDashboard approvalView />;
+// Cash Purchase Based on P.O., split by delivery status (see PettyCashPage).
+const DeliveredCashPurchase = () => <PettyCashPage view="delivered" />;
+// "Pending Requests" — the requester's fully approved, still-open requests,
+// split out of the Create New Request screen (see StaffDashboard pendingView).
+const StaffPendingRequests = () => <StaffDashboard pendingView />;
 
 const preload = {
   staff: () => import("@/features/requests/components/StaffDashboard"),
@@ -48,12 +54,11 @@ const preload = {
   pettyCash: () => import("@/features/petty-cash/components/PettyCashPage"),
   custodian: () => import("@/features/approvals/components/CustodianDashboard"),
   admin: () => import("@/features/settings/components/AdminDashboard"),
-  pendingItems: () => import("@/features/purchase-requests/components/PendingItemsPage"),
-  deliveredItems: () => import("@/features/purchase-requests/components/DeliveredItemsPage"),
   urgentItems: () => import("@/features/inventory/components/UrgentItemsPage"),
   pendingItemEntry: () => import("@/features/inventory/components/PendingItemEntryPage"),
   newItemList: () => import("@/features/inventory/components/NewItemListPage"),
   completeRequests: () => import("@/features/reports/components/CompleteRequestsPage"),
+  summaryRequests: () => import("@/features/reports/components/SummaryRequestsPage"),
   deletedItems: () => import("@/features/reports/components/DeletedItemsPage"),
   itemsHub: () => import("@/features/inventory/components/ItemsHubPage"),
   adjustmentHistory: () => import("@/features/reports/components/AdjustmentHistoryPage"),
@@ -75,18 +80,20 @@ const routes: Record<string, RouteDef> = {
   "/approvals/purchaser": { component: PurchaserDashboard, permission: "purchaser_dashboard", preload: preload.purchaser },
   "/approvals/ap-officer": { component: APOfficerDashboard, permission: "ap_officer_dashboard", preload: preload.apOfficer },
   "/petty-cash": { component: PettyCashPage, permission: "petty_cash", preload: preload.pettyCash },
+  "/petty-cash/delivered": { component: DeliveredCashPurchase, permission: "petty_cash", preload: preload.pettyCash },
   "/approvals/custodian": { component: CustodianDashboard, permission: "department_requests", preload: preload.custodian },
   "/settings": { component: AdminDashboard, permission: "users_management", preload: preload.admin },
   "/approvals/all": { component: CustodianDashboard, permission: "department_requests", preload: preload.custodian },
   "/requests/new": { component: StaffDashboard, permission: "create_request", preload: preload.staff },
-  "/purchase-requests": { component: PendingItemsPage, permission: "pending_items_services", preload: preload.pendingItems },
-  "/purchase-requests/services": { component: PendingItemsPage, permission: "pending_items_services", preload: preload.pendingItems },
-  "/purchase-requests/delivered": { component: DeliveredItemsPage, permission: "delivered_items", preload: preload.deliveredItems },
+  "/requests/approval": { component: StaffApprovalRequests, permission: "create_request", preload: preload.staff },
+  "/requests/pending": { component: StaffPendingRequests, permission: "create_request", preload: preload.staff },
+  "/approvals/review": { component: CustodianApprovalRequests, permission: "department_requests", preload: preload.custodian },
   "/inventory/urgent-items": { component: UrgentItemsPage, permission: "urgent_items", preload: preload.urgentItems },
   "/inventory/pending-entry": { component: PendingItemEntryPage, permission: "pending_item_entry", preload: preload.pendingItemEntry },
   "/inventory/new-items": { component: NewItemListPage, permission: "new_item_list", preload: preload.newItemList },
   "/inventory/issued": { component: ItemsHubPage, permission: "item_list", preload: preload.itemsHub },
   "/reports": { component: CompleteRequestsPage, permission: "complete_requests", preload: preload.completeRequests },
+  "/reports/summary": { component: SummaryRequestsPage, permission: "complete_requests", preload: preload.summaryRequests },
   "/reports/deleted": { component: DeletedItemsPage, permission: "deleted_items", preload: preload.deletedItems },
   "/inventory/held": { component: ItemsHubPage, permission: "item_list", preload: preload.itemsHub },
   "/inventory": { component: ItemsHubPage, permission: "item_list", preload: preload.itemsHub },
@@ -262,15 +269,9 @@ export default function ClientApp({ initialUser }: { initialUser: User | null })
     <AuthProvider initialUser={initialUser}>
       <UserScope>
         <DateRangeProvider>
-          <PendingItemsProvider>
-            <PendingServicesProvider>
-              <DeliveredItemsProvider>
-                <OutedItemsProvider>
-                  <RouteContent />
-                </OutedItemsProvider>
-              </DeliveredItemsProvider>
-            </PendingServicesProvider>
-          </PendingItemsProvider>
+          <OutedItemsProvider>
+            <RouteContent />
+          </OutedItemsProvider>
         </DateRangeProvider>
       </UserScope>
     </AuthProvider>

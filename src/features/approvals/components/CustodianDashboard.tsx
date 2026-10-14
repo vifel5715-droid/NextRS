@@ -1,4 +1,5 @@
 import React from "react";
+import { useSearchParams } from "@/lib/next-router";
 import Layout from "@/components/layout/Layout";
 import Modal from "@/components/dialogs/Modal";
 import DeleteReasonModal from "@/components/dialogs/DeleteReasonModal";
@@ -13,7 +14,7 @@ import AdjustmentHistoryModal from "@/features/reports/components/AdjustmentHist
 const ItemCatalogModal = React.lazy(() => import("@/features/item-master/components/ItemCatalogModal"));
 import SearchableCombobox from "@/components/forms/SearchableCombobox";
 import { sanitizeUserInput } from "@/lib/utils/sanitize";
-import { getBsStatusBadgeClass, getStatusBadgeClass, formatStatusLabel, getHeldServiceCount, hasEditedHeldService } from "@/lib/utils/status";
+import { getBsStatusBadgeClass, getStatusBadgeClass, formatStatusLabel, getForApprovalLabel, isFullyApproved, getHeldServiceCount, hasEditedHeldService } from "@/lib/utils/status";
 import { useCustodianRequests } from "@/features/approvals/hooks/useCustodianRequests";
 import { useUrgentRequests } from "@/features/requests/hooks/useUrgentRequests";
 import { useMachineCodeOptions } from "@/features/item-master/hooks/useMachineCodeOptions";
@@ -23,6 +24,7 @@ import { itemRequestAPI } from "@/lib/api";
 import { openAttachment } from "@/lib/utils/openAttachment";
 import { UOM_OPTIONS } from "@/constants/uom";
 import type { ItemAudit, ItemRow, ServiceRow, RequestRow, FieldValue } from "@/types";
+import ItemStatusReasonRow from "@/features/requests/components/ItemStatusReasonRow";
 import IssuanceHistory from "@/features/requests/components/IssuanceHistory";
 import { ItemExistenceBadge } from "@/components/shared/ItemExistenceStatus";
 import { useItemCatalogNames } from "@/features/item-master/hooks/useItemCatalogNames";
@@ -45,7 +47,8 @@ const DELIVERY_STATUS_STYLES: Record<string, React.CSSProperties> = {
   OUT: { backgroundColor: "#eff6ff", color: "#1d4ed8", borderColor: "#93c5fd", fontWeight: 600 },
   "PURCHASE REQUEST": { backgroundColor: "#fffbeb", color: "#b45309", borderColor: "#fcd34d", fontWeight: 600 },
   URGENT: { backgroundColor: "#f5f3ff", color: "#6d28d9", borderColor: "#c4b5fd", fontWeight: 600 },
-  HOLD: { backgroundColor: "#fef2f2", color: "#b91c1c", borderColor: "#fca5a5", fontWeight: 600 },
+  CANCEL: { backgroundColor: "#fef2f2", color: "#b91c1c", borderColor: "#fca5a5", fontWeight: 600 },
+  CLOSE: { backgroundColor: "#f1f5f9", color: "#334155", borderColor: "#94a3b8", fontWeight: 600 },
 };
 
 /** Same idea as DELIVERY_STATUS_STYLES, for the PR Status field in the Details panel. */
@@ -55,7 +58,14 @@ const PR_STATUS_STYLES: Record<string, React.CSSProperties> = {
   "DELIVERED PARTIAL": { backgroundColor: "#eff6ff", color: "#1d4ed8", borderColor: "#93c5fd", fontWeight: 600 },
 };
 
-const CustodianDashboard: React.FC = () => {
+interface CustodianDashboardProps {
+  /** "Approval Requests" mode — only requests still waiting on the Custodian
+   * stage (or declined there). The default "Pending Requests" mode lists only
+   * fully approved requests, which move there automatically once approved. */
+  approvalView?: boolean;
+}
+
+const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = false }) => {
   const { user } = useAuth();
   const role = user?.role?.toLowerCase().trim() ?? "";
   const isAdmin = role === "admin";
@@ -120,7 +130,9 @@ const CustodianDashboard: React.FC = () => {
 
   const { urgentRequests, loadingUrgentRequests, reviewUrgentRequest, expandedUrgentIds, toggleUrgentRow, setItemInventoriable, savingItemInventoriableId } = useUrgentRequests();
 
-  const [activeUrgentTab, setActiveUrgentTab] = React.useState(false);
+  // ?tab=urgent (the Dashboard's Urgent Requests card) lands on the Urgent tab.
+  const [searchParams] = useSearchParams();
+  const [activeUrgentTab, setActiveUrgentTab] = React.useState(!approvalView && searchParams.get("tab") === "urgent");
   const [urgentDeclineTarget, setUrgentDeclineTarget] = React.useState<number | null>(null);
 
   // Which item/service is queued for deletion, pending a typed reason —
@@ -273,7 +285,7 @@ const CustodianDashboard: React.FC = () => {
       <div data-label="Purpose">{row.purpose}</div>
       <div>
         {row.all_items_served ? (
-          <span className={`${styles.statusText} ${styles.approved}`}>ALL ITEM ARE FULLY SERVED</span>
+          <span className={`${styles.statusText} ${styles.approved}`}>Complete</span>
         ) : row.has_held_item && row.status !== "rejected" ? (
           // Display-only — does not touch the underlying `status`/custodian_status
           // fields, so an already-approved request keeps its real approval intact
@@ -290,7 +302,9 @@ const CustodianDashboard: React.FC = () => {
             {hasEditedHeldService(row as { services?: ServiceRow[] }) ? "RELEASE ON HOLD" : "ON HOLD"} ({getHeldServiceCount(row as { services?: ServiceRow[] })})
           </span>
         ) : (
-          <span className={`${styles.statusText} ${styles[getStatusBadgeClass(row.status)]}`}>{row.status}</span>
+          <span className={`${styles.statusText} ${styles[getStatusBadgeClass(row.status)]}`}>
+            {row.status === "pending" ? getForApprovalLabel(row) : formatStatusLabel(row.status)}
+          </span>
         )}
       </div>
     </div>
@@ -555,14 +569,7 @@ const CustodianDashboard: React.FC = () => {
                   // touched. The lock only re-applies once the row goes back to
                   // "saved" (not dirty) and that saved name is an exact catalog match.
                   const isItemNameDirty = item.id !== undefined && itemNameDirtyIds.has(item.id);
-                  // Once an item is placed on HOLD, custodian loses edit access to
-                  // that row entirely — every field and action button locks. Admin
-                  // is exempt, same as every other "admin can always" rule on this
-                  // page. (Secretary/Supervisor/Manager, who gain edit access on a
-                  // HOLD item instead, don't have a route into this page — see the
-                  // Held Items page for their side of this workflow.)
-                  const isHeldLocked = item.delivery_status === "HOLD" && !isAdmin;
-                  const canEditItemName = !isReadOnlyRole && !isHeldLocked && (isAdmin || isItemNameDirty || existenceStatus === "not_found" || !item.item_name?.trim());
+                  const canEditItemName = !isReadOnlyRole && (isAdmin || isItemNameDirty || existenceStatus === "not_found" || !item.item_name?.trim());
                   return (
                   <div key={index} className={`${styles.itemCard} ${isSelected ? styles.itemCardSelected : ""}`}>
                     <div className={styles.itemCardRow}>
@@ -570,7 +577,7 @@ const CustodianDashboard: React.FC = () => {
                       <input
                         type="checkbox"
                         className="form-check-input"
-                        disabled={!isApproved || isHeldLocked}
+                        disabled={!isApproved}
                         checked={isSelected}
                         onChange={() => toggleItemSelected(row.id, itemId)}
                       />
@@ -591,7 +598,7 @@ const CustodianDashboard: React.FC = () => {
                       )}
                     </div>
                     <div data-label="Quantity">
-                      {isAdmin && !isHeldLocked ? (
+                      {isAdmin ? (
                         <input
                           type="number"
                           min="1"
@@ -604,7 +611,7 @@ const CustodianDashboard: React.FC = () => {
                       ) : item.quantity}
                     </div>
                     <div data-label="UoM">
-                      {isAdmin && !isHeldLocked ? (
+                      {isAdmin ? (
                         <select
                           className="form-select form-select-sm text-uppercase"
                           style={{ width: "110px" }}
@@ -621,11 +628,6 @@ const CustodianDashboard: React.FC = () => {
                       ) : item.uom}
                     </div>
                     <div data-label="Status">
-                      {/* Custodian keeps full control of Status even once an item is HOLD —
-                          only Status; item name/qty/delete stay locked (see isHeldLocked
-                          above). Explicitly reversed after the HOLD hand-off restriction
-                          turned out to also block custodian from ever un-holding an item
-                          themselves, which wasn't intended. */}
                       {/* A `disabled` native <select> swallows every mouse event over
                           its own box in Chrome/Firefox — a `title` on it, or on a
                           wrapper around it, never fires while the pointer sits
@@ -647,11 +649,8 @@ const CustodianDashboard: React.FC = () => {
                           <option value="OUT">ON HAND</option>
                           <option value="PURCHASE REQUEST">PURCHASE REQUEST</option>
                           <option value="URGENT">URGENT</option>
-                          {/* Same underlying "HOLD" value either way — only the
-                              label changes, based on whether Secretary/Supervisor/
-                              Manager have already fixed the item's details (see
-                              hold_edited, set server-side in updateRequestItem). */}
-                          <option value="HOLD">{item.hold_edited ? "RELEASE ON HOLD" : "ON HOLD"}</option>
+                          <option value="CANCEL">CANCEL</option>
+                          <option value="CLOSE">CLOSE</option>
                         </select>
                         {existenceStatus === "not_found" && (
                           <div
@@ -663,7 +662,7 @@ const CustodianDashboard: React.FC = () => {
                     </div>
                     <div data-label="Remarks">{sanitizeUserInput(item.remarks || "N/A")}</div>
                     <div data-label="Machine Code">
-                      {isAdmin && !isHeldLocked ? (
+                      {isAdmin ? (
                         <SearchableCombobox
                           className="form-control form-control-sm text-uppercase"
                           value={item.machine_code || ""}
@@ -743,6 +742,7 @@ const CustodianDashboard: React.FC = () => {
                                     )}
                                   </td>
                                 </tr>
+                                {item.delivery_status === "URGENT" && (
                                 <tr style={{ borderBottom: item.pr_status === "DELIVERED PARTIAL" ? "1px solid #dee2e6" : "none" }}>
                                   <td style={{ width: "110px", padding: "12px 16px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Order Status</td>
                                   <td style={{ padding: "12px 16px", border: "none" }}>
@@ -760,9 +760,10 @@ const CustodianDashboard: React.FC = () => {
                                     </select>
                                   </td>
                                 </tr>
+                                )}
                               </>
                             )}
-                            {(((item.delivery_status === "PURCHASE REQUEST" || item.delivery_status === "URGENT") && item.pr_status === "DELIVERED PARTIAL") || item.delivery_status === "PARTIAL DELIVERED") && (
+                            {((item.delivery_status === "URGENT" && item.pr_status === "DELIVERED PARTIAL") || item.delivery_status === "PARTIAL DELIVERED") && (
                               <tr>
                                 <td style={{ width: "110px", padding: "12px 16px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Qty Delivered</td>
                                 <td style={{ padding: "12px 16px", border: "none" }}>
@@ -770,6 +771,12 @@ const CustodianDashboard: React.FC = () => {
                                 </td>
                               </tr>
                             )}
+                            <ItemStatusReasonRow
+                              status={item.delivery_status}
+                              reason={item.status_reason}
+                              disabled={!isApproved || isReadOnlyRole}
+                              onChange={(value) => updateSelectedItemField(row.id, index, item, items, "status_reason", value)}
+                            />
                             {audits.length > 0 && (
                               <tr>
                                 <td colSpan={2} style={{ padding: "0", border: "none" }}>
@@ -1072,21 +1079,22 @@ const CustodianDashboard: React.FC = () => {
   // badges, the rendered rows, and the department-dropdown-driven counts —
   // so they all agree. The tab badge counts every matching request (the true
   // total), not just the 20 rows the table actually renders below it.
+  const inThisView = (row: RequestRow) => isFullyApproved(row) !== approvalView;
   const matchingItemRequests = filterByDateRange(
-    filterByDepartment(filteredItemRequests, selectedDepartment), startDate, endDate, "created_at"
+    filterByDepartment(filteredItemRequests.filter(inThisView), selectedDepartment), startDate, endDate, "created_at"
   );
   const matchingServiceRequests = filterByDateRange(
-    filterByDepartment(filteredServiceRequests, selectedDepartment), startDate, endDate, "created_at"
+    filterByDepartment(filteredServiceRequests.filter(inThisView), selectedDepartment), startDate, endDate, "created_at"
   );
   const visibleItemRequests = byMostRecent(matchingItemRequests).slice(0, 20);
   const visibleServiceRequests = byMostRecent(matchingServiceRequests).slice(0, 20);
 
   // Exports the full filtered set for the active tab, not just the 20 rows
-  // rendered below it — mirrors HeldItemsPage/PendingItemsPage's export.
+  // rendered below it — mirrors HeldItemsPage's export.
   const handleExport = () =>
     activeTab === "item"
       ? exportToExcel(
-          "pending-item-requests",
+          approvalView ? "approval-item-requests" : "pending-item-requests",
           [
             { key: "serial", label: "Serial" },
             { key: "date", label: "Date" },
@@ -1105,7 +1113,7 @@ const CustodianDashboard: React.FC = () => {
           }))
         )
       : exportToExcel(
-          "pending-service-requests",
+          approvalView ? "approval-service-requests" : "pending-service-requests",
           [
             { key: "serial", label: "Serial" },
             { key: "date", label: "Date" },
@@ -1127,8 +1135,10 @@ const CustodianDashboard: React.FC = () => {
   return (
     <Layout>
       <div className="page-header">
-        <h1 className="page-title">Custodian Dashboard</h1>
-        <p className="page-subtitle">All Departments — Request Management</p>
+        <h1 className="page-title">{approvalView ? "Approval Requests" : "Custodian Dashboard"}</h1>
+        <p className="page-subtitle">
+          {approvalView ? "All Departments — Requests awaiting Custodian approval" : "All Departments — Request Management"}
+        </p>
       </div>
 
       <div className="dash-toolbar">
@@ -1147,6 +1157,7 @@ const CustodianDashboard: React.FC = () => {
             Service Requests
             <span className="dash-tab-badge">{matchingServiceRequests.length}</span>
           </button>
+          {!approvalView && (
           <button
             className={`dash-tab ${activeUrgentTab ? "active" : ""}`}
             onClick={() => setActiveUrgentTab(true)}
@@ -1156,6 +1167,7 @@ const CustodianDashboard: React.FC = () => {
               {urgentRequests.filter((r) => r.stockroom_status === "pending").length}
             </span>
           </button>
+          )}
 
         </div>
       </div>

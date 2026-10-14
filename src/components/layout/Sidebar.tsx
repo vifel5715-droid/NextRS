@@ -1,14 +1,9 @@
 import React, { useEffect } from "react";
 import { useNavigate, useLocation } from "@/lib/next-router";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { usePendingItemsContext } from "@/components/providers/PendingItemsProvider";
-import { usePendingServicesContext } from "@/components/providers/PendingServicesProvider";
-import { useDeliveredItemsContext } from "@/components/providers/DeliveredItemsProvider";
-import { useOutedItemsContext } from "@/components/providers/OutedItemsProvider";
 import { useDashboardCounts } from "@/components/providers/DashboardCountsProvider";
-import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
-import { filterByDateRange } from "@/lib/utils/dateRange";
 import { createLogger } from "@/lib/client-logger";
+import { getApprovalRequestLinks } from "@/components/layout/approvalLinks";
 
 const log = createLogger("Sidebar");
 
@@ -54,39 +49,22 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
   const location = useLocation();
   const { user } = useAuth();
   const hasPermission = (key: string) => user?.permissions.includes(key) ?? false;
-  const { startDate, endDate } = useDateRangeContext();
-  const pendingItems = usePendingItemsContext();
-  const pendingItemsCount = filterByDateRange(pendingItems, startDate, endDate, "created_at")
-    .reduce((sum, req) => sum + req.items.length, 0);
-  const pendingServices = usePendingServicesContext();
-  const pendingServicesFiltered = filterByDateRange(pendingServices, startDate, endDate, "created_at");
-  const deliveredItems = useDeliveredItemsContext();
-  const deliveredItemsCount = filterByDateRange(deliveredItems, startDate, endDate, "created_at")
-    .reduce((sum, req) => sum + req.items.length, 0);
-  const outedItems = useOutedItemsContext();
-  // Outed items carry their own per-item release date (issued_at), unlike
-  // Pending/Delivered which only have a date at the parent-request level —
-  // so this one filters each request's items individually rather than the
-  // whole request.
-  const outedItemsCount = outedItems.reduce(
-    (sum, req) => sum + filterByDateRange(req.items, startDate, endDate, "issued_at").length,
-    0
-  );
   const {
-    myRequestsProcessingCount,
-    summary: { completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount },
-    adjustmentLog: { entries: adjustmentEntries },
+    myPendingRequestsCount,
+    cashPurchase,
+    summary: {
+      completeRequestsCount,
+      itemListCount,
+      totalRequestsCount,
+      awaitingSupervisorApprovalCount,
+      awaitingCustodianApprovalCount,
+    },
   } = useDashboardCounts();
-  // Same total the Custodian/Admin "Pending Requests" page shows across its
-  // Item + Service Requests tabs (CustodianDashboard.tsx) — not just requests
-  // still awaiting the custodian, so this badge can never disagree with what
-  // that page's own tab badges add up to.
+  // Fully approved, unfinished requests — what the Custodian/Admin "Pending
+  // Requests" page (CustodianDashboard.tsx) lists. Requests still awaiting
+  // approval are counted on the Approval Requests links instead.
   const pendingRequestsCount = totalRequestsCount;
-  const adjustmentHistoryCount = adjustmentEntries.length;
   const isAdmin = user?.role?.toLowerCase().trim() === "admin";
-  // Supervisor/Manager keep the supervisor_dashboard permission (server
-  // actions rely on it for approvals) but don't get the sidebar link.
-  const hideSupervisorDashboardLink = ["supervisor", "manager"].includes(user?.role?.toLowerCase().trim() ?? "");
 
   useEffect(() => {
     log.info("Mounted — user:", user?.email, `role: ${user?.role}`);
@@ -103,6 +81,12 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
   // Each sidebar row below is gated by its own page permission now, rather
   // than one shared boolean — a custom role can have any subset checked.
   const canCreateRequest = hasPermission("create_request");
+
+  const canApproveCustodianStage = hasPermission("department_requests");
+  const approvalRequestLinks = getApprovalRequestLinks(user?.permissions ?? [], {
+    awaitingSupervisorApprovalCount,
+    awaitingCustodianApprovalCount,
+  });
 
   const handleItemClick = (path: string) => {
     log.info("Navigating to:", path);
@@ -142,7 +126,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
 
   const pendingRequestsItem = filteredItems.find((item) => item.path === "/approvals/custodian" || item.path === "/approvals/all");
   const usersManagementItem = filteredItems.find((item) => item.path === "/settings");
-  const canSeeHeldItems = hasPermission("held_items");
   const itemsHubPaths = ["/inventory", "/inventory/held", "/inventory/issued"];
 
   const renderNavContent = () => (
@@ -167,30 +150,40 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
             <li className="sidebar-item">
               <button
                 className={`sidebar-link ${
-                  location.pathname === "/requests" && new URLSearchParams(location.search).get("tab") === "create"
-                    ? "active"
-                    : ""
+                  location.pathname === "/requests" || location.pathname === "/requests/new" ? "active" : ""
                 }`}
                 onClick={() => handleItemClick("/requests?tab=create")}
               >
                 <span className="sidebar-icon">➕</span>
                 <span style={{ flex: 1 }}>Create New Request</span>
-                <CountBadge count={myRequestsProcessingCount} color="#dc3545" />
+              </button>
+            </li>
+          )}
+          {approvalRequestLinks.map((link) => (
+            <li className="sidebar-item" key={link.path}>
+              <button
+                className={`sidebar-link ${location.pathname === link.path ? "active" : ""}`}
+                onClick={() => handleItemClick(link.path)}
+              >
+                <span className="sidebar-icon">📋</span>
+                <span style={{ flex: 1 }}>{link.label}</span>
+                <CountBadge count={link.count} color="#ea580c" />
+              </button>
+            </li>
+          ))}
+          {canCreateRequest && (
+            <li className="sidebar-item">
+              <button
+                className={`sidebar-link ${location.pathname === "/requests/pending" ? "active" : ""}`}
+                onClick={() => handleItemClick("/requests/pending")}
+              >
+                <span className="sidebar-icon">📄</span>
+                <span style={{ flex: 1 }}>{canApproveCustodianStage ? "My Pending Requests" : "Pending Requests"}</span>
+                <CountBadge count={myPendingRequestsCount} color="#dc3545" />
               </button>
             </li>
           )}
           {pendingRequestsItem && renderMenuItem(pendingRequestsItem)}
-          {hasPermission("supervisor_dashboard") && !hideSupervisorDashboardLink && (
-            <li className="sidebar-item">
-              <button
-                className={`sidebar-link ${location.pathname === "/approvals" ? "active" : ""}`}
-                onClick={() => handleItemClick("/approvals")}
-              >
-                <span className="sidebar-icon">📊</span>
-                <span style={{ flex: 1 }}>Supervisor Dashboard</span>
-              </button>
-            </li>
-          )}
           {hasPermission("purchaser_dashboard") && (
             <li className="sidebar-item">
               <button
@@ -225,15 +218,27 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
             </li>
           )}
           {hasPermission("petty_cash") && (
-            <li className="sidebar-item">
-              <button
-                className={`sidebar-link ${location.pathname === "/petty-cash" ? "active" : ""}`}
-                onClick={() => handleItemClick("/petty-cash")}
-              >
-                <span className="sidebar-icon">💵</span>
-                <span style={{ flex: 1 }}>Cash Purchase Base on P.O</span>
-              </button>
-            </li>
+            <>
+              <li className="sidebar-item">
+                <button
+                  className={`sidebar-link ${location.pathname === "/petty-cash" ? "active" : ""}`}
+                  onClick={() => handleItemClick("/petty-cash")}
+                >
+                  <span className="sidebar-icon">💰</span>
+                  <span style={{ flex: 1 }}>Pending Cash Purchase</span>
+                  <CountBadge count={cashPurchase.pending} color="#d97706" />
+                </button>
+              </li>
+              <li className="sidebar-item">
+                <button
+                  className={`sidebar-link ${location.pathname === "/petty-cash/delivered" ? "active" : ""}`}
+                  onClick={() => handleItemClick("/petty-cash/delivered")}
+                >
+                  <span className="sidebar-icon">✅</span>
+                  <span style={{ flex: 1 }}>Delivered Cash Purchase</span>
+                </button>
+              </li>
+            </>
           )}
           {hasPermission("complete_requests") && (
             <li className="sidebar-item">
@@ -247,32 +252,14 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
               </button>
             </li>
           )}
-          {hasPermission("pending_items_services") && (
+          {hasPermission("complete_requests") && (
             <li className="sidebar-item">
               <button
-                className={`sidebar-link ${
-                  location.pathname === "/purchase-requests" || location.pathname === "/purchase-requests/services"
-                    ? "active"
-                    : ""
-                }`}
-                onClick={() => handleItemClick("/purchase-requests")}
+                className={`sidebar-link ${location.pathname === "/reports/summary" ? "active" : ""}`}
+                onClick={() => handleItemClick("/reports/summary")}
               >
-                <span className="sidebar-icon">⏳</span>
-                <span style={{ flex: 1 }}>Pending Purchase Items &amp; Services</span>
-                <CountBadge count={pendingItemsCount} color="#d97706" />
-                <CountBadge count={pendingServicesFiltered.length} color="#7c3aed" />
-              </button>
-            </li>
-          )}
-          {hasPermission("delivered_items") && (
-            <li className="sidebar-item">
-              <button
-                className={`sidebar-link ${location.pathname === "/purchase-requests/delivered" ? "active" : ""}`}
-                onClick={() => handleItemClick("/purchase-requests/delivered")}
-              >
-                <span className="sidebar-icon">📦</span>
-                <span style={{ flex: 1 }}>Delivered Purchase Items</span>
-                <CountBadge count={deliveredItemsCount} color="#78350f" />
+                <span className="sidebar-icon">📊</span>
+                <span style={{ flex: 1 }}>Summary Requests</span>
               </button>
             </li>
           )}
@@ -318,32 +305,6 @@ const Sidebar: React.FC<SidebarProps> = ({ onClose, isDesktop = false }) => {
                 <span className="sidebar-icon">📚</span>
                 <span style={{ flex: 1 }}>Item List</span>
                 <CountBadge count={itemListCount} color="#2563eb" />
-                {canSeeHeldItems && <CountBadge count={heldItemsCount} color="#0d9488" />}
-                <CountBadge count={outedItemsCount} color="#0ea5e9" />
-              </button>
-            </li>
-          )}
-          {hasPermission("adjustment_history") && (
-            <li className="sidebar-item">
-              <button
-                className={`sidebar-link ${location.pathname === "/reports/adjustments" ? "active" : ""}`}
-                onClick={() => handleItemClick("/reports/adjustments")}
-              >
-                <span className="sidebar-icon">📝</span>
-                <span style={{ flex: 1 }}>Adjustment History</span>
-                <CountBadge count={adjustmentHistoryCount} color="#64748b" />
-              </button>
-            </li>
-          )}
-          {hasPermission("deleted_items") && (
-            <li className="sidebar-item">
-              <button
-                className={`sidebar-link ${location.pathname === "/reports/deleted" ? "active" : ""}`}
-                onClick={() => handleItemClick("/reports/deleted")}
-              >
-                <span className="sidebar-icon">🗑️</span>
-                <span style={{ flex: 1 }}>Deleted</span>
-                <CountBadge count={deletedCount} color="#991b1b" />
               </button>
             </li>
           )}

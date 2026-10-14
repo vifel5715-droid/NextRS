@@ -1,6 +1,6 @@
 {
   "/dashboard/overview": "/dashboard",
-  "/dashboard/staff": "/requests",
+  "/dashboard/staff": "/requests/pending",
   "/request/new": "/requests/new",
   "/dashboard/supervisor": "/approvals",
   "/dashboard/custodian": "/approvals/custodian",
@@ -13,9 +13,6 @@
   "/dashboard/urgent-items": "/inventory/urgent-items",
   "/dashboard/pending-item-entry": "/inventory/pending-entry",
   "/dashboard/new-item-list": "/inventory/new-items",
-  "/dashboard/pending-items": "/purchase-requests",
-  "/dashboard/pending-services": "/purchase-requests/services",
-  "/dashboard/delivered-items": "/purchase-requests/delivered",
   "/dashboard/submitted-payment-requests": "/purchase-requests/payment-requests",
   "/dashboard/complete-requests": "/reports",
   "/dashboard/adjustment-history": "/reports/adjustments",

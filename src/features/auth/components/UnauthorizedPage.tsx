@@ -33,7 +33,7 @@ const Unauthorized: React.FC = () => {
                   </button>
                   <button
                     className="btn btn-outline-primary"
-                    onClick={() => navigate("/requests")}
+                    onClick={() => navigate("/requests/pending")}
                   >
                     <i className="bi bi-house me-2"></i>
                     Staff Dashboard

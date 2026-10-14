@@ -28,7 +28,7 @@ async function reviewCustodianRequest(input: CustodianReviewInput): Promise<void
 
   const role = user.role.trim().toLowerCase();
   if (!["custodian", "admin"].includes(role)) throw new Error("Permission denied.");
-  if (role !== "admin" && !user.permissions.includes("pending_items_services") && !user.permissions.includes("department_requests")) {
+  if (role !== "admin" && !user.permissions.includes("department_requests")) {
     throw new Error("Permission denied.");
   }
 

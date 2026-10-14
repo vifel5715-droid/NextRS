@@ -8,7 +8,6 @@ import { requireUser, type AuthorizedUser } from "@/lib/auth";
 import {
   assertCanEditRequest,
   isDepartmentScoped,
-  isHoldResolver,
   isRequestOwner,
   requireDepartmentAccess,
   requirePermission,
@@ -256,13 +255,7 @@ export async function deleteRequestItemAction(itemId: number, reasonInput: strin
       if ((item.quantity_out ?? 0) > 0) {
         throw new Error("Cannot delete an item that has already been released to the requester (Qty Out > 0).");
       }
-      if (user.roleKey === "custodian" && item.delivery_status === "HOLD") {
-        throw new Error("This item is on HOLD — only Secretary, Supervisor, or Manager can act on it.");
-      }
-      if (isHoldResolver(user)) {
-        if (item.delivery_status !== "HOLD") throw new Error("You can only act on an item that is currently on HOLD.");
-        if (user.roleKey === "secretary") requireDepartmentAccess(user, request.department);
-      } else if (!["custodian", "admin", "director", "operations_manager"].includes(user.roleKey)) {
+      if (!["custodian", "admin", "director", "operations_manager"].includes(user.roleKey)) {
         throw new Error("Permission denied.");
       }
 
@@ -431,7 +424,7 @@ export async function deleteItemAttachmentAction(id: number): Promise<ActionResu
 }
 
 // ---------------------------------------------------------------------------
-// "Urgent Item From IRS" / "Pending Purchase Items" / "Pending Item Entry".
+// "Urgent Item From IRS" / "Pending Item Entry".
 // ---------------------------------------------------------------------------
 
 /**
@@ -446,7 +439,7 @@ export async function deleteItemAttachmentAction(id: number): Promise<ActionResu
 export async function getPurchasePaymentItemsAction(): Promise<ActionResult<PurchasePaymentItem[]>> {
   return runAction(async () => {
     const user = await requireUser();
-    requirePermission(user, ["pending_items_services", "urgent_items", "pending_item_entry"]);
+    requirePermission(user, ["urgent_items", "pending_item_entry"]);
     const db = getDb();
 
     const purchaseFilter = inArray(itemRequestItems.pr_type, ["PURCHASE REQUEST", "URGENT"]);

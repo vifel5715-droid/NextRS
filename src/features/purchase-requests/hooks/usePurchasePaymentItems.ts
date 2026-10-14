@@ -10,9 +10,8 @@ const POLL_INTERVAL_MS = 30_000;
 
 /**
  * Every item ever routed through a Purchase/Payment Request, active or
- * inactive (already delivered/released OUT) — the PendingItemsPage's
- * "Pending Purchase Items" tab uses this instead of usePendingItems so
- * already-resolved items don't just disappear from the list. See
+ * inactive (already delivered/released OUT), so already-resolved items
+ * don't just disappear from the list. See
  * item-request.controller.ts's getPurchasePaymentItems for what
  * distinguishes it from the plain "still pending" endpoint.
  */

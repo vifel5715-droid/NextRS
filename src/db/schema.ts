@@ -101,6 +101,12 @@ export const itemRequestItems = pgTable("item_request_items", {
    */
   hold_edited: boolean("hold_edited").notNull().default(false),
   /**
+   * Required reason for a "CANCEL" or "CLOSE" delivery_status — cleared when
+   * the item moves to any other status (the Adjustment History entry written
+   * at the time keeps the old reason).
+   */
+  status_reason: text("status_reason"),
+  /**
    * Custodian/admin-entered deadline for a "URGENT" item — takes the GR
    * Number field's place in the UI while the item sits at that status,
    * since there is no goods-receipt number yet at that point. ISO date
@@ -710,7 +716,7 @@ export const reimbursementItems = pgTable("reimbursement_items", {
  */
 export const pettyCashTransactions = pgTable("petty_cash_transactions", {
   id: serial("id").primaryKey(),
-  serial: text("serial").notNull().unique(), // "PC-2026-000001"
+  serial: text("serial").notNull().unique(), // "CP-2026-000001" (Cash Purchase; older rows may still read PC-)
   po_number: text("po_number").notNull(),
   total_amount: numeric("total_amount", { precision: 12, scale: 2 }).notNull(),
   // Null until AP Officer records it.
@@ -723,6 +729,16 @@ export const pettyCashTransactions = pgTable("petty_cash_transactions", {
   // logged in — a free-text name) — same AP-Officer-only restriction as
   // cash_received/cash_received_at, recorded at the same time.
   receiver_name: text("receiver_name"),
+  // Set when a Custodian (or admin) confirms the purchased goods were
+  // delivered — moves the row from Pending to Delivered Cash Purchase. Null
+  // means pending, including every row that predates this column.
+  delivered_at: text("delivered_at"),
+  delivered_by: uuid("delivered_by"),
+  // Set when the Custodian marks the cash as received on their side (Cash
+  // Status "Received"); null = "Not Received". Separate from AP Officer's
+  // cash_received amount.
+  cash_confirmed_at: text("cash_confirmed_at"),
+  cash_confirmed_by: uuid("cash_confirmed_by"),
   created_by: uuid("created_by").notNull(),
   created_at: text("created_at").notNull(),
   updated_at: text("updated_at").notNull(),

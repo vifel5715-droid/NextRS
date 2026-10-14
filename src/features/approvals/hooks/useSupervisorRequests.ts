@@ -15,12 +15,21 @@ import { filterByDateRange } from '@/lib/utils/dateRange';
 import { useItemCatalogEntries } from '@/features/item-master/hooks/useItemCatalogEntries';
 import type { ItemRequest, ServiceRequest, RequestTab, CacheEntry, ItemRow, ServiceRow, RequestDetail, FieldValue } from '@/types';
 import { throwOnError } from "@/lib/utils/actionResult";
+import { isAwaitingSupervisorApproval, isFullyApproved } from "@/lib/utils/status";
 
 const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
 
 const log = createLogger("useSupervisorRequests");
 
 const CACHE_TTL = 30000;
+
+// Approval Requests only — a fully approved request has moved on to the
+// Pending Item/Service Requests lists. Rows still waiting on this stage sort
+// first (stable sort keeps the server's newest-first order within each group).
+const approvalRequestsOnly = <T extends { supervisor_status?: string; custodian_status?: string }>(rows: T[]): T[] =>
+  rows
+    .filter((row) => !isFullyApproved(row))
+    .sort((a, b) => Number(isAwaitingSupervisorApproval(b)) - Number(isAwaitingSupervisorApproval(a)));
 
 export const useSupervisorRequests = () => {
   const { user } = useAuth();
@@ -48,7 +57,7 @@ export const useSupervisorRequests = () => {
   const requestCache = useRef<Map<string, CacheEntry<{ itemRequests: ItemRequest[]; serviceRequests: ServiceRequest[] }>>>(new Map());
 
   const filteredItemRequests = useMemo(() => {
-    const inRange = filterByDateRange(itemRequests, startDate, endDate, 'created_at');
+    const inRange = filterByDateRange(approvalRequestsOnly(itemRequests), startDate, endDate, 'created_at');
     if (!searchQuery.trim()) return inRange;
     const q = searchQuery.toLowerCase();
     return inRange.filter(row =>
@@ -61,7 +70,7 @@ export const useSupervisorRequests = () => {
   }, [itemRequests, searchQuery, startDate, endDate]);
 
   const filteredServiceRequests = useMemo(() => {
-    const inRange = filterByDateRange(serviceRequests, startDate, endDate, 'created_at');
+    const inRange = filterByDateRange(approvalRequestsOnly(serviceRequests), startDate, endDate, 'created_at');
     if (!searchQuery.trim()) return inRange;
     const q = searchQuery.toLowerCase();
     return inRange.filter(row =>
@@ -116,7 +125,7 @@ export const useSupervisorRequests = () => {
 
   useEffect(() => {
     const userRole = user?.role?.toLowerCase().trim();
-    if (userRole === 'staff' || userRole === 'secretary') navigate('/requests');
+    if (userRole === 'staff' || userRole === 'secretary') navigate('/requests/pending');
   }, [user?.role, navigate]);
 
   useEffect(() => {
@@ -275,10 +284,13 @@ export const useSupervisorRequests = () => {
 
   const updateItem = (requestId: number, index: number, field: string, value: FieldValue) => {
     const key = makeRequestKey(activeTab, requestId);
-    const currentItems = editableItems.get(key) || [];
-    const updatedItems = [...currentItems];
-    updatedItems[index] = { ...updatedItems[index], [field]: value };
-    setEditableItems(prev => new Map(prev).set(key, updatedItems));
+    // Functional update so back-to-back calls (Item Name, then its catalog
+    // UoM) each build on the previous one instead of a stale snapshot.
+    setEditableItems(prev => {
+      const updatedItems = [...(prev.get(key) || [])];
+      updatedItems[index] = { ...updatedItems[index], [field]: value };
+      return new Map(prev).set(key, updatedItems);
+    });
     setHasChanges(prev => new Map(prev).set(key, true));
   };
 

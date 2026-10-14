@@ -66,3 +66,33 @@
   border-top: 2px solid var(--gray-200);
   font-weight: var(--font-weight-bold);
 }
+
+/* All Requests Summary — same stat tiles as the grid below, plus a one-line
+   hint saying exactly what each count covers. */
+.summarySection {
+  margin-bottom: var(--space-2);
+}
+
+.summaryHint {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--font-size-xs, 0.75rem);
+  color: var(--gray-500);
+}
+
+.summaryError {
+  margin: 0 0 var(--space-3);
+  font-size: var(--font-size-sm);
+  color: var(--danger, #b91c1c);
+}
+
+/* Cards with no single matching list aren't clickable. */
+.tileStatic {
+  cursor: default;
+}
+
+.tileStatic:hover {
+  transform: none;
+  box-shadow: none;
+  border-color: var(--gray-200);
+}

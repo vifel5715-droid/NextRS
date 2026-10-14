@@ -1,12 +1,13 @@
-import React, { useEffect } from "react";
+import React, { useEffect, useMemo, useState } from "react";
 import Layout from "@/components/layout/Layout";
 import Modal from "@/components/dialogs/Modal";
 import DeleteReasonModal from "@/components/dialogs/DeleteReasonModal";
 import ApprovalStatusPanel from "@/features/requests/components/ApprovalStatusPanel";
+import ItemStatusBadge from "@/features/requests/components/ItemStatusBadge";
 import ReimbursementAttachmentLink from "@/features/requests/components/ReimbursementAttachmentLink";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { sanitizeUserInput } from "@/lib/utils/sanitize";
-import { getBsStatusBadgeClass, formatStatusLabel, getItemStatusText, getItemStatusBadgeClass, getHeldServiceCount, hasEditedHeldService } from "@/lib/utils/status";
+import { getBsStatusBadgeClass, formatStatusLabel, getForApprovalLabel, getHeldServiceCount, hasEditedHeldService } from "@/lib/utils/status";
 import { useSupervisorRequests } from "@/features/approvals/hooks/useSupervisorRequests";
 import { useUrgentRequests } from "@/features/requests/hooks/useUrgentRequests";
 import { useReimbursementRequests } from "@/features/requests/hooks/useReimbursementRequests";
@@ -15,8 +16,10 @@ import SearchableCombobox from "@/components/forms/SearchableCombobox";
 import { makeRequestKey } from "@/lib/utils/requestKey";
 import { createLogger } from "@/lib/client-logger";
 import IssuanceHistory from "@/features/requests/components/IssuanceHistory";
-import { ItemExistenceBadge } from "@/components/shared/ItemExistenceStatus";
-import { useItemCatalogNames } from "@/features/item-master/hooks/useItemCatalogNames";
+import { ItemExistenceBadge, ItemExistenceLegend } from "@/components/shared/ItemExistenceStatus";
+import { isMachineCodeEnabled } from "@/lib/utils/machineCodeValidation";
+import { UOM_OPTIONS } from "@/constants/uom";
+import { useItemCatalogEntries } from "@/features/item-master/hooks/useItemCatalogEntries";
 import { getItemExistenceStatus } from "@/lib/utils/itemExistenceStatus";
 import { getItemBalance } from "@/lib/utils/itemBalance";
 import { formatMilitaryTime, formatMilitaryDateTime } from "@/lib/utils/format";
@@ -51,13 +54,15 @@ interface HoldStatusBadgeProps {
   heldItemEdited: boolean;
   heldItemCount?: number;
   services?: ServiceRow[];
+  supervisorStatus?: string;
+  custodianStatus?: string;
 }
 
 // Display-only — a Held item never touches the underlying `status`, so this
 // overlays "ON HOLD"/"RELEASE ON HOLD" without disturbing the real
 // supervisor/custodian approval shown once expanded. A rejected request stays
 // "rejected" even with a stale HOLD item.
-const HoldStatusBadge: React.FC<HoldStatusBadgeProps> = ({ status, hasHeldItem, heldItemEdited, heldItemCount, services }) => {
+const HoldStatusBadge: React.FC<HoldStatusBadgeProps> = ({ status, hasHeldItem, heldItemEdited, heldItemCount, services, supervisorStatus, custodianStatus }) => {
   if (status !== "rejected") {
     if (hasHeldItem) {
       return (
@@ -76,7 +81,13 @@ const HoldStatusBadge: React.FC<HoldStatusBadgeProps> = ({ status, hasHeldItem, 
       );
     }
   }
-  return <span className={`badge ${getBsStatusBadgeClass(status)}`}>{formatStatusLabel(status)}</span>;
+  return (
+    <span className={`badge ${getBsStatusBadgeClass(status)}`}>
+      {status === "pending"
+        ? getForApprovalLabel({ supervisor_status: supervisorStatus, custodian_status: custodianStatus })
+        : formatStatusLabel(status)}
+    </span>
+  );
 };
 
 const ApprovalAction: React.FC<{ evaluated: boolean; canApprove: boolean; onProcess: () => void }> = ({ evaluated, canApprove, onProcess }) => {
@@ -168,14 +179,44 @@ const ItemDeliveryDetails: React.FC<{ item: ItemRow; showPrNumber: boolean }> = 
 
 const SupervisorDashboard: React.FC = () => {
   const { user } = useAuth();
-  const itemCatalogNames = useItemCatalogNames();
+  // Item List (catalog) data for editing a request's lines — scoped to the
+  // request's own department, the same rule the create form applies (an
+  // entry listing departments is only offered to those departments).
+  const itemCatalogEntries = useItemCatalogEntries();
+  const catalogByDepartment = useMemo(() => {
+    const build = (entries: typeof itemCatalogEntries) => ({
+      names: Array.from(new Set(entries.map((entry) => entry.item_name))).sort(),
+      uomByName: new Map(entries.map((entry) => [entry.item_name.toUpperCase(), entry.uom])),
+    });
+    const departmentsOf = (entry: (typeof itemCatalogEntries)[number]) =>
+      entry.departments ? entry.departments.split(",").map((d) => d.trim().toUpperCase()) : [];
+    const unrestricted = itemCatalogEntries.filter((entry) => !entry.departments);
+    const byDepartment = new Map<string, ReturnType<typeof build>>();
+    for (const dept of new Set(itemCatalogEntries.flatMap(departmentsOf))) {
+      byDepartment.set(dept, build(itemCatalogEntries.filter((entry) => !entry.departments || departmentsOf(entry).includes(dept))));
+    }
+    return { byDepartment, unrestricted: build(unrestricted) };
+  }, [itemCatalogEntries]);
+  // Rows whose UoM dropdown is on OTHER with nothing typed yet (an empty uom
+  // alone can't say that), keyed "<request key>:<row index>".
+  const [otherUomRows, setOtherUomRows] = useState<Set<string>>(new Set());
+  const setOtherUom = (key: string, idx: number, on: boolean) =>
+    setOtherUomRows((prev) => {
+      const next = new Set(prev);
+      if (on) next.add(`${key}:${idx}`);
+      else next.delete(`${key}:${idx}`);
+      return next;
+    });
+  // Row indexes shift when a line is removed, so drop that request's flags.
+  const clearOtherUom = (key: string) =>
+    setOtherUomRows((prev) => new Set([...prev].filter((entry) => !entry.startsWith(`${key}:`))));
+  const catalogForDepartment = (department?: string) =>
+    catalogByDepartment.byDepartment.get((department || "").trim().toUpperCase()) ?? catalogByDepartment.unrestricted;
   const machineCodeOptions = useMachineCodeOptions();
 
   const {
     filteredItemRequests,
     filteredServiceRequests,
-    itemRequests,
-    serviceRequests,
     activeTab,
     setActiveTab,
     searchQuery,
@@ -223,7 +264,7 @@ const SupervisorDashboard: React.FC = () => {
 
   const isItemTab = activeTab === "item";
   const rows = isItemTab ? filteredItemRequests : filteredServiceRequests;
-  const totalCount = isItemTab ? itemRequests.length : serviceRequests.length;
+  const totalCount = rows.length;
   const showRequestTabs = !activeUrgentTab && !activeReimbursementTab;
   const isAdmin = user?.role?.toLowerCase().trim() === "admin";
 
@@ -235,8 +276,8 @@ const SupervisorDashboard: React.FC = () => {
   return (
     <Layout>
       <div className="page-header">
-        <h1 className="page-title">Approval Dashboard</h1>
-        <p className="page-subtitle">{user?.department} — Pending Approvals</p>
+        <h1 className="page-title">Approval Requests</h1>
+        <p className="page-subtitle">{user?.department} — Requests awaiting approval</p>
       </div>
 
       <div className="dash-toolbar">
@@ -295,7 +336,7 @@ const SupervisorDashboard: React.FC = () => {
       {showRequestTabs && (
       <div className={styles.requestListFrame}>
         <div className={styles.requestListHeader}>
-
+          <div></div>
           <div>Serial Number</div>
           <div>Created Date</div>
           <div>Created By</div>
@@ -306,7 +347,7 @@ const SupervisorDashboard: React.FC = () => {
         {totalCount === 0 ? (
           <div className="text-center py-5" style={{ color: "#9ca3af" }}>
             <i className="bi bi-inbox" style={{ fontSize: "2rem", display: "block", marginBottom: "0.5rem" }}></i>
-            No pending {isItemTab ? "item" : "service"} requests found.
+            No {isItemTab ? "item" : "service"} requests awaiting approval.
           </div>
         ) : rows.map((row) => {
           const key = makeRequestKey(activeTab, row.id);
@@ -335,6 +376,8 @@ const SupervisorDashboard: React.FC = () => {
                     heldItemEdited={!!row.has_edited_held_item}
                     heldItemCount={row.held_item_count}
                     services={(row as { services?: ServiceRow[] }).services}
+                    supervisorStatus={row.supervisor_status}
+                    custodianStatus={row.custodian_status}
                   />
                 </div>
               </div>
@@ -367,6 +410,8 @@ const SupervisorDashboard: React.FC = () => {
                             heldItemEdited={heldDetailItems.some((i) => i.hold_edited)}
                             heldItemCount={heldDetailItems.length}
                             services={details.services}
+                            supervisorStatus={details.supervisor_status}
+                            custodianStatus={details.custodian_status}
                           />
                         </div>
                         <div className="col-12 col-sm-6 col-md">
@@ -379,77 +424,157 @@ const SupervisorDashboard: React.FC = () => {
                         </div>
                       </div>
                     </div>
-                    {/* Supervisor Status + Action */}
-                    <div className="border rounded p-3 mb-3">
-                      <div className="fw-semibold text-secondary small text-uppercase mb-3">Approval</div>
-                      <div className="row g-2 mb-3">
-                        <div className="col-12 col-sm-6">
-                          <div className="text-muted" style={{ fontSize: "0.72rem" }}>Supervisor and Manager Status</div>
-                          <span className={`badge ${getBsStatusBadgeClass(details.supervisor_status)}`}>
-                            {formatStatusLabel(details.supervisor_status) || "pending"}
-                          </span>
-                        </div>
-                      </div>
-                      <div>
-                        <ApprovalAction
-                          evaluated={evaluated}
-                          canApprove={canApproveRequest(details)}
-                          onProcess={() => handleStatusClick(row)}
-                        />
-                      </div>
-                    </div>
+                    {/* Approval history (name, date, time per role) + Action */}
+                    <ApprovalStatusPanel
+                      supervisorLabel="Supervisor And Manager"
+                      supervisorStatus={details.supervisor_status || "pending"}
+                      supervisorApprovedByName={details.supervisor_name || details.supervisor_approved_by_name}
+                      supervisorApprovedByRole={details.supervisor_approved_by_role}
+                      supervisorApprovedAt={details.supervisor_approved_at}
+                      custodianStatus={details.custodian_status || "pending"}
+                      custodianApprovedByName={details.custodian_name || details.custodian_approved_by_name}
+                      custodianApprovedByRole={details.custodian_approved_by_role}
+                      custodianApprovedAt={details.custodian_approved_at}
+                      rejectionComment={details.rejection_comment}
+                    >
+                      <ApprovalAction
+                        evaluated={evaluated}
+                        canApprove={canApproveRequest(details)}
+                        onProcess={() => handleStatusClick(row)}
+                      />
+                    </ApprovalStatusPanel>
                     {isItemTab ? (
                       <>
-                        <h5 className="mb-2">Items</h5>
+                        <div className="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+                          <h5 className="mb-0">Items</h5>
+                          <ItemExistenceLegend />
+                        </div>
                         <div className="table-responsive">
-                          <table className={`table table-sm ${styles.itemsTable}`} style={{ borderCollapse: "separate", borderSpacing: "0", border: "1px solid #e0e0e0", borderRadius: "8px", overflow: "hidden" }}>
-                            <thead style={{ backgroundColor: "#f8f9fa" }}>
+                          <table className={`table table-bordered table-sm ${styles.itemsTable}`}>
+                            <thead className="table-light">
                               <tr>
-                                {(["#", "Item Name", "Qty", "UoM", "Remarks", "Machine Code", "Balance", "Existence Status", "Status", "Details", "Action"] as const).map((label) => (
-                                  <th key={label} style={{ padding: "12px", border: "none", borderBottom: "1px solid #e0e0e0", fontWeight: "600", color: "#495057" }}>{label}</th>
-                                ))}
+                                <th className={styles.itemInputWidth}>Item Name</th>
+                                <th className={styles.quantityInput}>Quantity</th>
+                                <th className={styles.uomInput}>UoM</th>
+                                <th className={styles.remarksInput}>Remarks</th>
+                                <th className={styles.machineCodeInput}>Machine Code</th>
+                                <th>Balance</th>
+                                <th>Status</th>
+                                <th>Details</th>
+                                <th style={{ width: "80px" }}></th>
                               </tr>
                             </thead>
                             <tbody>
-                              {((editableItems.get(key) || []) as ItemRow[]).map((item: ItemRow, idx: number) => (
-                                <tr key={item.id ?? `new-${idx}`} style={{ backgroundColor: idx % 2 === 0 ? "#ffffff" : "#f8f9fa", borderBottom: "1px solid #e0e0e6" }}>
-                                  <td data-label="#" style={{ padding: "12px", border: "none" }}>{idx + 1}</td>
-                                  <td data-label="Item Name" style={{ padding: "12px", border: "none" }}><input type="text" value={item.item_name || ""} className="form-control form-control-sm" onChange={(e) => updateItem(row.id, idx, "item_name", e.target.value)} /></td>
-                                  <td data-label="Qty" style={{ padding: "12px", border: "none" }}><input type="number" min="1" value={item.quantity || 1} className="form-control form-control-sm" onChange={(e) => updateItem(row.id, idx, "quantity", Math.max(1, Number.parseInt(e.target.value, 10) || 1))} /></td>
-                                  <td data-label="UoM" style={{ padding: "12px", border: "none" }}><input type="text" value={item.uom || ""} className="form-control form-control-sm" onChange={(e) => updateItem(row.id, idx, "uom", e.target.value)} /></td>
-                                  <td data-label="Remarks" style={{ padding: "12px", border: "none" }}><input type="text" value={item.remarks || ""} className="form-control form-control-sm" onChange={(e) => updateItem(row.id, idx, "remarks", e.target.value)} /></td>
-                                  <td data-label="Machine Code" style={{ padding: "12px", border: "none" }}>
-                                    <SearchableCombobox
-                                      className="form-control form-control-sm text-uppercase"
-                                      value={item.machine_code || ""}
-                                      onChange={(value) => updateItem(row.id, idx, "machine_code", value)}
-                                      options={machineCodeOptions.options}
-                                      descriptions={machineCodeOptions.descriptions}
-                                      placeholder="Search or type…"
-                                      noResultsText="No record found"
-                                    />
-                                  </td>
-                                  <td data-label="Balance" style={{ padding: "12px", border: "none" }}>
-                                    {getItemBalance(item)}
-                                  </td>
-                                  <td data-label="Existence Status" style={{ padding: "12px", border: "none" }}>
-                                    <ItemExistenceBadge status={getItemExistenceStatus(item.item_name, itemCatalogNames)} />
-                                  </td>
-                                  <td data-label="Status" style={{ padding: "12px", border: "none" }}>
-                                    <span className={`badge ${getItemStatusBadgeClass(item)}`}>
-                                      {getItemStatusText(item)}
-                                    </span>
-                                  </td>
-                                  <td data-label="Details" style={{ padding: "12px", border: "none" }}>
-                                    <ItemDeliveryDetails item={item} showPrNumber={isAdmin} />
-                                  </td>
-                                  <td data-label="Action" style={{ padding: "12px", border: "none" }} className="text-center">
-                                    <button className="btn btn-sm btn-outline-danger" onClick={() => deleteItem(row.id, idx)}>
-                                      <i className="bi bi-trash"></i>
-                                    </button>
-                                  </td>
-                                </tr>
-                              ))}
+                              {((editableItems.get(key) || []) as ItemRow[]).map((item: ItemRow, idx: number) => {
+                                // Same controls as the Create Item form: Item List names for this
+                                // request's department, a UoM locked to the catalog's once the name
+                                // matches, and Machine Code only for Engineering.
+                                const catalog = catalogForDepartment(row.department);
+                                const existenceStatus = getItemExistenceStatus(item.item_name, catalog.names);
+                                const isUomLocked = existenceStatus === "existing";
+                                const uom = item.uom || "";
+                                const isKnownUom = (UOM_OPTIONS as readonly string[]).includes(uom);
+                                const isOther = otherUomRows.has(`${key}:${idx}`) || (uom !== "" && !isKnownUom);
+                                const selectedUomValue = isKnownUom && !otherUomRows.has(`${key}:${idx}`) ? uom : isOther ? "OTHER" : "";
+                                const machineCodeEnabled = isMachineCodeEnabled(row.department);
+                                return (
+                                  <tr key={item.id ?? `new-${idx}`}>
+                                    <td data-label="Item Name">
+                                      <div>
+                                        <SearchableCombobox
+                                          className={`form-control form-control-sm text-uppercase ${styles.itemInputWidth}`}
+                                          value={item.item_name || ""}
+                                          onChange={(value) => {
+                                            updateItem(row.id, idx, "item_name", value);
+                                            // Picking an Item List entry brings its UoM along.
+                                            const matchedUom = catalog.uomByName.get(value.trim().toUpperCase());
+                                            if (matchedUom) {
+                                              updateItem(row.id, idx, "uom", matchedUom);
+                                              setOtherUom(key, idx, false);
+                                            }
+                                          }}
+                                          options={catalog.names}
+                                          placeholder="Search or type item name…"
+                                        />
+                                        <ItemExistenceBadge status={existenceStatus} />
+                                      </div>
+                                    </td>
+                                    <td data-label="Quantity">
+                                      <input
+                                        type="number"
+                                        min="1"
+                                        className={`form-control form-control-sm ${styles.quantityInput}`}
+                                        value={item.quantity || 1}
+                                        onChange={(e) => updateItem(row.id, idx, "quantity", Math.max(1, Number.parseInt(e.target.value, 10) || 1))}
+                                      />
+                                    </td>
+                                    <td data-label="UoM">
+                                      <select
+                                        className={`form-select form-select-sm text-uppercase ${styles.uomInput}`}
+                                        aria-label={`UoM for ${item.item_name || `item ${idx + 1}`}`}
+                                        value={selectedUomValue}
+                                        onChange={(e) => {
+                                          const value = e.target.value;
+                                          setOtherUom(key, idx, value === "OTHER");
+                                          updateItem(row.id, idx, "uom", value === "OTHER" ? "" : value);
+                                        }}
+                                        disabled={isUomLocked}
+                                      >
+                                        <option value="" disabled>Select UoM</option>
+                                        {UOM_OPTIONS.map((option) => (
+                                          <option key={option} value={option}>{option}</option>
+                                        ))}
+                                        <option value="OTHER">OTHER</option>
+                                      </select>
+                                      {isOther && !isUomLocked && (
+                                        <input
+                                          type="text"
+                                          className={`form-control form-control-sm text-uppercase mt-1 ${styles.uomInput}`}
+                                          placeholder="Specify UoM"
+                                          value={uom}
+                                          onChange={(e) => updateItem(row.id, idx, "uom", e.target.value)}
+                                        />
+                                      )}
+                                    </td>
+                                    <td data-label="Remarks">
+                                      <input
+                                        type="text"
+                                        className={`form-control form-control-sm text-uppercase ${styles.remarksInput}`}
+                                        value={item.remarks || ""}
+                                        onChange={(e) => updateItem(row.id, idx, "remarks", e.target.value)}
+                                      />
+                                    </td>
+                                    <td data-label="Machine Code">
+                                      <SearchableCombobox
+                                        className={`form-control form-control-sm text-uppercase ${styles.machineCodeInput}`}
+                                        value={item.machine_code || ""}
+                                        onChange={(value) => updateItem(row.id, idx, "machine_code", value)}
+                                        options={machineCodeOptions.options}
+                                        descriptions={machineCodeOptions.descriptions}
+                                        placeholder={machineCodeEnabled ? "Search or type…" : "N/A"}
+                                        noResultsText="No record found"
+                                        disabled={!machineCodeEnabled}
+                                      />
+                                    </td>
+                                    <td data-label="Balance">{getItemBalance(item)}</td>
+                                    <td data-label="Status"><ItemStatusBadge item={item} /></td>
+                                    <td data-label="Details"><ItemDeliveryDetails item={item} showPrNumber={isAdmin} /></td>
+                                    <td className="text-center">
+                                      <button
+                                        type="button"
+                                        className="btn btn-sm btn-danger"
+                                        aria-label={`Remove ${item.item_name || `item ${idx + 1}`}`}
+                                        onClick={() => {
+                                          clearOtherUom(key);
+                                          deleteItem(row.id, idx);
+                                        }}
+                                      >
+                                        ×
+                                      </button>
+                                    </td>
+                                  </tr>
+                                );
+                              })}
                             </tbody>
                           </table>
                         </div>

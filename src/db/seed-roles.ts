@@ -26,8 +26,6 @@ const ALL_PERMISSIONS: PermissionKey[] = [
   "overview",
   "create_request",
   "department_requests",
-  "pending_items_services",
-  "delivered_items",
   "item_list",
   "held_items",
   "complete_requests",
@@ -45,30 +43,26 @@ const ALL_PERMISSIONS: PermissionKey[] = [
 ];
 
 const STAFF: PermissionKey[] = [
-  "overview", "create_request", "pending_items_services", "delivered_items",
+  "overview", "create_request",
   "item_list", "complete_requests", "adjustment_history", "deleted_items",
 ];
 const SECRETARY: PermissionKey[] = [...STAFF, "held_items"];
 const SUPERVISOR: PermissionKey[] = [...SECRETARY, "supervisor_dashboard"];
 const MANAGER: PermissionKey[] = SUPERVISOR;
 const CUSTODIAN: PermissionKey[] = [
-  "overview", "department_requests", "pending_items_services", "delivered_items",
+  "overview", "department_requests",
   "item_list", "held_items", "complete_requests", "adjustment_history", "deleted_items",
   "urgent_items", "pending_item_entry", "new_item_list", "petty_cash",
 ];
 const DIRECTOR: PermissionKey[] = CUSTODIAN;
 // Purchaser Dashboard, Phase 2 of the Urgent Request workflow — a new role
 // (not a repurposed existing one) since Purchasing is a genuinely separate
-// function from Custodian/Stockroom review. pending_items_services and
-// delivered_items give visibility into those existing pages too —
-// Purchasing needs that same across-the-board view of pending/delivered
-// purchase activity, not just what originated from an Urgent Request. More
-// keys (e.g. item_list, for linking a Purchase Order to a catalog entry) get
+// function from Custodian/Stockroom review. More keys (e.g. item_list, for linking a Purchase Order to a catalog entry) get
 // added here as later phases need them. submitted_payment_requests (view
 // only — see urgent-request.service.ts's savePaymentRequestForm lock) lets
 // Purchaser see every F-ACC-003 form it has already submitted, but not edit
 // it any further; that edit right belongs to AP Officer once submitted.
-const PURCHASER: PermissionKey[] = ["overview", "purchaser_dashboard", "pending_items_services", "delivered_items", "urgent_items", "submitted_payment_requests"];
+const PURCHASER: PermissionKey[] = ["overview", "purchaser_dashboard", "urgent_items", "submitted_payment_requests"];
 // Reimbursement Request workflow's final approval stage — a new role since
 // Accounts Payable is a genuinely separate function from Purchasing, same
 // reasoning as PURCHASER above. Only needs its own dedicated dashboard;

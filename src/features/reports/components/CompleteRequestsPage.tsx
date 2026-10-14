@@ -4,17 +4,19 @@ import { useMachineCodeOptions } from "@/features/item-master/hooks/useMachineCo
 import { useAuth } from "@/components/providers/AuthProvider";
 import { itemRequestAPI } from "@/lib/api";
 import { openAttachment } from "@/lib/utils/openAttachment";
-import { getCompositeStatus, getStatusBadgeClass, getItemStatusText, getItemStatusBadgeClass, getServiceStatusText, getServiceStatusBadgeClass } from "@/lib/utils/status";
+import { getCompositeStatus, getStatusBadgeClass, getServiceStatusText, getServiceStatusBadgeClass } from "@/lib/utils/status";
 import { sanitizeUserInput } from "@/lib/utils/sanitize";
 import { copyToClipboard, formatItemsForClipboard, formatItemsForProjectGrid } from "@/lib/utils/clipboard";
 import { UOM_OPTIONS } from "@/constants/uom";
 import { makeRequestKey } from "@/lib/utils/requestKey";
 import type { ItemRequest, ServiceRequest, ItemRow, ServiceRow, ItemAudit, FieldValue } from "@/types";
 import Layout from "@/components/layout/Layout";
+import ItemStatusReasonRow from "@/features/requests/components/ItemStatusReasonRow";
 import IssuanceHistory from "@/features/requests/components/IssuanceHistory";
 import DeleteReasonModal from "@/components/dialogs/DeleteReasonModal";
 import AdjustmentHistoryModal from "@/features/reports/components/AdjustmentHistoryModal";
 import ApprovalStatusPanel from "@/features/requests/components/ApprovalStatusPanel";
+import ItemStatusBadge from "@/features/requests/components/ItemStatusBadge";
 import SearchableCombobox from "@/components/forms/SearchableCombobox";
 import { ItemExistenceBadge } from "@/components/shared/ItemExistenceStatus";
 import { useItemCatalogNames } from "@/features/item-master/hooks/useItemCatalogNames";
@@ -486,15 +488,11 @@ const CompleteRequestsPage: React.FC = () => {
                             // — see CustodianDashboard's canEditItemName for the fuller
                             // rationale on both.
                             const isRowDirty = item.id !== undefined && dirtyItemIds.has(item.id);
-                            // See CustodianDashboard's isHeldLocked for the full rationale —
-                            // custodian loses edit access to a HOLD item entirely; admin is
-                            // exempt.
-                            const isHeldLocked = item.delivery_status === "HOLD" && !isAdmin;
-                            const canEditItemName = !isHeldLocked && (isAdmin || isRowDirty || existenceStatus === "not_found" || !item.item_name?.trim());
+                            const canEditItemName = (isAdmin || isRowDirty || existenceStatus === "not_found" || !item.item_name?.trim());
                             return (
                               <tr key={index} style={{ backgroundColor: isSelected ? "#e7f1ff" : index % 2 === 0 ? "#ffffff" : "#f8f9fa" }}>
                                 <td data-label="Select" style={{ padding: "12px", border: "none" }}>
-                                  <input type="checkbox" className="form-check-input" disabled={!isApproved || isHeldLocked} checked={isSelected} onChange={() => toggleItemSelected(req.id, itemId)} />
+                                  <input type="checkbox" className="form-check-input" disabled={!isApproved} checked={isSelected} onChange={() => toggleItemSelected(req.id, itemId)} />
                                 </td>
                                 <td data-label="#" style={{ padding: "12px", border: "none" }}>{index + 1}</td>
                                 <td data-label="Item Name" style={{ padding: "12px", border: "none" }}>
@@ -510,12 +508,12 @@ const CompleteRequestsPage: React.FC = () => {
                                   ) : item.item_name}
                                 </td>
                                 <td data-label="Qty" style={{ padding: "12px", border: "none" }}>
-                                  {isAdmin && !isHeldLocked ? (
+                                  {isAdmin ? (
                                     <input type="number" min="1" className="form-control form-control-sm" style={{ width: "90px" }} value={item.quantity ?? ""} onChange={(e) => updateItemField(req.id, index, "quantity", Math.max(1, parseInt(e.target.value) || 1))} onKeyDown={(e) => { if (e.key === "Enter" && item.id !== undefined) { e.preventDefault(); handleSaveItem(req.id, item.id); } }} />
                                   ) : item.quantity}
                                 </td>
                                 <td data-label="UoM" style={{ padding: "12px", border: "none" }}>
-                                  {isAdmin && !isHeldLocked ? (
+                                  {isAdmin ? (
                                     <select className="form-select form-select-sm text-uppercase" style={{ width: "110px" }} aria-label={`UoM for ${item.item_name || `item ${index + 1}`}`} value={(UOM_OPTIONS as readonly string[]).includes(item.uom) ? item.uom : ""} onChange={(e) => updateItemField(req.id, index, "uom", e.target.value)} onKeyDown={(e) => { if (e.key === "Enter" && item.id !== undefined) { e.preventDefault(); handleSaveItem(req.id, item.id); } }}>
                                       <option value="" disabled>Select UoM</option>
                                       {UOM_OPTIONS.map((uom) => (<option key={uom} value={uom}>{uom}</option>))}
@@ -524,7 +522,7 @@ const CompleteRequestsPage: React.FC = () => {
                                 </td>
                                 <td data-label="Remarks" style={{ padding: "12px", border: "none" }}>{sanitizeUserInput(item.remarks || "N/A")}</td>
                                 <td data-label="Machine Code" style={{ padding: "12px", border: "none" }}>
-                                  {isAdmin && !isHeldLocked ? (
+                                  {isAdmin ? (
                                     <SearchableCombobox
                                       className="form-control form-control-sm text-uppercase"
                                       value={item.machine_code || ""}
@@ -549,17 +547,16 @@ const CompleteRequestsPage: React.FC = () => {
                                   <ItemExistenceBadge status={existenceStatus} />
                                 </td>
                                 <td data-label="Status" style={{ padding: "12px", border: "none" }}>
-                                  {/* Custodian keeps full control of Status even once an item is HOLD —
-                                      see CustodianDashboard's Status cell for the fuller rationale. */}
-                                  <select className="form-select form-select-sm w-100" value={item.delivery_status || ""} disabled={!isApproved} onChange={(e) => updateSelectedItemField(req.id, index, item, items, "delivery_status", e.target.value)}>
+                                  <select className="form-select form-select-sm w-100" style={{ minWidth: "150px" }} value={item.delivery_status || ""} disabled={!isApproved} onChange={(e) => updateSelectedItemField(req.id, index, item, items, "delivery_status", e.target.value)}>
                                     <option value="">Select Status</option>
                                     <option value="OUT">OUT</option>
                                     <option value="PURCHASE REQUEST">PURCHASE REQUEST</option>
                                     <option value="URGENT">URGENT</option>
-                                    <option value="HOLD">{item.hold_edited ? "RELEASE ON HOLD" : "ON HOLD"}</option>
+                                    <option value="CANCEL">CANCEL</option>
+                                    <option value="CLOSE">CLOSE</option>
                                   </select>
                                 </td>
-                                <td data-label="Details" style={{ padding: "12px", border: "none" }}>
+                                <td data-label="Details" style={{ padding: "12px", border: "none", minWidth: "240px" }}>
                                   {item.delivery_status ? (
                                     <div className="table-responsive">
                                       <table className="table table-sm mb-0" style={{ borderCollapse: "separate", borderSpacing: "0", border: "1px solid #dee2e6", borderRadius: "6px", overflow: "hidden", backgroundColor: "#fafbfc" }}>
@@ -592,6 +589,7 @@ const CompleteRequestsPage: React.FC = () => {
                                                   )}
                                                 </td>
                                               </tr>
+                                              {item.delivery_status === "URGENT" && (
                                               <tr style={{ borderBottom: item.pr_status === "DELIVERED PARTIAL" ? "1px solid #dee2e6" : "none" }}>
                                                 <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Order Status</td>
                                                 <td style={{ padding: "8px 12px", border: "none" }}>
@@ -603,9 +601,10 @@ const CompleteRequestsPage: React.FC = () => {
                                                   </select>
                                                 </td>
                                               </tr>
+                                              )}
                                             </>
                                           )}
-                                          {(((item.delivery_status === "PURCHASE REQUEST" || item.delivery_status === "URGENT") && item.pr_status === "DELIVERED PARTIAL") || item.delivery_status === "PARTIAL DELIVERED") && (
+                                          {((item.delivery_status === "URGENT" && item.pr_status === "DELIVERED PARTIAL") || item.delivery_status === "PARTIAL DELIVERED") && (
                                             <tr>
                                               <td style={{ width: "110px", padding: "8px 12px", border: "none", backgroundColor: "#f8f9fa", fontWeight: "500", color: "#6c757d" }}>Qty Delivered</td>
                                               <td style={{ padding: "8px 12px", border: "none" }}>
@@ -613,6 +612,14 @@ const CompleteRequestsPage: React.FC = () => {
                                               </td>
                                             </tr>
                                           )}
+                                          <ItemStatusReasonRow
+                                            status={item.delivery_status}
+                                            reason={item.status_reason}
+                                            disabled={!isApproved}
+                                            padding="8px 12px"
+                                            stacked
+                                            onChange={(value) => updateSelectedItemField(req.id, index, item, items, "status_reason", value)}
+                                          />
                                           {audits.length > 0 && (
                                             <tr>
                                               <td colSpan={2} style={{ padding: "0", border: "none" }}>
@@ -643,9 +650,9 @@ const CompleteRequestsPage: React.FC = () => {
                                     </button>
                                     <button
                                       className="btn btn-sm btn-danger"
-                                      disabled={(item.quantity_out || 0) > 0 || isHeldLocked}
+                                      disabled={(item.quantity_out || 0) > 0}
                                       onClick={() => setDeleteTarget({ requestId: req.id, entityId: itemId, type: "item" })}
-                                      title={isHeldLocked ? "On HOLD — only Secretary, Supervisor, or Manager can act on this item" : (item.quantity_out || 0) > 0 ? "Cannot delete — already released to the requester (Qty Out > 0)" : "Delete Item"}
+                                      title={(item.quantity_out || 0) > 0 ? "Cannot delete — already released to the requester (Qty Out > 0)" : "Delete Item"}
                                     >
                                       <i className="bi bi-trash"></i>
                                     </button>
@@ -681,7 +688,7 @@ const CompleteRequestsPage: React.FC = () => {
                                 <ItemExistenceBadge status={getItemExistenceStatus(item.item_name, itemCatalogNames)} />
                               </td>
                               <td style={{ padding: "12px", border: "none" }}>
-                                <span className={`badge ${getItemStatusBadgeClass(item)}`}>{getItemStatusText(item)}</span>
+                                <ItemStatusBadge item={item} />
                               </td>
                               <td style={{ padding: "12px", border: "none" }}>
                                 {item.audits && item.audits.length > 0 ? <IssuanceHistory audits={item.audits} prNumber={(item.pr_type || item.delivery_status) === "URGENT" ? (item.date_needed ? new Date(item.date_needed).toLocaleDateString() : null) : item.pr_number} prNumberLabel={(item.pr_type || item.delivery_status) === "URGENT" ? "Date Needed" : "PR Number"} showPrNumber={isCustodian} /> : <span className="text-muted">-</span>}

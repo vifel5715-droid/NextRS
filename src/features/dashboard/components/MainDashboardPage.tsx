@@ -2,14 +2,10 @@ import React from "react";
 import { useNavigate } from "@/lib/next-router";
 import Layout from "@/components/layout/Layout";
 import { useAuth } from "@/components/providers/AuthProvider";
-import { usePendingItemsContext } from "@/components/providers/PendingItemsProvider";
-import { usePendingServicesContext } from "@/components/providers/PendingServicesProvider";
-import { useDeliveredItemsContext } from "@/components/providers/DeliveredItemsProvider";
-import { useOutedItemsContext } from "@/components/providers/OutedItemsProvider";
 import { useDashboardCounts } from "@/components/providers/DashboardCountsProvider";
-import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
-import { filterByDateRange } from "@/lib/utils/dateRange";
 import DateRangeFilter from "@/components/forms/DateRangeFilter";
+import { getApprovalRequestLinks } from "@/components/layout/approvalLinks";
+import { useSpecialRequestCounts } from "@/features/dashboard/hooks/useSpecialRequestCounts";
 import styles from "@/features/dashboard/components/MainDashboard.module.css";
 
 type Variant = "primary" | "success" | "warning" | "danger";
@@ -23,43 +19,49 @@ interface Tile {
   path: string;
 }
 
+interface SummaryCard {
+  key: string;
+  label: string;
+  hint: string;
+  icon: string;
+  value: number;
+  variant: Variant;
+  /** Omitted when there's no single list showing exactly this count. */
+  path?: string;
+}
+
 const MainDashboardPage: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
   const role = user?.role?.toLowerCase().trim() ?? "";
   const isAdmin = role === "admin";
 
-  const { startDate, endDate } = useDateRangeContext();
-  const pendingItems = usePendingItemsContext();
-  const pendingItemsCount = filterByDateRange(pendingItems, startDate, endDate, "created_at")
-    .reduce((sum, req) => sum + req.items.length, 0);
-  const pendingServices = usePendingServicesContext();
-  const pendingServicesCount = filterByDateRange(pendingServices, startDate, endDate, "created_at").length;
-  const deliveredItems = useDeliveredItemsContext();
-  const deliveredItemsCount = filterByDateRange(deliveredItems, startDate, endDate, "created_at")
-    .reduce((sum, req) => sum + req.items.length, 0);
-  const outedItems = useOutedItemsContext();
-  const outedItemsCount = outedItems.reduce(
-    (sum, req) => sum + filterByDateRange(req.items, startDate, endDate, "issued_at").length,
-    0
-  );
   const {
     myRequestsProcessingCount,
-    summary: { completeRequestsCount, heldItemsCount, itemListCount, deletedCount, totalRequestsCount, loading },
+    summary: {
+      completeRequestsCount,
+      itemListCount,
+      deletedCount,
+      totalRequestsCount,
+      awaitingSupervisorApprovalCount,
+      awaitingCustodianApprovalCount,
+      allRequestsCount,
+      loading,
+    },
   } = useDashboardCounts();
+  const special = useSpecialRequestCounts();
   // Same total the Custodian/Admin "Pending Requests" page shows across its
   // Item + Service Requests tabs — not just requests still awaiting the
   // custodian (see Sidebar.tsx for the identical reasoning).
   const pendingRequestsCount = totalRequestsCount;
 
   const showPendingSection = ["staff", "secretary", "supervisor", "manager", "custodian", "admin", "director"].includes(role);
-  const canSeeHeldItems = ["secretary", "supervisor", "manager", "custodian", "admin", "director"].includes(role);
   const canSeeDeptRequests = ["staff", "secretary", "supervisor", "manager", "admin"].includes(role);
   const canSeePendingRequests = ["custodian", "admin", "director"].includes(role);
 
   const tiles: Tile[] = [];
   if (canSeeDeptRequests) {
-    tiles.push({ key: "dept-requests", label: "Department Requests", icon: "📋", value: myRequestsProcessingCount, variant: "primary", path: "/requests" });
+    tiles.push({ key: "dept-requests", label: "Department Requests", icon: "📋", value: myRequestsProcessingCount, variant: "primary", path: "/requests/pending" });
   }
   if (canSeePendingRequests) {
     tiles.push({
@@ -76,19 +78,93 @@ const MainDashboardPage: React.FC = () => {
   }
   if (showPendingSection) {
     tiles.push({ key: "item-list", label: "Item List", icon: "📚", value: itemListCount, variant: "primary", path: "/inventory" });
-    tiles.push({ key: "pending-items", label: "Pending Purchase Items", icon: "⏳", value: pendingItemsCount, variant: "warning", path: "/purchase-requests" });
-    tiles.push({ key: "delivered-items", label: "Delivered Purchase Items", icon: "📦", value: deliveredItemsCount, variant: "success", path: "/purchase-requests/delivered" });
-    tiles.push({ key: "pending-services", label: "Pending Services", icon: "🛠️", value: pendingServicesCount, variant: "warning", path: "/purchase-requests/services" });
-  }
-  if (canSeeHeldItems) {
-    tiles.push({ key: "held-items", label: "Held Items", icon: "⏸️", value: heldItemsCount, variant: "warning", path: "/inventory/held" });
   }
   if (showPendingSection) {
-    tiles.push({ key: "outed-items", label: "ISSUED LIST OF ITEM", icon: "📤", value: outedItemsCount, variant: "primary", path: "/inventory/issued" });
     tiles.push({ key: "deleted", label: "Deleted", icon: "🗑️", value: deletedCount, variant: "danger", path: "/reports/deleted" });
   }
 
   const totalTracked = tiles.reduce((sum, tile) => sum + tile.value, 0);
+
+  // ---- All Requests Summary ----
+  // Every count comes from the server, scoped by the same role/department
+  // rules as the list each card opens (see getDashboardRequestCountsAction
+  // and getSpecialRequestCountsAction). Item, service, urgent and
+  // reimbursement requests live in separate tables, so Total is a plain sum
+  // with no request counted twice.
+  const permissions = user?.permissions ?? [];
+  const canCreateRequest = permissions.includes("create_request");
+  const canManageDepartmentRequests = permissions.includes("department_requests");
+  const showRequestsSummary =
+    canCreateRequest || canManageDepartmentRequests || permissions.includes("supervisor_dashboard");
+  const custodianPendingPath = isAdmin ? "/approvals/all" : "/approvals/custodian";
+  const approvalLinks = getApprovalRequestLinks(permissions, {
+    awaitingSupervisorApprovalCount,
+    awaitingCustodianApprovalCount,
+  });
+  const summaryCards: SummaryCard[] = [
+    {
+      key: "total",
+      label: "Total Requests",
+      hint: "Every request you can see",
+      icon: "🗂️",
+      value: allRequestsCount + (special.urgentCount ?? 0) + (special.reimbursementCount ?? 0),
+      variant: "primary",
+    },
+    {
+      key: "pending",
+      label: "Pending Requests",
+      hint: "Item & service, approved and in progress",
+      icon: "📄",
+      value: totalRequestsCount,
+      variant: "warning",
+      path: canManageDepartmentRequests ? custodianPendingPath : canCreateRequest ? "/requests/pending" : undefined,
+    },
+    {
+      key: "approval",
+      label: "Approval Requests",
+      hint: "Item & service, awaiting approval",
+      icon: "📋",
+      value: approvalLinks.reduce((sum, link) => sum + link.count, 0),
+      variant: "danger",
+      path: approvalLinks[0]?.path,
+    },
+    {
+      key: "completed",
+      label: "Completed Requests",
+      hint: "Item & service, fully served or finished",
+      icon: "✅",
+      value: completeRequestsCount,
+      variant: "success",
+      path: permissions.includes("complete_requests") ? "/reports" : undefined,
+    },
+  ];
+  if (special.urgentCount !== null) {
+    summaryCards.push({
+      key: "urgent",
+      label: "Urgent Requests",
+      hint: "All urgent requests",
+      icon: "🚨",
+      value: special.urgentCount,
+      variant: "danger",
+      path: canCreateRequest
+        ? "/requests/pending?tab=urgent"
+        : canManageDepartmentRequests
+          ? `${custodianPendingPath}?tab=urgent`
+          : undefined,
+    });
+  }
+  if (special.reimbursementCount !== null) {
+    summaryCards.push({
+      key: "reimbursement",
+      label: "Reimbursement Requests",
+      hint: "All reimbursement requests",
+      icon: "🧾",
+      value: special.reimbursementCount,
+      variant: "primary",
+      path: canCreateRequest ? "/requests/pending?tab=reimbursement" : undefined,
+    });
+  }
+  const summaryLoading = loading || special.loading;
 
   return (
     <Layout>
@@ -100,6 +176,43 @@ const MainDashboardPage: React.FC = () => {
         <div className="mb-4">
           <DateRangeFilter />
         </div>
+
+        {showRequestsSummary && (
+          <section className={styles.summarySection} aria-labelledby="all-requests-summary">
+            <h2 id="all-requests-summary" className={styles.reportTitle}>All Requests Summary</h2>
+            {special.error && (
+              <p className={styles.summaryError}>Some counts couldn&apos;t be loaded. They&apos;ll refresh automatically.</p>
+            )}
+            <div className={styles.grid}>
+              {summaryCards.map((card) => {
+                const content = (
+                  <>
+                    <span className={`stat-icon ${card.variant}`}>{card.icon}</span>
+                    <span className="stat-content">
+                      <span className="stat-value">{summaryLoading ? "…" : card.value}</span>
+                      <span className="stat-label">{card.label}</span>
+                      <span className={styles.summaryHint}>{card.hint}</span>
+                    </span>
+                  </>
+                );
+                return card.path ? (
+                  <button
+                    key={card.key}
+                    type="button"
+                    className={`stat-card ${styles.tile}`}
+                    onClick={() => navigate(card.path!)}
+                  >
+                    {content}
+                  </button>
+                ) : (
+                  <div key={card.key} className={`stat-card ${styles.tile} ${styles.tileStatic}`}>
+                    {content}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+        )}
 
         <div className={styles.grid}>
           {tiles.map((tile) => (
