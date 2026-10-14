@@ -15,7 +15,16 @@ import { findSessionUser } from "@/server/repositories/user-repository";
 const SESSION_COOKIE = "request_system_session";
 export const SESSION_DURATION_SECONDS = 8 * 60 * 60;
 
-export async function setSessionCookie(userId: string, sessionVersion: number): Promise<void> {
+/**
+ * `persistent: false` ("Remember me" unchecked) omits maxAge, so the browser
+ * drops the cookie when it closes. Either way the signed token itself expires
+ * after SESSION_DURATION_SECONDS.
+ */
+export async function setSessionCookie(
+  userId: string,
+  sessionVersion: number,
+  { persistent = true }: { persistent?: boolean } = {}
+): Promise<void> {
   const token = signSessionToken(
     { sub: userId, exp: Math.floor(Date.now() / 1000) + SESSION_DURATION_SECONDS, ver: sessionVersion },
     readSessionSecret()
@@ -26,7 +35,7 @@ export async function setSessionCookie(userId: string, sessionVersion: number): 
     secure: process.env.NODE_ENV === "production",
     sameSite: "lax",
     path: "/",
-    maxAge: SESSION_DURATION_SECONDS,
+    ...(persistent ? { maxAge: SESSION_DURATION_SECONDS } : {}),
   });
 }
 

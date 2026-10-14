@@ -95,12 +95,12 @@ const Login: React.FC = () => {
             </div>
 
             {error && (
-              <div className="error-message" role="alert">
+              <div id="login-error" className="error-message" role="alert">
                 {error}
               </div>
             )}
 
-            <form className="login-form" onSubmit={handleSubmit}>
+            <form className="login-form" onSubmit={handleSubmit} aria-busy={loading}>
               <div className="form-field">
                 <label htmlFor="username">Username</label>
                 <div className="input-wrapper">
@@ -114,7 +114,13 @@ const Login: React.FC = () => {
                     value={formData.email}
                     onChange={(e) => handleFieldChange("email", e.target.value)}
                     required
+                    maxLength={254}
                     autoComplete="username"
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby={error ? "login-error" : undefined}
                   />
                 </div>
               </div>
@@ -132,13 +138,17 @@ const Login: React.FC = () => {
                     value={formData.password}
                     onChange={(e) => handleFieldChange("password", e.target.value)}
                     required
+                    maxLength={1024}
                     autoComplete="current-password"
+                    aria-invalid={error ? true : undefined}
+                    aria-describedby={error ? "login-error" : undefined}
                   />
                   <button
                     type="button"
                     className="input-action"
                     onClick={() => setShowPassword((prev) => !prev)}
                     aria-label={showPassword ? "Hide password" : "Show password"}
+                    aria-pressed={showPassword}
                   >
                     {showPassword ? <EyeOffIcon /> : <EyeIcon />}
                   </button>

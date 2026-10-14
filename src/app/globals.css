@@ -1322,6 +1322,16 @@ textarea.form-control {
   color: #0066cc;
 }
 
+/* Keyboard focus was invisible on the show/hide toggle, the checkbox and the
+   submit button (the button's hover lift is mouse-only). */
+.input-action:focus-visible,
+.checkbox-label input:focus-visible,
+.login-button:focus-visible {
+  outline: 2px solid #0066cc;
+  outline-offset: 2px;
+  border-radius: var(--radius-sm, 4px);
+}
+
 .form-options {
   margin-bottom: var(--space-6);
 }
@@ -1492,6 +1502,13 @@ textarea.form-control {
 @keyframes brandFloat {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-6px); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .login-brand .brand-icon,
+  .hero-blob {
+    animation: none;
+  }
 }
 
 @keyframes blobDrift {
