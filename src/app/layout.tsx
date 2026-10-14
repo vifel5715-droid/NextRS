@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { connection } from "next/server";
+import { StaleDeploymentReload } from "@/components/providers/StaleDeploymentReload";
 import "@/app/globals.css";
 
 export const metadata: Metadata = {
@@ -15,7 +16,10 @@ export default async function RootLayout({ children }: Readonly<{ children: Reac
   await connection();
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <StaleDeploymentReload />
+        {children}
+      </body>
     </html>
   );
 }
