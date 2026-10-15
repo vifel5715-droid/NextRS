@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from "react";
-import { getMyRequestListsAction } from "@/features/requests/actions/request-lists";
+import { fetchRequestLists } from "@/lib/api";
 import { getCompositeStatus } from "@/lib/utils/status";
 import { useRequestsChanged } from "@/hooks/useRequestsChanged";
 import { debounce } from "@/lib/utils/debounce";
@@ -50,7 +50,7 @@ export const useMyRequestsProcessingCount = (
   const fetchCount = useCallback(async () => {
     if (!active) return;
     try {
-      const { itemRequests, serviceRequests } = await getMyRequestListsAction();
+      const { itemRequests, serviceRequests } = await fetchRequestLists("own");
       setCount(
         countProcessing(itemRequests) +
         countProcessing(serviceRequests)
@@ -67,7 +67,7 @@ export const useMyRequestsProcessingCount = (
     const runFetch = async () => {
       if (!active) return;
       try {
-        const { itemRequests, serviceRequests } = await getMyRequestListsAction();
+        const { itemRequests, serviceRequests } = await fetchRequestLists("own");
         if (!cancelled) {
           setCount(
             countProcessing(itemRequests) +

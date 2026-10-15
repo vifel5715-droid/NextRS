@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from 'react';
 import { useSearchParams } from '@/lib/next-router';
 import { itemRequestAPI, serviceRequestAPI, statusAPI } from '@/lib/api';
-import { getRequestListsAction } from "@/features/requests/actions/request-lists";
+import { fetchRequestLists } from "@/lib/api";
 import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@/features/approvals/actions/supervisor-review";
 import { reviewCustodianRequestAction as reviewCustodianRequestResult } from "@/features/approvals/actions/custodian-review";
 import { updateRequestItemAction as updateRequestItemResult } from "@/features/requests/actions/update-request-item";
@@ -134,7 +134,7 @@ export const useRequestManagement = (
   const loadItemRequests = useCallback(async () => {
     log.info("Loading item requests");
     try {
-      const res = await getRequestListsAction();
+      const res = await fetchRequestLists("all");
       // Fully-served requests live on the Complete Requests page instead —
       // see useCompleteRequestsManagement.ts — so they are dropped here rather than shown twice.
       const data = res.itemRequests.filter((request) =>
@@ -152,7 +152,7 @@ export const useRequestManagement = (
   const loadServiceRequests = useCallback(async () => {
     log.info("Loading service requests");
     try {
-      const res = await getRequestListsAction();
+      const res = await fetchRequestLists("all");
       // Finished PRs live on the Complete Requests page instead — see
       // useCompleteRequestsManagement.ts — so they are dropped here rather than shown twice.
       const data = res.serviceRequests.filter((request) =>

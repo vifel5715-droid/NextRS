@@ -1,6 +1,6 @@
 import type { RolePermissionGrant, UrgentRequestItem, PaymentRequestForm, ItemPaymentRequestForm, RequestDetail } from "@/types";
 import { asResponse, type ActionResult } from "@/lib/utils/actionResult";
-import { getItemRequestByIdAction, getServiceRequestByIdAction } from "@/features/requests/actions/request-lists";
+import type { RequestListsResult } from "@/features/requests/actions/request-lists";
 import { getAttachmentStorageUsageAction } from "@/features/requests/actions/attachment-storage";
 import { createReimbursementRequestAction } from "@/features/requests/actions/create-reimbursement-request";
 import { getAdjustmentLogForRequestAction } from "@/features/reports/actions/history-reads";
@@ -237,14 +237,71 @@ async function call<T>(promise: Promise<ActionResult<T>>): Promise<{ data: T }> 
   }
 }
 
+/**
+ * PERF: reads go through the GET Route Handlers (app/api/requests), not
+ * Server Actions. Next.js dispatches a tab's Server Actions one at a time,
+ * so with reads on Server Actions too, opening a request's details or the
+ * refetch after saving a status waited behind every full-list load, sidebar
+ * poll and realtime-triggered refresh queued ahead of it. Plain fetches run
+ * in parallel. Same server code, auth and department scoping either way —
+ * the routes call the same request-lists functions.
+ */
+async function getJson<T>(url: string): Promise<T> {
+  const response = await fetch(url, { credentials: "same-origin", cache: "no-store" });
+  const body: unknown = await response.json().catch(() => null);
+  if (!response.ok) {
+    const message =
+      (body as { error?: { message?: string } } | null)?.error?.message || `Request failed (${response.status}).`;
+    if (response.status === 401) onUnauthorized?.();
+    throw new Error(message);
+  }
+  return body as T;
+}
+
+type RequestListScope = "all" | "own";
+
+/**
+ * Coalesces list loads per scope. Calls made together (e.g. a dashboard
+ * loading its Item and Service tabs on mount) share one fetch. A call made
+ * while a fetch is already running gets the NEXT fetch, started after the
+ * current one, never the one in flight — that one may predate the change the
+ * caller is reacting to, and returning it would show a stale status.
+ */
+const listLoads = new Map<RequestListScope, { inFlight: Promise<unknown> | null; queued: Promise<RequestListsResult> | null }>();
+
+export function fetchRequestLists(scope: RequestListScope = "all"): Promise<RequestListsResult> {
+  let state = listLoads.get(scope);
+  if (!state) {
+    state = { inFlight: null, queued: null };
+    listLoads.set(scope, state);
+  }
+  if (state.queued) return state.queued;
+  const slot = state;
+  const queued = (slot.inFlight ?? Promise.resolve())
+    .catch(() => undefined)
+    .then(() => {
+      slot.queued = null;
+      const request = getJson<RequestListsResult>(`/api/requests?scope=${scope}`);
+      slot.inFlight = request;
+      void request.catch(() => undefined).finally(() => {
+        if (slot.inFlight === request) slot.inFlight = null;
+      });
+      return request;
+    });
+  slot.queued = queued;
+  return queued;
+}
+
+async function fetchRequestDetail(type: "item" | "service", id: number): Promise<{ data: RequestDetail }> {
+  const { request } = await getJson<{ request: RequestDetail }>(`/api/requests/${encodeURIComponent(id)}?type=${type}`);
+  return { data: { ...request } };
+}
+
 /** Percent (0-100) uploaded. Server Actions expose no upload progress, so this reports 0 at the start and 100 when the upload finished. */
 export type UploadProgressHandler = (percent: number) => void;
 
 export const itemRequestAPI = {
-  getById: async (id: number): Promise<{ data: RequestDetail }> => {
-    const request = await getItemRequestByIdAction(id);
-    return { data: { ...request } };
-  },
+  getById: (id: number): Promise<{ data: RequestDetail }> => fetchRequestDetail("item", id),
   update: (id: number, data: RequestPayload) => call(updateItemRequestAction(id, data)),
   deleteItem: (id: number, reason: string) => call(deleteRequestItemAction(id, reason)),
   getPendingCount: (params?: { startDate?: string; endDate?: string }) => call(getPendingCountAction("item", params)),
@@ -284,10 +341,7 @@ export const itemRequestAPI = {
 };
 
 export const serviceRequestAPI = {
-  getById: async (id: number): Promise<{ data: RequestDetail }> => {
-    const request = await getServiceRequestByIdAction(id);
-    return { data: { ...request } };
-  },
+  getById: (id: number): Promise<{ data: RequestDetail }> => fetchRequestDetail("service", id),
   update: (id: number, data: RequestPayload) => call(updateServiceRequestAction(id, data)),
   getPendingCount: (params?: { startDate?: string; endDate?: string }) => call(getPendingCountAction("service", params)),
   deleteItem: (id: number, reason: string) => call(deleteServiceItemAction(id, reason)),

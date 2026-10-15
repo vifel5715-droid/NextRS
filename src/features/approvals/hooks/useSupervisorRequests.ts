@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useNavigate } from '@/lib/next-router';
 import { useAuth } from "@/components/providers/AuthProvider";
 import { itemRequestAPI, serviceRequestAPI } from '@/lib/api';
-import { getRequestListsAction } from "@/features/requests/actions/request-lists";
+import { fetchRequestLists } from "@/lib/api";
 import { reviewSupervisorRequestAction as reviewSupervisorRequestResult } from "@/features/approvals/actions/supervisor-review";
 import { sanitizeUserInput } from '@/lib/utils/sanitize';
 import { createLogger } from '@/lib/client-logger';
@@ -99,7 +99,7 @@ export const useSupervisorRequests = () => {
 
     try {
       isFetching.current = true;
-      const result = await getRequestListsAction();
+      const result = await fetchRequestLists("all");
       log.info("Pending requests fetched — items:", result.itemRequests.length, "services:", result.serviceRequests.length);
       requestCache.current.set(cacheKey, { data: result, timestamp: Date.now() });
       return result;

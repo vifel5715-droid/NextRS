@@ -41,7 +41,9 @@ const GLOBAL_REQUEST_ROLES = new Set([
 async function loadRequestLists(
   scope: RequestScope,
   allowOverview = false,
-  requestId?: number
+  requestId?: number,
+  /** Single-request lookups skip the other table — ids aren't shared between them. */
+  only?: "item" | "service"
 ): Promise<RequestListsResult> {
   const user = await getCurrentUser();
   if (!user) throw new Error("Authentication required.");
@@ -76,7 +78,7 @@ async function loadRequestLists(
     ? eq(sql`upper(trim(${serviceRequests.department}))`, user.department.trim().toUpperCase())
     : undefined;
   const [itemHeaders, serviceHeaders] = await Promise.all([
-    db
+    only === "service" ? Promise.resolve([]) : db
       .select({
         id: itemRequests.id,
         serial: itemRequests.serial,
@@ -106,7 +108,7 @@ async function loadRequestLists(
           : and(eq(itemRequests.id, requestId), itemAccessFilter)
       )
       .orderBy(desc(itemRequests.created_at)),
-    db
+    only === "item" ? Promise.resolve([]) : db
       .select({
         id: serviceRequests.id,
         serial: serviceRequests.serial,
@@ -371,7 +373,7 @@ function assertValidRequestId(id: number): void {
 
 export async function getItemRequestByIdAction(id: number): Promise<ItemRequest> {
   assertValidRequestId(id);
-  const { itemRequests } = await loadRequestLists("all", false, id);
+  const { itemRequests } = await loadRequestLists("all", false, id, "item");
   const request = itemRequests[0];
   if (!request) throw new NotFoundError("Item request not found or access denied.");
   return request;
@@ -379,7 +381,7 @@ export async function getItemRequestByIdAction(id: number): Promise<ItemRequest>
 
 export async function getServiceRequestByIdAction(id: number): Promise<ServiceRequest> {
   assertValidRequestId(id);
-  const { serviceRequests } = await loadRequestLists("all", false, id);
+  const { serviceRequests } = await loadRequestLists("all", false, id, "service");
   const request = serviceRequests[0];
   if (!request) throw new NotFoundError("Service request not found or access denied.");
   return request;

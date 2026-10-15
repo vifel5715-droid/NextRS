@@ -1,7 +1,6 @@
 import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { debounceByKey } from "@/lib/utils/debounce";
-import { itemRequestAPI, serviceRequestAPI, statusAPI } from "@/lib/api";
-import { getRequestListsAction } from "@/features/requests/actions/request-lists";
+import { fetchRequestLists, itemRequestAPI, serviceRequestAPI, statusAPI } from "@/lib/api";
 import { getReimbursementRequestsAction, getUrgentRequestsAction } from "@/features/requests/actions/special-requests";
 import { deleteCompleteRequestsAction } from "@/features/requests/actions/complete-request-deletions";
 import { updateRequestItemAction as updateRequestItemResult } from "@/features/requests/actions/update-request-item";
@@ -120,7 +119,7 @@ export const useCompleteRequestsManagement = () => {
   const loadItemRequests = useCallback(async () => {
     log.info("Loading complete item requests");
     try {
-      const res = await getRequestListsAction();
+      const res = await fetchRequestLists("all");
       const data = res.itemRequests.filter((r) => r.all_items_served);
       log.info("Complete item requests loaded:", data.length, "records");
       setItemRequests(data);
@@ -132,7 +131,7 @@ export const useCompleteRequestsManagement = () => {
   const loadServiceRequests = useCallback(async () => {
     log.info("Loading complete service requests");
     try {
-      const res = await getRequestListsAction();
+      const res = await fetchRequestLists("all");
       const data = res.serviceRequests.filter((r) => r.pr_status === "finish");
       log.info("Complete service requests loaded:", data.length, "records");
       setServiceRequests(data);

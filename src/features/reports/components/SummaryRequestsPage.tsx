@@ -3,7 +3,7 @@ import Layout from "@/components/layout/Layout";
 import ListToolbar from "@/components/tables/ListToolbar";
 import DateRangeFilter from "@/components/forms/DateRangeFilter";
 import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
-import { getRequestListsAction } from "@/features/requests/actions/request-lists";
+import { fetchRequestLists } from "@/lib/api";
 import { getVisibleSpecialRequestsAction } from "@/features/requests/actions/special-requests";
 import { urgentStatus, reimbursementStatus } from "@/features/requests/utils/specialRequestStatus";
 import { useRequestsChanged } from "@/hooks/useRequestsChanged";
@@ -421,7 +421,7 @@ const SummaryRequestsPage: React.FC = () => {
   const loadRows = useCallback(async () => {
     try {
       const [{ itemRequests, serviceRequests }, { urgent, reimbursement }] = await Promise.all([
-        getRequestListsAction(),
+        fetchRequestLists("all"),
         getVisibleSpecialRequestsAction(),
       ]);
       setRows(

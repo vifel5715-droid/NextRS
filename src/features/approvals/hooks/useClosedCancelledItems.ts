@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createLogger } from "@/lib/client-logger";
 import { debounce } from "@/lib/utils/debounce";
 import { useRequestsChanged, type RequestChangedPayload } from "@/hooks/useRequestsChanged";
-import { getRequestListsAction } from "@/features/requests/actions/request-lists";
+import { fetchRequestLists } from "@/lib/api";
 import type { ItemRequest } from "@/types";
 import { toClosedCancelledRows } from "@/features/approvals/utils/closedCancelledItems";
 
@@ -10,7 +10,7 @@ const log = createLogger("useClosedCancelledItems");
 
 /**
  * Every item request in the caller's scope (the same server-side role and
- * department scoping as the Item Requests tab — getRequestListsAction), kept
+ * department scoping as the Item Requests tab — GET /api/requests), kept
  * whole rather than dropping Complete requests the way the Item Requests tab
  * does: a request whose items are all Closed counts as Complete, but its
  * items still belong on the Closed / Cancelled tab.
@@ -22,7 +22,7 @@ export const useClosedCancelledItems = ({ enabled = true }: { enabled?: boolean 
 
   const load = useCallback(
     () =>
-      getRequestListsAction()
+      fetchRequestLists("all")
         .then(
           (res) => {
             setRequests(res.itemRequests);
