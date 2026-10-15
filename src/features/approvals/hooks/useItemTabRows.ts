@@ -5,17 +5,19 @@ import { useRequestsChanged, type RequestChangedPayload } from "@/hooks/useReque
 import { fetchRequestLists } from "@/lib/api";
 import type { ItemRequest } from "@/types";
 import { toClosedCancelledRows } from "@/features/approvals/utils/closedCancelledItems";
+import { toPurchaseRequestRows } from "@/features/approvals/utils/purchaseRequestItems";
 
-const log = createLogger("useClosedCancelledItems");
+const log = createLogger("useItemTabRows");
 
 /**
- * Every item request in the caller's scope (the same server-side role and
- * department scoping as the Item Requests tab — GET /api/requests), kept
- * whole rather than dropping Complete requests the way the Item Requests tab
- * does: a request whose items are all Closed counts as Complete, but its
- * items still belong on the Closed / Cancelled tab.
+ * Rows for the Custodian Dashboard's per-item tabs (Closed / Cancelled and
+ * Purchase Requests), from one load of every item request in the caller's
+ * scope (the same server-side role and department scoping as the Item
+ * Requests tab — GET /api/requests). Kept whole rather than dropping Complete
+ * requests the way the Item Requests tab does: a request whose items are all
+ * Closed counts as Complete, but its items still belong on Closed / Cancelled.
  */
-export const useClosedCancelledItems = ({ enabled = true }: { enabled?: boolean } = {}) => {
+export const useItemTabRows = ({ enabled = true }: { enabled?: boolean } = {}) => {
   const [requests, setRequests] = useState<ItemRequest[]>([]);
   const [loading, setLoading] = useState(enabled);
   const [error, setError] = useState("");
@@ -29,8 +31,8 @@ export const useClosedCancelledItems = ({ enabled = true }: { enabled?: boolean 
             setError("");
           },
           (err: unknown) => {
-            log.error("Failed to load closed/cancelled items:", err);
-            setError("Failed to load closed and cancelled items. Please try again.");
+            log.error("Failed to load item requests:", err);
+            setError("Failed to load items. Please try again.");
           }
         )
         .finally(() => setLoading(false)),
@@ -41,8 +43,8 @@ export const useClosedCancelledItems = ({ enabled = true }: { enabled?: boolean 
     if (enabled) void load();
   }, [enabled, load]);
 
-  // Any item request change can close, cancel or reopen an item — one
-  // debounced full reload rather than patching rows in place.
+  // Any item request change can close, cancel, raise or finish a PR on an
+  // item — one debounced full reload rather than patching rows in place.
   const debouncedLoad = useRef(debounce(() => void load(), 500)).current;
   const handleChange = useCallback(
     (payload: RequestChangedPayload) => {
@@ -52,6 +54,7 @@ export const useClosedCancelledItems = ({ enabled = true }: { enabled?: boolean 
   );
   useRequestsChanged(handleChange);
 
-  const rows = useMemo(() => toClosedCancelledRows(requests), [requests]);
-  return { rows, loading, error, reload: load };
+  const closedCancelledRows = useMemo(() => toClosedCancelledRows(requests), [requests]);
+  const purchaseRequestRows = useMemo(() => toPurchaseRequestRows(requests), [requests]);
+  return { closedCancelledRows, purchaseRequestRows, loading, error, reload: load };
 };

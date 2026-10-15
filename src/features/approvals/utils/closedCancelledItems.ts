@@ -77,23 +77,37 @@ export interface ClosedCancelledFilters {
   endDate: string;
 }
 
+/** The request + item fields every per-item tab row carries (Closed / Cancelled, Purchase Requests). */
+export interface ItemTabRowBase {
+  serial: string;
+  created_at: string;
+  department: string;
+  purpose: string;
+  item_name: string;
+  pr_number: string;
+  /** Extra tab-specific text the search box also matches (e.g. the Closed/Cancelled reason). */
+  reason?: string;
+}
+
 /**
  * Same filters as the Item/Service tabs: search on serial, purpose, PR number
- * (plus the item name and reason, which only this tab shows), the department
- * dropdown ("all" = no filter) and the request's created date range.
+ * (plus the item name and reason, which only these per-item tabs show), the
+ * department dropdown ("all" = no filter) and the request's created date range.
  */
-export function filterClosedCancelledRows(
-  rows: ClosedCancelledItemRow[],
+export function filterItemTabRows<T extends ItemTabRowBase>(
+  rows: T[],
   { searchQuery, department, startDate, endDate }: ClosedCancelledFilters
-): ClosedCancelledItemRow[] {
+): T[] {
   const q = searchQuery.trim().toLowerCase();
   const searched = !q
     ? rows
     : rows.filter((row) =>
-        [row.serial, row.created_at, row.purpose, row.pr_number, row.item_name, row.reason].some((value) =>
+        [row.serial, row.created_at, row.purpose, row.pr_number, row.item_name, row.reason ?? ""].some((value) =>
           value.toLowerCase().includes(q)
         )
       );
   const inDepartment = department === "all" ? searched : searched.filter((row) => row.department === department);
   return filterByDateRange(inDepartment, startDate, endDate, "created_at");
 }
+
+export const filterClosedCancelledRows = filterItemTabRows<ClosedCancelledItemRow>;

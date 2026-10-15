@@ -6,6 +6,7 @@ import { requireUser, type AuthorizedUser } from "@/lib/auth";
 import {
   isHoldResolver,
   assertCanEditRequest,
+  assertServiceFulfillmentEditable,
   isRequestOwner,
   requireDepartmentAccess,
   requirePermission,
@@ -98,6 +99,8 @@ export async function updateServiceRequestAction(id: number, value: unknown): Pr
     if ((changesPrNumber || changesPrStatus) && !isCustodianRole(user)) {
       throw new Error("Only the custodian can change the PR Number or PR Status.");
     }
+    // Checked against the stored approval state, not anything the client sent.
+    if (changesPrNumber || changesPrStatus) assertServiceFulfillmentEditable(request);
     if (changesPurpose || changesRemarks || services) {
       assertCanEditRequest(user, request);
     }
@@ -192,6 +195,8 @@ export async function updateServiceItemAction(serviceId: number, value: unknown)
           pr_status: serviceRequests.pr_status,
           created_by: serviceRequests.created_by,
           requested_by: serviceRequests.requested_by,
+          supervisor_status: serviceRequests.supervisor_status,
+          custodian_status: serviceRequests.custodian_status,
         })
         .from(serviceRequests)
         .where(eq(serviceRequests.id, service.service_request_id))
@@ -225,6 +230,8 @@ export async function updateServiceItemAction(serviceId: number, value: unknown)
         throw new Error("Permission denied.");
       }
       if (!Object.values(changed).some(Boolean)) return null;
+      // Any real change to a line needs both approvals first (row locked above).
+      assertServiceFulfillmentEditable(request);
 
       const now = new Date().toISOString();
       const patch: Partial<typeof serviceItems.$inferInsert> = {};

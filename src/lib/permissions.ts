@@ -104,3 +104,28 @@ export function assertCanEditRequest(user: AuthorizedUser, request: EditableRequ
   const decision = canEditRequest(user, request);
   if (!decision.allowed) throw new ForbiddenError(decision.reason);
 }
+
+export const SERVICE_NOT_APPROVED_MESSAGE = "This service cannot be edited until the required approvals are completed.";
+
+const isApproved = (status: string | null | undefined) => (status ?? "").trim().toLowerCase() === "approved";
+
+/**
+ * A service request's fulfillment fields (each line's status, Receiving
+ * Report No. and description, and the request's PR Number / PR Status) are
+ * only editable once BOTH approval stages have approved: Supervisor/Manager,
+ * then Custodian. Pending, Declined or reset approvals keep them locked. The
+ * requester's own pre-review corrections are a separate rule (canEditRequest).
+ */
+export function isServiceFulfillmentEditable(request: {
+  supervisor_status?: string | null;
+  custodian_status?: string | null;
+}): boolean {
+  return isApproved(request.supervisor_status) && isApproved(request.custodian_status);
+}
+
+export function assertServiceFulfillmentEditable(request: {
+  supervisor_status?: string | null;
+  custodian_status?: string | null;
+}): void {
+  if (!isServiceFulfillmentEditable(request)) throw new ForbiddenError(SERVICE_NOT_APPROVED_MESSAGE);
+}

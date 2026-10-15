@@ -38,11 +38,14 @@ import DateRangeFilter from "@/components/forms/DateRangeFilter";
 import ListToolbar from "@/components/tables/ListToolbar";
 import { exportToExcel } from "@/lib/utils/exportExcel";
 import { getCompositeStatus } from "@/lib/utils/status";
-import { useClosedCancelledItems } from "@/features/approvals/hooks/useClosedCancelledItems";
+import { useItemTabRows } from "@/features/approvals/hooks/useItemTabRows";
 import {
   CLOSED_CANCELLED_LABELS,
   filterClosedCancelledRows,
+  filterItemTabRows,
 } from "@/features/approvals/utils/closedCancelledItems";
+import { formatPrStatus, prStatusBadgeClass } from "@/features/approvals/utils/purchaseRequestItems";
+import { isServiceFulfillmentEditable, SERVICE_NOT_APPROVED_MESSAGE } from "@/lib/permissions";
 import styles from "@/styles/Dashboard.module.css";
 
 /** Per-value tint for the delivery-status <select> in the Items table, so the
@@ -138,10 +141,22 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
   // ?tab=urgent (the Dashboard's Urgent Requests card) lands on the Urgent tab.
   const [searchParams] = useSearchParams();
   const [activeUrgentTab, setActiveUrgentTab] = React.useState(!approvalView && searchParams.get("tab") === "urgent");
-  // Closed / Cancelled tab — management view only, like Urgent Requests.
-  const [activeClosedTab, setActiveClosedTab] = React.useState(!approvalView && searchParams.get("tab") === "closed");
-  const { rows: closedCancelledRows, loading: loadingClosedCancelled, error: closedCancelledError } =
-    useClosedCancelledItems({ enabled: !approvalView });
+  // Per-item tabs (one row per item, not per request) — management view only,
+  // like Urgent Requests. null = one of the Item/Service/Urgent tabs instead.
+  // ?tab=closed / ?tab=purchase land on them directly.
+  type ItemTab = "closed" | "purchase";
+  const initialItemTab = searchParams.get("tab");
+  const [itemTab, setItemTab] = React.useState<ItemTab | null>(
+    !approvalView && (initialItemTab === "closed" || initialItemTab === "purchase") ? initialItemTab : null
+  );
+  const activeClosedTab = itemTab === "closed";
+  const activePurchaseTab = itemTab === "purchase";
+  const {
+    closedCancelledRows,
+    purchaseRequestRows,
+    loading: loadingItemTabs,
+    error: itemTabsError,
+  } = useItemTabRows({ enabled: !approvalView });
   const [urgentDeclineTarget, setUrgentDeclineTarget] = React.useState<number | null>(null);
 
   // Which item/service is queued for deletion, pending a typed reason —
@@ -820,7 +835,11 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
   const renderServiceDetail = (row: RequestRow) => {
     const details = requestDetails.get(makeRequestKey("service", row.id));
     if (!details) return null;
-    const isApproved = (details.custodian_status === "approved" || isAdmin) && !isReadOnlyRole;
+    // Service fields unlock only once Supervisor/Manager AND Custodian have
+    // approved — no admin bypass; the server enforces the same rule
+    // (assertServiceFulfillmentEditable).
+    const approvalsComplete = isServiceFulfillmentEditable(details);
+    const isApproved = approvalsComplete && !isReadOnlyRole;
     // Edited copy wins, so the checkbox indices line up with what is rendered.
     const serviceRows: ServiceRow[] = editableServices.get(row.id) || details.services || [];
     return (
@@ -906,11 +925,11 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
           <div className="row g-3">
             <div className="col-12 col-sm-6">
               <label className="text-muted d-block mb-1" style={{ fontSize: "0.75rem" }}>PR Number</label>
-              <input type="text" className="form-control form-control-sm" placeholder="PR Number" value={details.pr_number || ""} onChange={(e) => updateRequestDetail(row.id, "pr_number", e.target.value)} />
+              <input type="text" className="form-control form-control-sm" placeholder="PR Number" disabled={!isApproved} value={details.pr_number || ""} onChange={(e) => updateRequestDetail(row.id, "pr_number", e.target.value)} />
             </div>
             <div className="col-12 col-sm-6">
               <label className="text-muted d-block mb-1" style={{ fontSize: "0.75rem" }}>Order Status</label>
-              <select className="form-select form-select-sm" value={details.pr_status || "pending"} onChange={(e) => updateRequestDetail(row.id, "pr_status", e.target.value)}>
+              <select className="form-select form-select-sm" disabled={!isApproved} value={details.pr_status || "pending"} onChange={(e) => updateRequestDetail(row.id, "pr_status", e.target.value)}>
                 <option value="pending">Pending</option>
                 <option value="finish">Finish</option>
               </select>
@@ -972,6 +991,12 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
         </div>
         <hr className="my-3" />
         <h5 className="mb-3">Services</h5>
+        {!approvalsComplete && (
+          <div className="alert alert-warning py-2 small d-flex align-items-center gap-2" role="status">
+            <i className="bi bi-lock"></i>
+            {SERVICE_NOT_APPROVED_MESSAGE}
+          </div>
+        )}
         <div className="table-responsive">
           <table className="table table-sm" style={{ borderCollapse: "separate", borderSpacing: "0", border: "1px solid #e0e0e0", borderRadius: "8px", overflow: "hidden" }}>
             <thead style={{ backgroundColor: "#f8f9fa" }}>
@@ -1009,7 +1034,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                   </td>
                   <td className={styles.serviceCell}>{index + 1}</td>
                   <td className={styles.serviceCell}>
-                    {isAdmin ? (
+                    {isAdmin && isApproved ? (
                       <input type="text" className="form-control form-control-sm text-uppercase" value={service.description || ""} onChange={(e) => updateService(row.id, index, "description", e.target.value.toUpperCase())} />
                     ) : (service.description || "-")}
                   </td>
@@ -1064,7 +1089,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
           </table>
         </div>
         <div className="mt-3 d-flex justify-content-end">
-          {hasServiceChanges.has(row.id) && (
+          {hasServiceChanges.has(row.id) && isApproved && (
             <button className="btn btn-primary btn-sm" onClick={() => handleSaveServiceUpdates(row.id)}>
               <i className="bi bi-save me-1"></i>Save Service Updates
             </button>
@@ -1142,11 +1167,66 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
       }))
     );
 
+  // Purchase Requests tab: items whose PR is still active (delivery_status
+  // "PURCHASE REQUEST" — see purchaseRequestItems.ts). Same filters, badge
+  // and export rules as Closed / Cancelled above.
+  const matchingPurchaseRows = filterItemTabRows(purchaseRequestRows, {
+    searchQuery,
+    department: selectedDepartment,
+    startDate,
+    endDate,
+  });
+  const purchaseTabDepartments = Array.from(
+    new Set(purchaseRequestRows.map((row) => row.department).filter(Boolean))
+  ).sort();
+
+  const exportPurchaseRequests = () =>
+    exportToExcel(
+      "purchase-request-items",
+      [
+        { key: "serial", label: "Serial" },
+        { key: "date", label: "Date" },
+        { key: "created_by", label: "Created By" },
+        { key: "department", label: "Department" },
+        { key: "purpose", label: "Purpose" },
+        { key: "item", label: "Item" },
+        { key: "quantity", label: "Quantity" },
+        { key: "uom", label: "UoM" },
+        { key: "pr_number", label: "PR Number" },
+        { key: "pr_status", label: "PR Status" },
+        { key: "quantity_delivered", label: "Qty Delivered" },
+      ],
+      matchingPurchaseRows.map((row) => ({
+        serial: row.serial,
+        date: row.created_at ? new Date(row.created_at).toISOString().split("T")[0] : "",
+        created_by: row.created_by,
+        department: row.department,
+        purpose: row.purpose,
+        item: row.item_name,
+        quantity: row.quantity,
+        uom: row.uom,
+        pr_number: row.pr_number,
+        pr_status: formatPrStatus(row.pr_status),
+        quantity_delivered: row.quantity_delivered,
+      }))
+    );
+
+  // Rows behind the active tab — drives the export button's disabled state.
+  const activeTabRows = activeClosedTab
+    ? matchingClosedRows
+    : activePurchaseTab
+      ? matchingPurchaseRows
+      : activeTab === "item"
+        ? matchingItemRequests
+        : matchingServiceRequests;
+
   // Exports the full filtered set for the active tab, not just the 20 rows
   // rendered below it — mirrors HeldItemsPage's export.
   const handleExport = () =>
     activeClosedTab
       ? exportClosedCancelled()
+      : activePurchaseTab
+      ? exportPurchaseRequests()
       : activeTab === "item"
       ? exportToExcel(
           approvalView ? "approval-item-requests" : "pending-item-requests",
@@ -1199,15 +1279,15 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
       <div className="dash-toolbar">
         <div className="dash-tabs">
           <button
-            className={`dash-tab ${!activeUrgentTab && !activeClosedTab && activeTab === "item" ? "active" : ""}`}
-            onClick={() => { setActiveUrgentTab(false); setActiveClosedTab(false); setActiveTab("item"); }}
+            className={`dash-tab ${!activeUrgentTab && !itemTab && activeTab === "item" ? "active" : ""}`}
+            onClick={() => { setActiveUrgentTab(false); setItemTab(null); setActiveTab("item"); }}
           >
             Item Requests
             <span className="dash-tab-badge">{matchingItemRequests.length}</span>
           </button>
           <button
-            className={`dash-tab ${!activeUrgentTab && !activeClosedTab && activeTab === "service" ? "active" : ""}`}
-            onClick={() => { setActiveUrgentTab(false); setActiveClosedTab(false); setActiveTab("service"); }}
+            className={`dash-tab ${!activeUrgentTab && !itemTab && activeTab === "service" ? "active" : ""}`}
+            onClick={() => { setActiveUrgentTab(false); setItemTab(null); setActiveTab("service"); }}
           >
             Service Requests
             <span className="dash-tab-badge">{matchingServiceRequests.length}</span>
@@ -1215,7 +1295,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
           {!approvalView && (
           <button
             className={`dash-tab ${activeUrgentTab ? "active" : ""}`}
-            onClick={() => { setActiveClosedTab(false); setActiveUrgentTab(true); }}
+            onClick={() => { setItemTab(null); setActiveUrgentTab(true); }}
           >
             Urgent Requests
             <span className="dash-tab-badge">
@@ -1226,10 +1306,19 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
           {!approvalView && (
           <button
             className={`dash-tab ${activeClosedTab ? "active" : ""}`}
-            onClick={() => { setActiveUrgentTab(false); setActiveClosedTab(true); }}
+            onClick={() => { setActiveUrgentTab(false); setItemTab("closed"); }}
           >
             Closed / Cancelled
             <span className="dash-tab-badge">{matchingClosedRows.length}</span>
+          </button>
+          )}
+          {!approvalView && (
+          <button
+            className={`dash-tab ${activePurchaseTab ? "active" : ""}`}
+            onClick={() => { setActiveUrgentTab(false); setItemTab("purchase"); }}
+          >
+            Purchase Requests
+            <span className="dash-tab-badge">{matchingPurchaseRows.length}</span>
           </button>
           )}
 
@@ -1243,7 +1332,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
             onSearchChange={setSearchQuery}
             searchPlaceholder="Search by Serial, Purpose, PR Number..."
             onExport={handleExport}
-            exportDisabled={(activeClosedTab ? matchingClosedRows : activeTab === "item" ? matchingItemRequests : matchingServiceRequests).length === 0}
+            exportDisabled={activeTabRows.length === 0}
           />
 
           <div className="mb-4 d-flex align-items-end gap-3 flex-wrap">
@@ -1255,7 +1344,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                 onChange={(e) => setSelectedDepartment(e.target.value)}
               >
                 <option value="all">All Departments</option>
-                {(activeClosedTab ? closedTabDepartments : activeTab === "item" ? getUniqueDepartments(itemRequests) : getUniqueDepartments(serviceRequests)).map((dept) => (
+                {(activeClosedTab ? closedTabDepartments : activePurchaseTab ? purchaseTabDepartments : activeTab === "item" ? getUniqueDepartments(itemRequests) : getUniqueDepartments(serviceRequests)).map((dept) => (
                   <option key={dept} value={dept}>{dept}</option>
                 ))}
               </select>
@@ -1277,11 +1366,11 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
               </div>
 
               <div>
-                {loadingClosedCancelled && <div className="p-3 text-muted">Loading closed and cancelled items...</div>}
-                {!loadingClosedCancelled && closedCancelledError && (
-                  <div className="p-3 text-danger" role="alert">{closedCancelledError}</div>
+                {loadingItemTabs && <div className="p-3 text-muted">Loading closed and cancelled items...</div>}
+                {!loadingItemTabs && itemTabsError && (
+                  <div className="p-3 text-danger" role="alert">{itemTabsError}</div>
                 )}
-                {!loadingClosedCancelled && !closedCancelledError && matchingClosedRows.length === 0 && (
+                {!loadingItemTabs && !itemTabsError && matchingClosedRows.length === 0 && (
                   <div className="p-3 text-muted">
                     {closedCancelledRows.length === 0
                       ? "No closed or cancelled items."
@@ -1313,6 +1402,58 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
               </div>
               <div className="p-2 small text-muted">
                 Close and Cancel are set per item, so each row is one item. Service and Urgent Requests have no Closed or Cancelled status.
+              </div>
+            </div>
+          ) : activePurchaseTab ? (
+            <div className={styles.requestListFrame}>
+              <div className={`${styles.urgentListHeader} ${styles.closedListGrid}`}>
+                <div>Serial Number</div>
+                <div>Created Date</div>
+                <div>Created By</div>
+                <div>Department</div>
+                <div>Purpose</div>
+                <div>Item</div>
+                <div>PR Number</div>
+                <div>PR Status</div>
+              </div>
+
+              <div>
+                {loadingItemTabs && <div className="p-3 text-muted">Loading purchase requests...</div>}
+                {!loadingItemTabs && itemTabsError && (
+                  <div className="p-3 text-danger" role="alert">{itemTabsError}</div>
+                )}
+                {!loadingItemTabs && !itemTabsError && matchingPurchaseRows.length === 0 && (
+                  <div className="p-3 text-muted">
+                    {purchaseRequestRows.length === 0
+                      ? "No items are on a purchase request."
+                      : "No purchase requests match the current filters."}
+                  </div>
+                )}
+                {matchingPurchaseRows.map((row) => (
+                  <div key={row.key} className={styles.requestCard}>
+                    <div className={`${styles.urgentListRow} ${styles.closedListGrid}`} style={{ cursor: "default" }}>
+                      <div className={styles.serialLink} data-label="Serial">{row.serial}</div>
+                      <div className="text-muted" data-label="Date">{row.created_at ? formatMilitaryDateTime(row.created_at) : ""}</div>
+                      <div data-label="Created By">{row.created_by}</div>
+                      <div data-label="Dept">{row.department}</div>
+                      <div data-label="Purpose">{row.purpose}</div>
+                      <div data-label="Item">
+                        {row.item_name}
+                        <span className="text-muted"> · {row.quantity} {row.uom}</span>
+                        {row.quantity_delivered > 0 && (
+                          <div className="small text-muted">Delivered {row.quantity_delivered} of {row.quantity}</div>
+                        )}
+                      </div>
+                      <div data-label="PR No.">{row.pr_number || <span className="text-muted">—</span>}</div>
+                      <div data-label="PR Status">
+                        <span className={`badge ${prStatusBadgeClass(row.pr_status)}`}>{formatPrStatus(row.pr_status)}</span>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <div className="p-2 small text-muted">
+                Items currently set to Purchase Request, one row per item. An item leaves this list once it moves on (e.g. released On Hand).
               </div>
             </div>
           ) : (

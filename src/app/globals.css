@@ -1387,8 +1387,10 @@ textarea.form-control {
   box-shadow: 0 2px 8px rgba(0, 102, 204, 0.3);
 }
 
+/* Stays blue while signing in — just dimmed — so the button doesn't look
+   like it broke; `disabled` itself is what blocks the clicks. */
 .login-button:disabled {
-  background: var(--gray-400);
+  opacity: 0.7;
   box-shadow: none;
   cursor: not-allowed;
 }
