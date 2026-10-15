@@ -1,14 +1,15 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { fetchRequestLists } from "@/lib/api";
 import { getCompositeStatus } from "@/lib/utils/status";
-import { useRequestsChanged } from "@/hooks/useRequestsChanged";
+import { useRequestsChanged, type RequestChangedPayload } from "@/hooks/useRequestsChanged";
 import { debounce } from "@/lib/utils/debounce";
 import { filterByDateRange } from "@/lib/utils/dateRange";
 import type { ItemRequest, ServiceRequest } from "@/types";
 
-// Polling stays as a fallback in case a socket event is missed (e.g. a brief
-// disconnect); realtime updates via useRequestsChanged handle the common case.
-const POLL_INTERVAL_MS = 30_000;
+// Fallback only — realtime events patch the count as they happen, and the
+// stream resyncs (a data-less event → full reload) after any reconnect. Each
+// poll downloads the department's whole list, so it stays infrequent.
+const POLL_INTERVAL_MS = 120_000;
 
 /**
  * Still moving through the approval/fulfillment chain. "Approved (Custodian)"
@@ -26,11 +27,16 @@ const isProcessing = (row: ItemRequest | ServiceRequest) => {
   return true;
 };
 
+type Row = ItemRequest | ServiceRequest;
+const keyOf = (type: "item" | "service", id: number) => `${type}:${id}`;
+const sameDepartment = (a: string | undefined, b: string | undefined) =>
+  !!a && !!b && a.trim().toUpperCase() === b.trim().toUpperCase();
+
 /**
- * Own submitted item + service requests still in flight — feeds the My
- * Requests sidebar badge for staff/supervisor/manager/admin. Mirrors the
- * exact department + requested_by filter useStaffRequests.ts uses to build
- * the My Requests list, so the count always matches what that page shows.
+ * Own department's item + service requests still in flight — feeds the My
+ * Requests sidebar badge for staff/supervisor/manager/admin. Same department
+ * scope as the "own" list (GET /api/requests?scope=own), so the count matches
+ * what the My Requests page shows.
  */
 export const useMyRequestsProcessingCount = (
   role: string | undefined,
@@ -39,69 +45,71 @@ export const useMyRequestsProcessingCount = (
   startDate = "",
   endDate = ""
 ) => {
-  const [count, setCount] = useState(0);
+  const [rows, setRows] = useState<Map<string, Row>>(new Map());
 
   const targetRoles = ["staff", "secretary", "supervisor", "manager", "admin"];
   const active = !!role && targetRoles.includes(role.toLowerCase()) && !!name;
 
-  const countProcessing = (rows: Array<ItemRequest | ServiceRequest>) =>
-    filterByDateRange(rows, startDate, endDate, "created_at").filter(isProcessing).length;
+  const fetchRows = useCallback(
+    (): Promise<void> =>
+      !active
+        ? Promise.resolve()
+        : fetchRequestLists("own").then(
+            ({ itemRequests, serviceRequests }) => {
+              const next = new Map<string, Row>();
+              itemRequests.forEach((row) => next.set(keyOf("item", row.id), row));
+              serviceRequests.forEach((row) => next.set(keyOf("service", row.id), row));
+              setRows(next);
+            },
+            () => {
+              // silently ignore — sidebar badge is non-critical
+            }
+          ),
+    [active]
+  );
 
-  const fetchCount = useCallback(async () => {
+  useEffect(() => {
     if (!active) return;
-    try {
-      const { itemRequests, serviceRequests } = await fetchRequestLists("own");
-      setCount(
-        countProcessing(itemRequests) +
-        countProcessing(serviceRequests)
-      );
-    } catch {
-      // silently ignore — sidebar badge is non-critical
+    void fetchRows();
+    const id = setInterval(() => void fetchRows(), POLL_INTERVAL_MS);
+    return () => clearInterval(id);
+  }, [active, fetchRows, department, name]);
+
+  const debouncedFetch = useRef(debounce(() => void fetchRows(), 400));
+  useEffect(() => {
+    debouncedFetch.current = debounce(() => void fetchRows(), 400);
+  }, [fetchRows]);
+
+  // Patch the one changed request when the event carries it. A row from
+  // another department (an admin receives every department's events, while
+  // this badge is department-scoped) is dropped rather than counted.
+  const handleChange = useCallback((payload: RequestChangedPayload) => {
+    if (payload.type !== "item" && payload.type !== "service") return;
+    const key = keyOf(payload.type, payload.id);
+    if (payload.action === "deleted") {
+      setRows((prev) => {
+        if (!prev.has(key)) return prev;
+        const next = new Map(prev);
+        next.delete(key);
+        return next;
+      });
+    } else if (payload.data) {
+      const row = payload.data as Row;
+      setRows((prev) => {
+        const next = new Map(prev);
+        if (sameDepartment(row.department, department)) next.set(key, row);
+        else next.delete(key);
+        return next;
+      });
+    } else {
+      debouncedFetch.current();
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, department, name, startDate, endDate]);
-
-  useEffect(() => {
-    let cancelled = false;
-
-    const runFetch = async () => {
-      if (!active) return;
-      try {
-        const { itemRequests, serviceRequests } = await fetchRequestLists("own");
-        if (!cancelled) {
-          setCount(
-            countProcessing(itemRequests) +
-            countProcessing(serviceRequests)
-          );
-        }
-      } catch {
-        // silently ignore — sidebar badge is non-critical
-      }
-    };
-
-    void runFetch();
-    if (!active) return () => {
-      cancelled = true;
-    };
-    const id = setInterval(() => {
-      void runFetch();
-    }, POLL_INTERVAL_MS);
-    return () => {
-      cancelled = true;
-      clearInterval(id);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [active, department, name, startDate, endDate]);
-
-  const debouncedFetch = useRef(debounce(fetchCount, 400));
-  useEffect(() => {
-    debouncedFetch.current = debounce(fetchCount, 400);
-  }, [fetchCount]);
-
-  const handleChange = useCallback(() => {
-    debouncedFetch.current();
-  }, []);
+  }, [department]);
   useRequestsChanged(handleChange);
 
-  return count;
+  return useMemo(() => {
+    if (!active) return 0;
+    const all = [...rows.values()];
+    return filterByDateRange(all, startDate, endDate, "created_at").filter(isProcessing).length;
+  }, [active, rows, startDate, endDate]);
 };

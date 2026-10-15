@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { withApiHandler } from "@/lib/api-response";
+import { compressedJson, withApiHandler } from "@/lib/api-response";
 import { requireUser } from "@/lib/auth";
 import { getItemRequestByIdAction, getServiceRequestByIdAction } from "@/features/requests/actions/request-lists";
 import { requestIdParamSchema, requestTypeSchema } from "@/features/requests/schemas/request-query";
@@ -18,5 +17,5 @@ export const GET = withApiHandler<{ params: Promise<{ requestId: string }> }>(as
   const id = requestIdParamSchema.parse((await params).requestId);
   const type = requestTypeSchema.parse(new URL(request.url).searchParams.get("type") ?? "item");
   const data = type === "item" ? await getItemRequestByIdAction(id) : await getServiceRequestByIdAction(id);
-  return NextResponse.json({ request: data }, { headers: { "Cache-Control": "no-store" } });
+  return compressedJson(request, { request: data }, { headers: { "Cache-Control": "no-store" } });
 });

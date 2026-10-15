@@ -11,9 +11,9 @@ type RequestType = "item" | "service" | "urgent" | "reimbursement";
 /**
  * A request-change notification. The realtime channel (see
  * server/realtime.ts and app/api/events/route.ts) only ever carries
- * identifiers — `data` is never filled in by the server — so subscribers
- * refetch through their normal, authorized Server Actions. `data` stays in
- * the type because the list hooks still accept an already-projected row.
+ * identifiers. For item/service changes this client fills in `data` with the
+ * changed request, fetched through the normal authorized route (see
+ * emitChange below); when `data` is absent subscribers refetch their list.
  */
 export type RequestChangedPayload =
   | { type: "item"; action: ChangedAction; id: number; department?: string | null; data?: ItemRequest }
@@ -74,6 +74,49 @@ function emitResync(): void {
   for (const type of REQUEST_TYPES) emit({ type, action: "updated", id: 0 } as RequestChangedPayload);
 }
 
+/**
+ * PERF: the server publishes ids only, and every list hook used to answer a
+ * data-less event by refetching its WHOLE list (several MB once there are a
+ * few thousand requests) — on every open screen, for every status change.
+ * Instead, one small fetch of just the changed request (shared by every
+ * listener in this tab) fills in `data`, and the hooks patch that one row
+ * with their existing upsert/remove rules.
+ *
+ * Ordering: only the newest event per request delivers — an older lookup
+ * that resolves late is dropped, so a stale row can't overwrite a newer one.
+ * A failed lookup (network, or a 404 because this narrower per-request scope
+ * hides a row a broader list legitimately shows) falls back to the old
+ * data-less event, i.e. the hook's full-list reload.
+ */
+const latestEventSeq = new Map<string, number>();
+let eventSeq = 0;
+
+async function fetchChangedRow(type: "item" | "service", id: number): Promise<ItemRequest | ServiceRequest | null> {
+  try {
+    const response = await fetch(`/api/requests/${id}?type=${type}`, { credentials: "same-origin", cache: "no-store" });
+    if (!response.ok) return null;
+    const body = (await response.json()) as { request?: ItemRequest | ServiceRequest };
+    return body.request ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function emitChange(payload: RequestChangedPayload): void {
+  if ((payload.type !== "item" && payload.type !== "service") || payload.action === "deleted" || payload.id <= 0) {
+    emit(payload);
+    return;
+  }
+  const key = `${payload.type}:${payload.id}`;
+  const seq = ++eventSeq;
+  latestEventSeq.set(key, seq);
+  void fetchChangedRow(payload.type, payload.id).then((row) => {
+    if (latestEventSeq.get(key) !== seq) return; // superseded by a newer event
+    latestEventSeq.delete(key);
+    emit(row ? ({ ...payload, data: row } as RequestChangedPayload) : payload);
+  });
+}
+
 function isPayload(value: unknown): value is RequestChangedPayload {
   if (typeof value !== "object" || value === null) return false;
   const event = value as Record<string, unknown>;
@@ -115,7 +158,7 @@ function connect(): void {
       const payload: unknown = JSON.parse((event as MessageEvent<string>).data);
       // petty_cash/catalog events have no list hook subscribed through this
       // channel; isPayload filters them out.
-      if (isPayload(payload)) emit({ ...payload, data: undefined } as RequestChangedPayload);
+      if (isPayload(payload)) emitChange({ ...payload, data: undefined } as RequestChangedPayload);
     } catch {
       // Ignore malformed events.
     }

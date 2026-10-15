@@ -38,13 +38,12 @@ const GLOBAL_REQUEST_ROLES = new Set([
   "operations_manager",
 ]);
 
-async function loadRequestLists(
-  scope: RequestScope,
-  allowOverview = false,
-  requestId?: number,
-  /** Single-request lookups skip the other table — ids aren't shared between them. */
-  only?: "item" | "service"
-): Promise<RequestListsResult> {
+/**
+ * Who may list requests, and which rows they see: global roles every
+ * department, everyone else their own department. Shared by the full lists
+ * and the dashboard counts so both always cover exactly the same rows.
+ */
+async function resolveListAccess(scope: RequestScope, allowOverview: boolean) {
   const user = await getCurrentUser();
   if (!user) throw new Error("Authentication required.");
 
@@ -63,7 +62,6 @@ async function loadRequestLists(
     throw new Error("Permission denied.");
   }
 
-  const db = getDb();
   const globalScope = scope === "all" && GLOBAL_REQUEST_ROLES.has(role);
   const ownScope = scope === "own" || (!globalScope && !hasBroadListPermission);
   const departmentScope = !globalScope && !ownScope && hasBroadListPermission;
@@ -77,6 +75,18 @@ async function loadRequestLists(
   const serviceAccessFilter = departmentFiltered
     ? eq(sql`upper(trim(${serviceRequests.department}))`, user.department.trim().toUpperCase())
     : undefined;
+  return { itemAccessFilter, serviceAccessFilter };
+}
+
+async function loadRequestLists(
+  scope: RequestScope,
+  allowOverview = false,
+  requestId?: number,
+  /** Single-request lookups skip the other table — ids aren't shared between them. */
+  only?: "item" | "service"
+): Promise<RequestListsResult> {
+  const { itemAccessFilter, serviceAccessFilter } = await resolveListAccess(scope, allowOverview);
+  const db = getDb();
   const [itemHeaders, serviceHeaders] = await Promise.all([
     only === "service" ? Promise.resolve([]) : db
       .select({
@@ -405,6 +415,72 @@ function isValidTimestamp(value: string | undefined): boolean {
   return !Number.isNaN(date.getTime()) && date.toISOString() === value;
 }
 
+/**
+ * PERF: just the columns the dashboard counts read, from the same rows the
+ * full lists cover (resolveListAccess). The counts used to build the entire
+ * list — every item, issuance audit and approver name, mapped and then
+ * discarded — for every user's sidebar on every change event. all_items_served
+ * uses the same isItemServedOrClosed rule as the full list.
+ */
+async function loadRequestCountRows(scope: RequestScope, allowOverview: boolean) {
+  const { itemAccessFilter, serviceAccessFilter } = await resolveListAccess(scope, allowOverview);
+  const db = getDb();
+  const [itemHeaders, serviceHeaders, itemLines, serviceLines] = await Promise.all([
+    db
+      .select({
+        id: itemRequests.id,
+        created_at: itemRequests.created_at,
+        supervisor_status: itemRequests.supervisor_status,
+        custodian_status: itemRequests.custodian_status,
+      })
+      .from(itemRequests)
+      .where(itemAccessFilter),
+    db
+      .select({
+        id: serviceRequests.id,
+        created_at: serviceRequests.created_at,
+        supervisor_status: serviceRequests.supervisor_status,
+        custodian_status: serviceRequests.custodian_status,
+        pr_status: serviceRequests.pr_status,
+      })
+      .from(serviceRequests)
+      .where(serviceAccessFilter),
+    db
+      .select({
+        request_id: itemRequestItems.request_id,
+        quantity: itemRequestItems.quantity,
+        quantity_out: itemRequestItems.quantity_out,
+        delivery_status: itemRequestItems.delivery_status,
+      })
+      .from(itemRequestItems)
+      .innerJoin(itemRequests, eq(itemRequests.id, itemRequestItems.request_id))
+      .where(itemAccessFilter),
+    db
+      .select({ service_request_id: serviceItems.service_request_id, delivery_status: serviceItems.delivery_status })
+      .from(serviceItems)
+      .innerJoin(serviceRequests, eq(serviceRequests.id, serviceItems.service_request_id))
+      .where(serviceAccessFilter),
+  ]);
+
+  const linesByItem = new Map<number, typeof itemLines>();
+  for (const line of itemLines) {
+    const list = linesByItem.get(line.request_id);
+    if (list) list.push(line);
+    else linesByItem.set(line.request_id, [line]);
+  }
+  const heldServiceRequests = new Set(
+    serviceLines.filter((line) => line.delivery_status === "holded").map((line) => line.service_request_id)
+  );
+
+  return {
+    items: itemHeaders.map((request) => {
+      const lines = linesByItem.get(request.id) ?? [];
+      return { ...request, all_items_served: lines.length > 0 && lines.every(isItemServedOrClosed) };
+    }),
+    services: serviceHeaders.map((request) => ({ ...request, has_held_service: heldServiceRequests.has(request.id) })),
+  };
+}
+
 export async function getDashboardRequestCountsAction(
   startAt?: string,
   endAt?: string
@@ -416,7 +492,7 @@ export async function getDashboardRequestCountsAction(
     throw new Error("Start date must not be after end date.");
   }
 
-  const { itemRequests, serviceRequests } = await loadRequestLists("all", true);
+  const { items: itemRequests, services: serviceRequests } = await loadRequestCountRows("all", true);
   const inRange = (createdAt: string) => {
     const timestamp = new Date(createdAt).getTime();
     return (
@@ -438,9 +514,7 @@ export async function getDashboardRequestCountsAction(
     completeRequestsCount: completeItems.length + completeServices.length,
     // Items no longer go On Hold (replaced by Cancel), so the Held badge now
     // counts service requests with a service marked ON HOLD.
-    heldItemsCount: servicesInRange.filter((request) =>
-      (request.services ?? []).some((service) => service.delivery_status === "holded")
-    ).length,
+    heldItemsCount: servicesInRange.filter((request) => request.has_held_service).length,
     // Fully approved only — requests still in the approval chain are counted
     // by the Approval Requests badges below instead.
     totalRequestsCount:

@@ -44,11 +44,25 @@ export const useItemTabRows = ({ enabled = true }: { enabled?: boolean } = {}) =
   }, [enabled, load]);
 
   // Any item request change can close, cancel, raise or finish a PR on an
-  // item — one debounced full reload rather than patching rows in place.
+  // item. The changed request arrives with the event (realtime-client), so
+  // only that one is replaced; a data-less event (missed events after a
+  // reconnect, or a failed lookup) falls back to one debounced full reload.
   const debouncedLoad = useRef(debounce(() => void load(), 500)).current;
   const handleChange = useCallback(
     (payload: RequestChangedPayload) => {
-      if (enabled && payload.type === "item") debouncedLoad();
+      if (!enabled || payload.type !== "item") return;
+      if (payload.action === "deleted") {
+        setRequests((prev) => prev.filter((request) => request.id !== payload.id));
+      } else if (payload.data) {
+        const row = payload.data;
+        setRequests((prev) =>
+          prev.some((request) => request.id === row.id)
+            ? prev.map((request) => (request.id === row.id ? row : request))
+            : [row, ...prev]
+        );
+      } else {
+        debouncedLoad();
+      }
     },
     [enabled, debouncedLoad]
   );

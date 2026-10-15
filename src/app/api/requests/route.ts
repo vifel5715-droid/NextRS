@@ -1,5 +1,4 @@
-import { NextResponse } from "next/server";
-import { withApiHandler } from "@/lib/api-response";
+import { compressedJson, withApiHandler } from "@/lib/api-response";
 import { requireUser } from "@/lib/auth";
 import { getMyRequestListsAction, getRequestListsAction } from "@/features/requests/actions/request-lists";
 import { requestListQuerySchema } from "@/features/requests/schemas/request-query";
@@ -28,5 +27,5 @@ export const GET = withApiHandler(async (request) => {
       : query.type === "service"
         ? { serviceRequests: lists.serviceRequests }
         : lists;
-  return NextResponse.json(body, { headers: { "Cache-Control": "no-store" } });
+  return compressedJson(request, body, { headers: { "Cache-Control": "no-store" } });
 });
