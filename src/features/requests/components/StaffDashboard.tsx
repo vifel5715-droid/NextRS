@@ -174,6 +174,15 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
     updateUrgentItemRow,
     isSubmittingUrgent,
     submitUrgentRequest,
+    paymentFormData,
+    setPaymentFormData,
+    paymentItems,
+    addPaymentItemRow,
+    removePaymentItemRow,
+    updatePaymentItemRow,
+    paymentTotalCost,
+    isSubmittingPayment,
+    submitPaymentRequest,
     urgentRequests,
     loadingUrgentRequests,
     expandedUrgentIds,
@@ -225,6 +234,9 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
   // rather than a 3rd activeTab value, to avoid rippling that type change
   // through every makeRequestKey(activeTab, ...) call in this file.
   const [showUrgentPending, setShowUrgentPending] = useState(initialPendingTab === "urgent");
+  // Create page only — the "Create Payment Request" tab, an overlay on
+  // activeTab for the same reason as showUrgentPending above.
+  const [showPaymentCreate, setShowPaymentCreate] = useState(false);
   // Pending Requests page only — the combined "All Pending Requests" list,
   // another overlay like the two above. It's the page's landing tab.
   const [showAllPending, setShowAllPending] = useState(
@@ -1331,6 +1343,140 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
     </form>
   );
 
+  /**
+   * Payment Request — same layout as the Urgent Request form, minus Remarks
+   * and UoM, plus a per-item Amount and computed Total Cost. Saved through
+   * the Urgent Request workflow with each item pre-routed as Payment Request.
+   */
+  const renderPaymentRequestForm = () => (
+    <form onSubmit={async (e) => {
+      e.preventDefault();
+      await submitPaymentRequest();
+    }}>
+      <h1 className="h5 mb-3 center">PAYMENT REQUEST: ENTER EACH ITEM&apos;S AMOUNT. THE TOTAL COST IS COMPUTED AUTOMATICALLY.</h1>
+      <div className="row g-3 mb-3">
+        <div className="col-12 col-md-6">
+          <label className="form-label">DEPARTMENT</label>
+          <input type="text" className="form-control" value={paymentFormData.department} disabled />
+        </div>
+        <div className="col-12 col-md-6">
+          <label className="form-label">REQUESTED BY</label>
+          {isSecretary ? (
+            <input
+              type="text"
+              className="form-control text-uppercase"
+              value={itemRequesterName}
+              onChange={(e) => {
+                const value = e.target.value;
+                setItemRequesterName(value);
+                setPaymentFormData({ ...paymentFormData, requested_by: formatRequestedBy(value) });
+              }}
+              placeholder="Type the requester's name…"
+            />
+          ) : (
+            <input type="text" className="form-control" value={paymentFormData.requested_by} disabled />
+          )}
+        </div>
+      </div>
+      <div className="row g-3 mb-3">
+        <div className="col-12 col-md-6">
+          <label className="form-label">PURPOSE</label>
+          <textarea
+            className="form-control text-uppercase"
+            value={paymentFormData.purpose}
+            onChange={(e) => setPaymentFormData({ ...paymentFormData, purpose: e.target.value })}
+            rows={3}
+            required
+          />
+        </div>
+        <div className="col-12 col-md-6">
+          <label className="form-label">DATE NEEDED</label>
+          <input
+            type="date"
+            className="form-control"
+            value={paymentFormData.date_needed}
+            onChange={(e) => setPaymentFormData({ ...paymentFormData, date_needed: e.target.value })}
+          />
+        </div>
+      </div>
+
+      <div className="table-responsive mb-3">
+        <table className="table table-sm">
+          <thead>
+            <tr>
+              <th style={{ width: "45%" }}>Item Description</th>
+              <th style={{ width: "15%" }}>Qty</th>
+              <th style={{ width: "25%" }}>Amount</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {paymentItems.map((item, index) => (
+              <tr key={index}>
+                <td>
+                  <SearchableCombobox
+                    className="form-control form-control-sm text-uppercase"
+                    value={item.item_description}
+                    onChange={(value) => updatePaymentItemRow(index, "item_description", value)}
+                    options={itemCatalogNames}
+                    placeholder="Search or type item name…"
+                    required
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    min={1}
+                    className="form-control form-control-sm"
+                    value={item.quantity ?? ""}
+                    onChange={(e) => updatePaymentItemRow(index, "quantity", e.target.value ? Number(e.target.value) : undefined)}
+                    required
+                  />
+                </td>
+                <td>
+                  <input
+                    type="number"
+                    min="0.01"
+                    step="0.01"
+                    className="form-control form-control-sm"
+                    value={item.amount}
+                    onChange={(e) => updatePaymentItemRow(index, "amount", e.target.value)}
+                    placeholder="0.00"
+                    required
+                  />
+                </td>
+                <td>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-outline-danger"
+                    onClick={() => removePaymentItemRow(index)}
+                    disabled={paymentItems.length === 1}
+                  >
+                    <i className="bi bi-trash"></i>
+                  </button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td className="text-end fw-bold" colSpan={2}>Total Cost:</td>
+              <td className="fw-bold">₱{paymentTotalCost.toFixed(2)}</td>
+              <td></td>
+            </tr>
+          </tfoot>
+        </table>
+        <button type="button" className="btn btn-sm btn-outline-secondary" onClick={addPaymentItemRow}>
+          <i className="bi bi-plus-lg me-1"></i>Add Item
+        </button>
+      </div>
+
+      <button type="submit" className="btn btn-primary" disabled={isSubmittingPayment}>
+        {isSubmittingPayment ? "Submitting…" : "Submit Payment Request"}
+      </button>
+    </form>
+  );
+
   const renderServiceRequestForm = () => (
     <form onSubmit={handleServiceSubmit}>
       <div className="row g-3 mb-3">
@@ -1510,9 +1656,10 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
         {viewMode === "create" ? (
           <>
             <button
-              className={`dash-tab ${activeTab === "item" ? "active" : ""}`}
+              className={`dash-tab ${!showPaymentCreate && activeTab === "item" ? "active" : ""}`}
               onClick={() => {
                 log.info("Tab switched to: create item requests");
+                setShowPaymentCreate(false);
                 setActiveTab("item");
                 prepareItemCreateForm();
               }}
@@ -1520,13 +1667,23 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
               Create Item
             </button>
             <button
-              className={`dash-tab ${activeTab === "service" ? "active" : ""}`}
+              className={`dash-tab ${!showPaymentCreate && activeTab === "service" ? "active" : ""}`}
               onClick={() => {
                 log.info("Tab switched to: create service requests");
+                setShowPaymentCreate(false);
                 setActiveTab("service");
               }}
             >
               Create Service
+            </button>
+            <button
+              className={`dash-tab ${showPaymentCreate ? "active" : ""}`}
+              onClick={() => {
+                log.info("Tab switched to: create payment requests");
+                setShowPaymentCreate(true);
+              }}
+            >
+              Create Payment Request
             </button>
           </>
         ) : (
@@ -1968,7 +2125,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
       ) : viewMode === "create" ? (
         <div className={styles.requestListFrame}>
           <div className="p-4">
-            {activeTab === "item" && (
+            {!showPaymentCreate && activeTab === "item" && (
               <div className="mb-3" style={{ maxWidth: "320px" }}>
                 <label className="form-label">Request Type</label>
                 <select
@@ -1982,7 +2139,9 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
                 </select>
               </div>
             )}
-            {activeTab === "item"
+            {showPaymentCreate
+              ? renderPaymentRequestForm()
+              : activeTab === "item"
               ? (requestUrgency === "urgent" ? renderUrgentRequestForm() : requestUrgency === "reimbursement" ? renderReimbursementRequestForm() : renderItemRequestForm())
               : renderServiceRequestForm()}
           </div>

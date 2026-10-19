@@ -86,10 +86,18 @@ const isReviewed = (status: string | null) => status === "approved" || status ==
  * Requester-side edit rule for a request's header/lines (ported from the
  * legacy updateItemRequest/updateServiceRequest): Staff may only edit their
  * own request, and Staff/Secretary only while neither approval stage has
- * acted. Other roles are governed by their page permission and department
- * scope, checked separately by the caller.
+ * acted. Supervisor/Manager approvers are locked out once the request is
+ * Supervisor-approved. Other roles (Custodian bookkeeping, Admin) are
+ * governed by their page permission and department scope, checked
+ * separately by the caller.
  */
 export function canEditRequest(user: AuthorizedUser, request: EditableRequest): PolicyDecision {
+  if (["supervisor", "manager", "operations_manager"].includes(user.roleKey)) {
+    if (request.supervisor_status === "approved") {
+      return { allowed: false, reason: "This request has already been approved and can no longer be edited." };
+    }
+    return { allowed: true };
+  }
   if (user.roleKey !== "staff" && user.roleKey !== "secretary") return { allowed: true };
   if (user.roleKey === "staff" && !isRequestOwner(user, request)) {
     return { allowed: false, reason: "You can only edit your own request." };

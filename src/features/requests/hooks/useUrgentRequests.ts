@@ -15,6 +15,14 @@ const log = createLogger("useUrgentRequests");
 
 const emptyUrgentItem: UrgentRequestItem = { item_description: "", quantity: undefined, uom: "", is_inventoriable: false };
 
+interface PaymentRequestItemInput {
+  item_description: string;
+  quantity?: number;
+  amount: string;
+}
+
+const emptyPaymentItem: PaymentRequestItemInput = { item_description: "", quantity: undefined, amount: "" };
+
 /**
  * Owns the Urgent Request workflow, Phase 1 (see the Urgent Request plan) —
  * kept as its own hook rather than folded into useStaffRequests.ts/
@@ -102,6 +110,83 @@ export function useUrgentRequests() {
       setIsSubmittingUrgent(false);
     }
   }, [urgentFormData, urgentItems, resetUrgentForm]);
+
+  // ---- Create Payment Request form — an Urgent Request whose items are
+  // priced by the requester, so they're stored already routed as Payment
+  // Request (see createUrgentRequestAction). No Remarks or UoM. ----
+  const [paymentFormData, setPaymentFormData] = useState({ department: "", requested_by: "", purpose: "", date_needed: "" });
+  const [paymentItems, setPaymentItems] = useState<PaymentRequestItemInput[]>([{ ...emptyPaymentItem }]);
+  const [isSubmittingPayment, setIsSubmittingPayment] = useState(false);
+
+  const resetPaymentForm = useCallback(() => {
+    setPaymentFormData({ department: user?.department || "", requested_by: user?.name || "", purpose: "", date_needed: "" });
+    setPaymentItems([{ ...emptyPaymentItem }]);
+  }, [user?.department, user?.name]);
+
+  useEffect(() => {
+    setPaymentFormData((f) => ({ ...f, department: user?.department || f.department, requested_by: f.requested_by || user?.name || "" }));
+  }, [user?.department, user?.name]);
+
+  const addPaymentItemRow = () => setPaymentItems((prev) => [...prev, { ...emptyPaymentItem }]);
+
+  const removePaymentItemRow = (index: number) => {
+    if (paymentItems.length > 1) setPaymentItems((prev) => prev.filter((_, i) => i !== index));
+  };
+
+  const updatePaymentItemRow = (index: number, field: keyof PaymentRequestItemInput, value: string | number | undefined) =>
+    setPaymentItems((prev) => {
+      const updated = [...prev];
+      updated[index] = { ...updated[index], [field]: value };
+      return updated;
+    });
+
+  const paymentTotalCost = paymentItems.reduce((sum, item) => sum + (Number(item.amount) || 0), 0);
+
+  const submitPaymentRequest = useCallback(async (): Promise<boolean> => {
+    if (!paymentFormData.department) {
+      alert("Please select a department.");
+      return false;
+    }
+    if (!paymentFormData.purpose.trim()) {
+      alert("Purpose is required.");
+      return false;
+    }
+    const items = paymentItems.filter((i) => i.item_description.trim());
+    if (items.length === 0) {
+      alert("Enter at least one item.");
+      return false;
+    }
+    if (items.some((i) => !(Number(i.amount) > 0))) {
+      alert("Enter an amount greater than zero for every item.");
+      return false;
+    }
+
+    setIsSubmittingPayment(true);
+    try {
+      log.info("Submitting payment request — department:", paymentFormData.department, "items:", items.length);
+      await urgentRequestAPI.create({
+        department: paymentFormData.department,
+        requested_by: paymentFormData.requested_by || undefined,
+        purpose: paymentFormData.purpose.toUpperCase(),
+        date_needed: paymentFormData.date_needed || undefined,
+        items: items.map((i) => ({
+          item_description: i.item_description.toUpperCase(),
+          quantity: i.quantity,
+          amount: i.amount,
+        })),
+      });
+      log.info("Payment request created successfully");
+      resetPaymentForm();
+      return true;
+    } catch (error: unknown) {
+      const reason = getErrorMessage(error);
+      log.error("Failed to create payment request:", reason);
+      alert("Error submitting payment request: " + reason);
+      return false;
+    } finally {
+      setIsSubmittingPayment(false);
+    }
+  }, [paymentFormData, paymentItems, resetPaymentForm]);
 
   // ---- List + Stockroom review (Custodian side) ----
   const [urgentRequests, setUrgentRequests] = useState<UrgentRequest[]>([]);
@@ -341,6 +426,15 @@ export function useUrgentRequests() {
     updateUrgentItemRow,
     isSubmittingUrgent,
     submitUrgentRequest,
+    paymentFormData,
+    setPaymentFormData,
+    paymentItems,
+    addPaymentItemRow,
+    removePaymentItemRow,
+    updatePaymentItemRow,
+    paymentTotalCost,
+    isSubmittingPayment,
+    submitPaymentRequest,
     urgentRequests,
     loadingUrgentRequests,
     reviewUrgentRequest,

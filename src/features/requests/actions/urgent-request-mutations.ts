@@ -32,6 +32,7 @@ interface UrgentItemInput {
   item_description: string;
   quantity: number;
   uom: string | null;
+  amount: string | null;
 }
 
 function parseUrgentItems(value: unknown): UrgentItemInput[] {
@@ -46,7 +47,9 @@ function parseUrgentItems(value: unknown): UrgentItemInput[] {
       throw new Error(`${label}: quantity must be a whole number between 1 and 999,999.`);
     }
     const uom = optionalString(item, "uom", 20, `${label} UoM`);
-    return { item_description: description.toUpperCase(), quantity, uom: uom ? uom.toUpperCase() : null };
+    const amount =
+      item.amount == null || item.amount === "" ? null : moneyString(item.amount, `${label} amount`, { allowZero: false });
+    return { item_description: description.toUpperCase(), quantity, uom: uom ? uom.toUpperCase() : null, amount };
   });
 }
 
@@ -131,6 +134,10 @@ export async function createUrgentRequestAction(value: unknown): Promise<ActionR
           uom: item.uom,
           // Stockroom classifies Inventoriable during its review.
           is_inventoriable: false,
+          // A Payment Request submission prices each item up front, so it
+          // arrives already routed instead of waiting on Purchaser's call.
+          purchasing_transaction: item.amount ? "payment_request" : null,
+          amount: item.amount,
           created_at: now.toISOString(),
         }))
       );

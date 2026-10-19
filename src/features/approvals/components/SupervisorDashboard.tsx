@@ -353,6 +353,8 @@ const SupervisorDashboard: React.FC = () => {
           const key = makeRequestKey(activeTab, row.id);
           const details = requestDetails.get(key);
           const evaluated = !!(details?.supervisor_status && details.supervisor_status !== "pending");
+          // Once Supervisor/Manager approves, the item list is frozen (Admin excepted).
+          const itemsLocked = details?.supervisor_status === "approved" && !isAdmin;
           const expanded = expandedRows.has(key);
           const heldDetailItems = ((details as { items?: ItemRow[] } | undefined)?.items ?? []).filter((i) => i.delivery_status === "HOLD");
           return (
@@ -495,6 +497,7 @@ const SupervisorDashboard: React.FC = () => {
                                           }}
                                           options={catalog.names}
                                           placeholder="Search or type item name…"
+                                          disabled={itemsLocked}
                                         />
                                         <ItemExistenceBadge status={existenceStatus} />
                                       </div>
@@ -506,6 +509,7 @@ const SupervisorDashboard: React.FC = () => {
                                         className={`form-control form-control-sm ${styles.quantityInput}`}
                                         value={item.quantity || 1}
                                         onChange={(e) => updateItem(row.id, idx, "quantity", Math.max(1, Number.parseInt(e.target.value, 10) || 1))}
+                                        disabled={itemsLocked}
                                       />
                                     </td>
                                     <td data-label="UoM">
@@ -518,7 +522,7 @@ const SupervisorDashboard: React.FC = () => {
                                           setOtherUom(key, idx, value === "OTHER");
                                           updateItem(row.id, idx, "uom", value === "OTHER" ? "" : value);
                                         }}
-                                        disabled={isUomLocked}
+                                        disabled={isUomLocked || itemsLocked}
                                       >
                                         <option value="" disabled>Select UoM</option>
                                         {UOM_OPTIONS.map((option) => (
@@ -526,7 +530,7 @@ const SupervisorDashboard: React.FC = () => {
                                         ))}
                                         <option value="OTHER">OTHER</option>
                                       </select>
-                                      {isOther && !isUomLocked && (
+                                      {isOther && !isUomLocked && !itemsLocked && (
                                         <input
                                           type="text"
                                           className={`form-control form-control-sm text-uppercase mt-1 ${styles.uomInput}`}
@@ -542,6 +546,7 @@ const SupervisorDashboard: React.FC = () => {
                                         className={`form-control form-control-sm text-uppercase ${styles.remarksInput}`}
                                         value={item.remarks || ""}
                                         onChange={(e) => updateItem(row.id, idx, "remarks", e.target.value)}
+                                        disabled={itemsLocked}
                                       />
                                     </td>
                                     <td data-label="Machine Code">
@@ -553,24 +558,26 @@ const SupervisorDashboard: React.FC = () => {
                                         descriptions={machineCodeOptions.descriptions}
                                         placeholder={machineCodeEnabled ? "Search or type…" : "N/A"}
                                         noResultsText="No record found"
-                                        disabled={!machineCodeEnabled}
+                                        disabled={!machineCodeEnabled || itemsLocked}
                                       />
                                     </td>
                                     <td data-label="Balance">{getItemBalance(item)}</td>
                                     <td data-label="Status"><ItemStatusBadge item={item} /></td>
                                     <td data-label="Details"><ItemDeliveryDetails item={item} showPrNumber={isAdmin} /></td>
                                     <td className="text-center">
-                                      <button
-                                        type="button"
-                                        className="btn btn-sm btn-danger"
-                                        aria-label={`Remove ${item.item_name || `item ${idx + 1}`}`}
-                                        onClick={() => {
-                                          clearOtherUom(key);
-                                          deleteItem(row.id, idx);
-                                        }}
-                                      >
-                                        ×
-                                      </button>
+                                      {!itemsLocked && (
+                                        <button
+                                          type="button"
+                                          className="btn btn-sm btn-danger"
+                                          aria-label={`Remove ${item.item_name || `item ${idx + 1}`}`}
+                                          onClick={() => {
+                                            clearOtherUom(key);
+                                            deleteItem(row.id, idx);
+                                          }}
+                                        >
+                                          ×
+                                        </button>
+                                      )}
                                     </td>
                                   </tr>
                                 );
@@ -578,12 +585,14 @@ const SupervisorDashboard: React.FC = () => {
                             </tbody>
                           </table>
                         </div>
-                        <div className="d-flex gap-2 mt-3">
-                          <button onClick={() => addItem(row.id)} className="btn btn-sm btn-outline-primary">+ Add Item</button>
-                          {hasChanges.get(key) && (
-                            <button onClick={() => updateItemList(row.id)} className="btn btn-sm btn-success">Save Changes</button>
-                          )}
-                        </div>
+                        {!itemsLocked && (
+                          <div className="d-flex gap-2 mt-3">
+                            <button onClick={() => addItem(row.id)} className="btn btn-sm btn-outline-primary">+ Add Item</button>
+                            {hasChanges.get(key) && (
+                              <button onClick={() => updateItemList(row.id)} className="btn btn-sm btn-success">Save Changes</button>
+                            )}
+                          </div>
+                        )}
                       </>
                     ) : (
                       details.services && details.services.length > 0 && (

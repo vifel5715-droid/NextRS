@@ -107,6 +107,18 @@ describe("request ownership and editing", () => {
     expect(canEditRequest(user({ roleKey: "secretary", id: "other" }), request()).allowed).toBe(true);
   });
 
+  it.each(["supervisor", "manager", "operations_manager"])("blocks %s once the request is supervisor-approved", (roleKey) => {
+    expect(canEditRequest(user({ roleKey, id: "other" }), request()).allowed).toBe(true);
+    expect(canEditRequest(user({ roleKey, id: "other" }), request({ supervisor_status: "approved" }))).toEqual({
+      allowed: false,
+      reason: "This request has already been approved and can no longer be edited.",
+    });
+  });
+
+  it("still lets admin edit an approved request", () => {
+    expect(canEditRequest(user({ roleKey: "admin", id: "other" }), request({ supervisor_status: "approved" })).allowed).toBe(true);
+  });
+
   it("leaves other roles to their page permission and department checks", () => {
     expect(canEditRequest(user({ roleKey: "custodian", id: "other" }), request({ custodian_status: "approved" })).allowed).toBe(true);
   });
