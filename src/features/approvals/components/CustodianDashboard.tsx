@@ -14,7 +14,7 @@ import AdjustmentHistoryModal from "@/features/reports/components/AdjustmentHist
 const ItemCatalogModal = React.lazy(() => import("@/features/item-master/components/ItemCatalogModal"));
 import SearchableCombobox from "@/components/forms/SearchableCombobox";
 import { sanitizeUserInput } from "@/lib/utils/sanitize";
-import { getBsStatusBadgeClass, getStatusBadgeClass, formatStatusLabel, getForApprovalLabel, isFullyApproved, getHeldServiceCount, hasEditedHeldService } from "@/lib/utils/status";
+import { getBsStatusBadgeClass, getStatusBadgeClass, formatStatusLabel, getForApprovalLabel, isFullyApproved, getHeldServiceCount, hasEditedHeldService, canFinishServiceRequest, SERVICE_FINISH_BLOCKED_MESSAGE } from "@/lib/utils/status";
 import { useCustodianRequests } from "@/features/approvals/hooks/useCustodianRequests";
 import { useUrgentRequests } from "@/features/requests/hooks/useUrgentRequests";
 import { useMachineCodeOptions } from "@/features/item-master/hooks/useMachineCodeOptions";
@@ -931,7 +931,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
               <label className="text-muted d-block mb-1" style={{ fontSize: "0.75rem" }}>Order Status</label>
               <select className="form-select form-select-sm" disabled={!isApproved} value={details.pr_status || "pending"} onChange={(e) => updateRequestDetail(row.id, "pr_status", e.target.value)}>
                 <option value="pending">Pending</option>
-                <option value="finish">Finish</option>
+                <option value="finish" disabled={details.pr_status !== "finish" && !canFinishServiceRequest(details.services)} title={canFinishServiceRequest(details.services) ? undefined : SERVICE_FINISH_BLOCKED_MESSAGE}>Finish</option>
               </select>
             </div>
             {details.pr_number_updated_by_name && (

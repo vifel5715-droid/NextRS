@@ -236,6 +236,15 @@ export const getServiceStatusText = (service: DeliveryStatusItem): string =>
     ? (service.hold_edited ? 'RELEASE ON HOLD' : 'ON HOLD')
     : (service?.delivery_status || 'pending');
 
+type FinishableService = { delivery_status?: string | null; receiving_report_no?: string | null };
+
+export const SERVICE_FINISH_BLOCKED_MESSAGE =
+  'PR Status cannot be set to Finish until every service is Completed and has a Receiving Report No.';
+
+export const canFinishServiceRequest = (services: FinishableService[] | null | undefined): boolean =>
+  !!services && services.length > 0 &&
+  services.every((s) => s.delivery_status === 'completed' && !!s.receiving_report_no?.trim());
+
 export const getServiceStatusBadgeClass = (service: DeliveryStatusItem): string =>
   service?.delivery_status === 'holded' ? 'held' : getStatusBadgeClass(service?.delivery_status ?? undefined);
 

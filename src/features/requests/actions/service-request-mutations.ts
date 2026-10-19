@@ -21,6 +21,7 @@ import { logAdjustments } from "@/server/audit/adjustments";
 import { getDb } from "@/lib/db";
 import { deletionLog, serviceItems, serviceRequests, users } from "@/db/schema";
 import { publishRequestChanged } from "@/lib/realtime";
+import { canFinishServiceRequest, SERVICE_FINISH_BLOCKED_MESSAGE } from "@/lib/utils/status";
 
 const SERVICE_STATUSES = new Set(["pending", "holded", "completed"]);
 const SERVICE_PR_STATUSES = new Set(["pending", "finish"]);
@@ -101,6 +102,13 @@ export async function updateServiceRequestAction(id: number, value: unknown): Pr
     }
     // Checked against the stored approval state, not anything the client sent.
     if (changesPrNumber || changesPrStatus) assertServiceFulfillmentEditable(request);
+    if (changesPrStatus && prStatus === "finish") {
+      const lines = await getDb()
+        .select({ delivery_status: serviceItems.delivery_status, receiving_report_no: serviceItems.receiving_report_no })
+        .from(serviceItems)
+        .where(eq(serviceItems.service_request_id, id));
+      if (!canFinishServiceRequest(lines)) throw new Error(SERVICE_FINISH_BLOCKED_MESSAGE);
+    }
     if (changesPurpose || changesRemarks || services) {
       assertCanEditRequest(user, request);
     }
@@ -253,16 +261,16 @@ export async function updateServiceItemAction(serviceId: number, value: unknown)
 
       await tx.update(serviceItems).set(patch).where(eq(serviceItems.id, serviceId));
 
-      // PR Status follows the lines: "finish" once every line is completed.
-      if (patch.delivery_status !== undefined) {
+      // PR Status follows the lines: "finish" once every line is completed
+      // and has a Receiving Report No.
+      if (patch.delivery_status !== undefined || changed.receiving_report_no) {
         const siblings = await tx
-          .select({ delivery_status: serviceItems.delivery_status })
+          .select({ delivery_status: serviceItems.delivery_status, receiving_report_no: serviceItems.receiving_report_no })
           .from(serviceItems)
           .where(eq(serviceItems.service_request_id, request.id));
-        const allCompleted = siblings.length > 0 && siblings.every((sibling) => sibling.delivery_status === "completed");
         await tx
           .update(serviceRequests)
-          .set({ pr_status: allCompleted ? "finish" : "pending" })
+          .set({ pr_status: canFinishServiceRequest(siblings) ? "finish" : "pending" })
           .where(eq(serviceRequests.id, request.id));
       }
 

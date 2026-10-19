@@ -24,7 +24,7 @@ import type {
   FieldValue,
 } from '@/types';
 import { throwOnError } from "@/lib/utils/actionResult";
-import { getItemStatusText, itemStatusNeedsReason } from "@/lib/utils/status";
+import { getItemStatusText, itemStatusNeedsReason, canFinishServiceRequest, SERVICE_FINISH_BLOCKED_MESSAGE } from "@/lib/utils/status";
 
 const updateRequestItemAction = throwOnError(updateRequestItemResult);
 const reviewSupervisorRequestAction = throwOnError(reviewSupervisorRequestResult);
@@ -603,6 +603,10 @@ export const useRequestManagement = (
   const handleSaveServiceUpdates = async (requestId: number) => {
     const details = requestDetails.get(makeRequestKey('service', requestId));
     if (!details) return;
+    if (details.pr_status === 'finish' && !canFinishServiceRequest(details.services)) {
+      alert(SERVICE_FINISH_BLOCKED_MESSAGE);
+      return;
+    }
 
     // Adjustment History: one shared prompt covering every service line whose
     // Description actually changed from its pre-edit snapshot — same rule
@@ -624,12 +628,7 @@ export const useRequestManagement = (
     }
 
     try {
-      await serviceRequestAPI.update(requestId, {
-        pr_number: details.pr_number,
-        pr_status: details.pr_status,
-        purpose: details.purpose,
-        remarks: details.remarks,
-      });
+      // Lines first: the server only accepts a Finish once the saved lines qualify.
       if (details.services) {
         await Promise.all(
           details.services.map((service) => {
@@ -643,6 +642,12 @@ export const useRequestManagement = (
           })
         );
       }
+      await serviceRequestAPI.update(requestId, {
+        pr_number: details.pr_number,
+        pr_status: details.pr_status,
+        purpose: details.purpose,
+        remarks: details.remarks,
+      });
       // Re-fetch rather than trust the locally-edited copy — the server can
       // override what was sent (e.g. clearing an existing receiving_report_no
       // forces delivery_status/pr_status back to pending regardless of what

@@ -4,7 +4,7 @@ import { useMachineCodeOptions } from "@/features/item-master/hooks/useMachineCo
 import { useAuth } from "@/components/providers/AuthProvider";
 import { itemRequestAPI } from "@/lib/api";
 import { openAttachment } from "@/lib/utils/openAttachment";
-import { getCompositeStatus, getStatusBadgeClass, getServiceStatusText, getServiceStatusBadgeClass } from "@/lib/utils/status";
+import { getCompositeStatus, getStatusBadgeClass, getServiceStatusText, getServiceStatusBadgeClass, canFinishServiceRequest, SERVICE_FINISH_BLOCKED_MESSAGE } from "@/lib/utils/status";
 import { sanitizeUserInput } from "@/lib/utils/sanitize";
 import { copyToClipboard, formatItemsForClipboard, formatItemsForProjectGrid } from "@/lib/utils/clipboard";
 import { UOM_OPTIONS } from "@/constants/uom";
@@ -809,7 +809,7 @@ const CompleteRequestsPage: React.FC = () => {
                         {isCustodian ? (
                           <select className="form-select form-select-sm" value={detail.pr_status || "pending"} onChange={(e) => updateRequestDetail(req.id, "pr_status", e.target.value)}>
                             <option value="pending">Pending</option>
-                            <option value="finish">Finish</option>
+                            <option value="finish" disabled={detail.pr_status !== "finish" && !canFinishServiceRequest(serviceRows)} title={canFinishServiceRequest(serviceRows) ? undefined : SERVICE_FINISH_BLOCKED_MESSAGE}>Finish</option>
                           </select>
                         ) : (
                           <div>{detail.pr_status || "—"}</div>
