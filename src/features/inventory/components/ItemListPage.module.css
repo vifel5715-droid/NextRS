@@ -1,0 +1,101 @@
+/*
+ * Desktop/laptop only: below 768px .simple-list-table turns each row into a
+ * stacked card (globals.css), which needs none of this.
+ *
+ * The wrapper is height-capped so its horizontal scrollbar stays on screen
+ * instead of sitting under all 50 rows of the page, and the header row plus
+ * the Item Name column stay pinned while scrolling. Every rule is scoped under
+ * .scroll so it outranks the global `.table …` rules regardless of load order.
+ */
+@media (min-width: 768px) {
+  .scroll {
+    max-height: calc(100vh - 160px);
+    min-height: 240px;
+    overflow: auto;
+    overscroll-behavior-x: contain;
+    border: 2px solid #94a3b8;
+    border-radius: 4px;
+    background: #ffffff;
+  }
+
+  /* Collapsed borders don't travel with sticky cells, so draw each cell's
+     right/bottom edge with separate borders instead (same colours). */
+  .scroll .table {
+    width: max-content;
+    min-width: 100%;
+    border: none;
+    border-collapse: separate;
+    border-spacing: 0;
+  }
+
+  .scroll .table thead th {
+    position: sticky;
+    top: 0;
+    z-index: 2;
+    border-width: 0 1.5px 2px 0;
+    vertical-align: middle;
+  }
+
+  .scroll .table tbody td {
+    border-width: 0 1.5px 1.5px 0;
+    overflow-wrap: anywhere;
+  }
+
+  /* Opaque row colours so the pinned Item Name cell (background: inherit)
+     hides what scrolls underneath it. */
+  .scroll .table tbody tr:nth-child(odd) {
+    background: #ffffff;
+  }
+
+  .scroll .table tbody tr:nth-child(even) {
+    background: #f8fafc;
+  }
+
+  .scroll .table tbody tr:hover {
+    background: #eaf1ff;
+  }
+
+  .scroll .table th:last-child,
+  .scroll .table td:last-child {
+    border-right-width: 0;
+  }
+
+  .scroll .table tbody tr:last-child td {
+    border-bottom-width: 0;
+  }
+
+  /* Item Name: pinned left, wraps instead of stretching the whole table. */
+  .scroll .table th:first-child,
+  .scroll .table td:first-child {
+    position: sticky;
+    left: 0;
+    width: 300px;
+    min-width: 240px;
+    box-shadow: 4px 0 6px -4px rgba(15, 23, 42, 0.25);
+  }
+
+  .scroll .table td:first-child {
+    z-index: 1;
+    background: inherit;
+  }
+
+  .scroll .table th:first-child {
+    z-index: 3;
+  }
+
+  .scroll .table td:first-child :global(.btn-link) {
+    white-space: normal;
+    text-align: left;
+    overflow-wrap: anywhere;
+  }
+
+  /* `width` (not max-width, which table cells ignore) caps how wide a column
+     grows before its text wraps; min-width keeps the header label + arrow. */
+  .scroll .colUom { min-width: 100px; }
+  .scroll .colMachineCode { width: 180px; min-width: 170px; }
+  .scroll .colItemGroup { width: 200px; min-width: 160px; }
+  .scroll .colApprover { min-width: 190px; }
+  .scroll .colDepartments { width: 220px; min-width: 180px; }
+  .scroll .colCreated { min-width: 160px; white-space: nowrap; }
+  .scroll .colActions { min-width: 110px; white-space: nowrap; }
+}

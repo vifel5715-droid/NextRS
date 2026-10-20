@@ -1953,8 +1953,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
                               rejectionComment={row.rejection_comment}
                             />
 
-                            {/* Supervisor/Manager can act directly from here — this is
-                                where they land by default (landingPathFor in useLogin), same as
+                            {/* Supervisor/Manager can act directly from here, same as
                                 the item/service Quick Action above. */}
                             {row.supervisor_status === "pending" && isSupervisor && (
                               canApproveUrgentAsSupervisor(row) ? (

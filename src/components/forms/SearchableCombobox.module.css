@@ -7,7 +7,6 @@
      itself, computed from the input's viewport rect — see its render for why
      (a table row's .table-responsive ancestor clips a plain absolute child). */
   z-index: 1055;
-  max-height: 200px;
   overflow-y: auto;
   display: flex;
   flex-direction: column;
@@ -41,9 +40,8 @@
   color: #212529;
   background: transparent;
   border: none;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .optionDescription {
@@ -51,9 +49,8 @@
   margin-top: 1px;
   font-size: 0.7rem;
   color: #6b7280;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .option:focus {

@@ -59,17 +59,17 @@ export const getForApprovalLabel = (row: {
     : 'For Approval (Supervisor/Manager)';
 
 // ---------------------------------------------------------------------------
-// Item Cancel / Close
+// Item Hold / Close
 // ---------------------------------------------------------------------------
 /** Item delivery statuses that need a reason (item_request_items.status_reason). */
-export const REASON_REQUIRED_ITEM_STATUSES: ReadonlySet<string> = new Set(['CANCEL', 'CLOSE']);
+export const REASON_REQUIRED_ITEM_STATUSES: ReadonlySet<string> = new Set(['HOLD', 'CLOSE']);
 
 export const itemStatusNeedsReason = (status?: string | null): boolean =>
   REASON_REQUIRED_ITEM_STATUSES.has((status ?? '').trim().toUpperCase());
 
 /**
  * An item counts toward its request being Complete once it is On Hand (every
- * unit released to the requester) or Closed. A Cancelled item does not — it
+ * unit released to the requester) or Closed. An On Hold item does not — it
  * keeps the request open until the custodian moves it to another status.
  */
 export const isItemServedOrClosed = (item: {
@@ -124,9 +124,9 @@ export const getStatusBadgeClass = (status?: string): string => {
     case 'in_progress':
       return 'in-progress';
 
-    // Item Cancel / Close statuses.
-    case 'cancel':
-      return 'rejected';
+    // Item Hold / Close statuses.
+    case 'hold':
+      return 'held';
     case 'close':
       return 'approved';
 
@@ -169,7 +169,7 @@ export const getBsStatusBadgeClass = (status?: string): string => {
 
     case 'held':
     case 'holded':
-    case 'cancel':
+    case 'hold':
       return 'bg-danger';
 
     case 'close':
@@ -204,7 +204,7 @@ type DeliveryStatusItem = { delivery_status?: string | null; hold_edited?: boole
 
 const ITEM_STATUS_LABELS: Record<string, string> = {
   OUT: 'ON HAND',
-  CANCEL: 'CANCELLED',
+  HOLD: 'ON HOLD',
   CLOSE: 'CLOSED',
 };
 

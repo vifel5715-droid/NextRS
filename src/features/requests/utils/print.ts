@@ -65,7 +65,7 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
   };
   const printableRows = isItem
     ? (rows as PrintableItem[])
-        .filter((item: PrintableItem) => !['OUT', 'CANCEL', 'CLOSE'].includes(item.delivery_status ?? ''))
+        .filter((item: PrintableItem) => !['OUT', 'HOLD', 'CLOSE'].includes(item.delivery_status ?? ''))
         .filter((item: PrintableItem) => remainingBalance(item) > 0)
         .map((item: PrintableItem) => ({ ...item, quantity: remainingBalance(item) }))
     : (rows as PrintableService[]);

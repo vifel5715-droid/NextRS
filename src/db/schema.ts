@@ -101,7 +101,7 @@ export const itemRequestItems = pgTable("item_request_items", {
    */
   hold_edited: boolean("hold_edited").notNull().default(false),
   /**
-   * Required reason for a "CANCEL" or "CLOSE" delivery_status — cleared when
+   * Required reason for a "HOLD" or "CLOSE" delivery_status — cleared when
    * the item moves to any other status (the Adjustment History entry written
    * at the time keeps the old reason).
    */

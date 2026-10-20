@@ -2,19 +2,19 @@ import type { ItemRequest } from "@/types";
 import { filterByDateRange } from "@/lib/utils/dateRange";
 
 /**
- * Closed / Cancelled tab of the Custodian Dashboard.
+ * Closed / On Hold tab of the Custodian Dashboard.
  *
- * Close and Cancel are per-ITEM statuses (item_request_items.delivery_status
- * "CLOSE" / "CANCEL", each with a required status_reason) — there is no
- * request-level closed/cancelled status, and service lines (pending/holded/
+ * Close and Hold are per-ITEM statuses (item_request_items.delivery_status
+ * "CLOSE" / "HOLD", each with a required status_reason) — there is no
+ * request-level closed/on-hold status, and service lines (pending/holded/
  * completed) and urgent requests (approval + delivery stages) have no
  * equivalent. So the tab lists one row per item whose CURRENT status is CLOSE
- * or CANCEL, together with its parent request. An item moved on to another
+ * or HOLD, together with its parent request. An item moved on to another
  * status drops out, since its status_reason is cleared at that point too.
  */
-export type ClosedCancelledStatus = "CLOSE" | "CANCEL";
+export type ClosedCancelledStatus = "CLOSE" | "HOLD";
 
-const CLOSED_CANCELLED: ReadonlySet<string> = new Set<ClosedCancelledStatus>(["CLOSE", "CANCEL"]);
+const CLOSED_CANCELLED: ReadonlySet<string> = new Set<ClosedCancelledStatus>(["CLOSE", "HOLD"]);
 
 export interface ClosedCancelledItemRow {
   /** Unique per item — `${requestId}-${itemId ?? index}`. */
@@ -40,10 +40,10 @@ export const closedCancelledStatusOf = (deliveryStatus?: string | null): ClosedC
 
 export const CLOSED_CANCELLED_LABELS: Record<ClosedCancelledStatus, string> = {
   CLOSE: "Closed",
-  CANCEL: "Cancelled",
+  HOLD: "On Hold",
 };
 
-/** Flattens item requests into one row per currently Closed/Cancelled item, newest request first. */
+/** Flattens item requests into one row per currently Closed/On Hold item, newest request first. */
 export function toClosedCancelledRows(requests: ItemRequest[]): ClosedCancelledItemRow[] {
   const rows: ClosedCancelledItemRow[] = [];
   for (const request of requests) {

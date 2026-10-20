@@ -113,7 +113,7 @@ export interface ItemRow {
    * review/release.
    */
   hold_edited?: boolean;
-  /** Reason entered when delivery_status is "CANCEL" or "CLOSE". */
+  /** Reason entered when delivery_status is "HOLD" or "CLOSE". */
   status_reason?: string | null;
   audits?: ItemAudit[];
 }

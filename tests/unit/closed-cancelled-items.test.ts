@@ -1,5 +1,5 @@
 /**
- * Custodian Dashboard's Closed / Cancelled tab: which items appear, and how
+ * Custodian Dashboard's Closed / On Hold tab: which items appear, and how
  * the shared search/department/date filters apply to them.
  */
 import type { ItemRequest, ItemRow } from "@/types";
@@ -36,7 +36,7 @@ const requests: ItemRequest[] = [
     items: [
       item({ id: 11, item_name: "BEARING", delivery_status: "CLOSE", status_reason: "No longer needed" }),
       item({ id: 12, item_name: "BOLT", delivery_status: "OUT" }),
-      item({ id: 13, item_name: "NUT", delivery_status: "cancel", status_reason: "Duplicate", pr_number: "PR-77" }),
+      item({ id: 13, item_name: "NUT", delivery_status: "hold", status_reason: "Duplicate", pr_number: "PR-77" }),
     ],
   }),
   request({
@@ -46,8 +46,8 @@ const requests: ItemRequest[] = [
     purpose: "OFFICE SUPPLIES",
     created_at: "2026-10-10T08:00:00.000Z",
     items: [
-      item({ id: 21, item_name: "PAPER", delivery_status: "CANCEL", status_reason: "Wrong item" }),
-      item({ id: 22, item_name: "PEN", delivery_status: "HOLD" }),
+      item({ id: 21, item_name: "PAPER", delivery_status: "HOLD", status_reason: "Wrong item" }),
+      item({ id: 22, item_name: "PEN", delivery_status: "CANCEL" }),
       item({ id: 23, item_name: "INK", delivery_status: "PURCHASE REQUEST" }),
       item({ id: 24, item_name: "TAPE" }),
     ],
@@ -58,10 +58,10 @@ const requests: ItemRequest[] = [
 describe("closedCancelledStatusOf", () => {
   it.each([
     ["CLOSE", "CLOSE"],
-    ["CANCEL", "CANCEL"],
-    [" cancel ", "CANCEL"],
+    ["HOLD", "HOLD"],
+    [" hold ", "HOLD"],
     ["OUT", null],
-    ["HOLD", null],
+    ["CANCEL", null],
     ["PURCHASE REQUEST", null],
     ["completed", null],
     [undefined, null],
@@ -74,11 +74,11 @@ describe("closedCancelledStatusOf", () => {
 describe("toClosedCancelledRows", () => {
   const rows = toClosedCancelledRows(requests);
 
-  it("includes only items currently CLOSE or CANCEL, one row per item", () => {
+  it("includes only items currently CLOSE or HOLD, one row per item", () => {
     expect(rows.map((row) => `${row.serial}:${row.item_name}:${row.status}`)).toEqual([
-      "IRS-000002:PAPER:CANCEL",
+      "IRS-000002:PAPER:HOLD",
       "IRS-000001:BEARING:CLOSE",
-      "IRS-000001:NUT:CANCEL",
+      "IRS-000001:NUT:HOLD",
     ]);
   });
 
@@ -99,7 +99,7 @@ describe("toClosedCancelledRows", () => {
     expect(new Set(rows.map((row) => row.key)).size).toBe(rows.length);
   });
 
-  it("is empty when nothing is closed or cancelled", () => {
+  it("is empty when nothing is closed or on hold", () => {
     expect(toClosedCancelledRows([requests[2]])).toEqual([]);
     expect(toClosedCancelledRows([request({ items: undefined })])).toEqual([]);
   });

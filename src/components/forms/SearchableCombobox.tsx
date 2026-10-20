@@ -30,6 +30,9 @@ interface SearchableComboboxProps {
   descriptions?: Record<string, string>;
 }
 
+const DROPDOWN_MIN_WIDTH = 280;
+const DROPDOWN_MAX_HEIGHT = 320;
+
 /**
  * Free-typed text input with a filtered, click-to-pick suggestion list below
  * it — a value not in `options` is still accepted (typing IS the "Other"
@@ -61,7 +64,9 @@ const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
   // Viewport-relative coordinates for the portaled dropdown below — see the
   // portal note on its render for why this can't just be `position: absolute`
   // inside wrapper.
-  const [dropdownRect, setDropdownRect] = useState<{ top: number; left: number; width: number } | null>(null);
+  const [dropdownRect, setDropdownRect] = useState<
+    { top?: number; bottom?: number; left: number; width: number; maxHeight: number } | null
+  >(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -87,7 +92,20 @@ const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
     const updatePosition = () => {
       if (!inputRef.current) return;
       const rect = inputRef.current.getBoundingClientRect();
-      setDropdownRect({ top: rect.bottom + 2, left: rect.left, width: rect.width });
+      const margin = 8;
+      const viewportWidth = document.documentElement.clientWidth;
+      const viewportHeight = window.innerHeight;
+      // Narrow table cells would otherwise squeeze every option to "AB…".
+      const width = Math.min(Math.max(rect.width, DROPDOWN_MIN_WIDTH), viewportWidth - margin * 2);
+      const left = Math.max(margin, Math.min(rect.left, viewportWidth - width - margin));
+      const spaceBelow = viewportHeight - rect.bottom - margin;
+      const spaceAbove = rect.top - margin;
+      const openUp = spaceBelow < DROPDOWN_MAX_HEIGHT && spaceAbove > spaceBelow;
+      setDropdownRect(
+        openUp
+          ? { bottom: viewportHeight - rect.top + 2, left, width, maxHeight: Math.min(DROPDOWN_MAX_HEIGHT, spaceAbove) }
+          : { top: rect.bottom + 2, left, width, maxHeight: Math.min(DROPDOWN_MAX_HEIGHT, spaceBelow) }
+      );
     };
     updatePosition();
     window.addEventListener("scroll", updatePosition, true);
@@ -153,7 +171,14 @@ const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
         <div
           ref={dropdownElRef}
           className={styles.dropdown}
-          style={{ position: "fixed", top: dropdownRect.top, left: dropdownRect.left, width: dropdownRect.width }}
+          style={{
+            position: "fixed",
+            top: dropdownRect.top,
+            bottom: dropdownRect.bottom,
+            left: dropdownRect.left,
+            width: dropdownRect.width,
+            maxHeight: dropdownRect.maxHeight,
+          }}
           onMouseDown={(e) => e.stopPropagation()}
         >
           {matches.map((option) =>

@@ -43,6 +43,7 @@ import {
   CLOSED_CANCELLED_LABELS,
   filterClosedCancelledRows,
   filterItemTabRows,
+  type ClosedCancelledStatus,
 } from "@/features/approvals/utils/closedCancelledItems";
 import { formatPrStatus, prStatusBadgeClass } from "@/features/approvals/utils/purchaseRequestItems";
 import { isServiceFulfillmentEditable, SERVICE_NOT_APPROVED_MESSAGE } from "@/lib/permissions";
@@ -55,7 +56,7 @@ const DELIVERY_STATUS_STYLES: Record<string, React.CSSProperties> = {
   OUT: { backgroundColor: "#eff6ff", color: "#1d4ed8", borderColor: "#93c5fd", fontWeight: 600 },
   "PURCHASE REQUEST": { backgroundColor: "#fffbeb", color: "#b45309", borderColor: "#fcd34d", fontWeight: 600 },
   URGENT: { backgroundColor: "#f5f3ff", color: "#6d28d9", borderColor: "#c4b5fd", fontWeight: 600 },
-  CANCEL: { backgroundColor: "#fef2f2", color: "#b91c1c", borderColor: "#fca5a5", fontWeight: 600 },
+  HOLD: { backgroundColor: "#fef2f2", color: "#b91c1c", borderColor: "#fca5a5", fontWeight: 600 },
   CLOSE: { backgroundColor: "#f1f5f9", color: "#334155", borderColor: "#94a3b8", fontWeight: 600 },
 };
 
@@ -143,13 +144,18 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
   const [activeUrgentTab, setActiveUrgentTab] = React.useState(!approvalView && searchParams.get("tab") === "urgent");
   // Per-item tabs (one row per item, not per request) — management view only,
   // like Urgent Requests. null = one of the Item/Service/Urgent tabs instead.
-  // ?tab=closed / ?tab=purchase land on them directly.
-  type ItemTab = "closed" | "purchase";
+  // ?tab=closed / ?tab=hold / ?tab=purchase land on them directly.
+  type ItemTab = "closed" | "hold" | "purchase";
   const initialItemTab = searchParams.get("tab");
   const [itemTab, setItemTab] = React.useState<ItemTab | null>(
-    !approvalView && (initialItemTab === "closed" || initialItemTab === "purchase") ? initialItemTab : null
+    !approvalView && (initialItemTab === "closed" || initialItemTab === "hold" || initialItemTab === "purchase")
+      ? initialItemTab
+      : null
   );
-  const activeClosedTab = itemTab === "closed";
+  // Closed and On Hold are two tabs over the same per-item rows, split by status.
+  const statusTab: ClosedCancelledStatus | null =
+    itemTab === "closed" ? "CLOSE" : itemTab === "hold" ? "HOLD" : null;
+  const activeClosedTab = statusTab !== null;
   const activePurchaseTab = itemTab === "purchase";
   const {
     closedCancelledRows,
@@ -673,7 +679,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                           <option value="OUT">ON HAND</option>
                           <option value="PURCHASE REQUEST">PURCHASE REQUEST</option>
                           <option value="URGENT">URGENT</option>
-                          <option value="CANCEL">CANCEL</option>
+                          <option value="HOLD">HOLD</option>
                           <option value="CLOSE">CLOSE</option>
                         </select>
                         {existenceStatus === "not_found" && (
@@ -1123,22 +1129,24 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
   const visibleItemRequests = byMostRecent(matchingItemRequests).slice(0, 20);
   const visibleServiceRequests = byMostRecent(matchingServiceRequests).slice(0, 20);
 
-  // Closed / Cancelled tab: the same search box, department dropdown and date
-  // range. The badge counts every matching item (one row per item), and the
-  // export uses this same filtered list.
-  const matchingClosedRows = filterClosedCancelledRows(closedCancelledRows, {
-    searchQuery,
-    department: selectedDepartment,
-    startDate,
-    endDate,
-  });
+  // Closed and On Hold tabs: the same search box, department dropdown and date
+  // range. Each badge counts its own matching items (one row per item), and
+  // the export uses the active tab's filtered list.
+  const statusTabFilters = { searchQuery, department: selectedDepartment, startDate, endDate };
+  const closedOnlyRows = closedCancelledRows.filter((row) => row.status === "CLOSE");
+  const holdOnlyRows = closedCancelledRows.filter((row) => row.status === "HOLD");
+  const matchingClosedOnlyRows = filterClosedCancelledRows(closedOnlyRows, statusTabFilters);
+  const matchingHoldRows = filterClosedCancelledRows(holdOnlyRows, statusTabFilters);
+  const statusTabSourceRows = statusTab === "HOLD" ? holdOnlyRows : closedOnlyRows;
+  const matchingClosedRows = statusTab === "HOLD" ? matchingHoldRows : matchingClosedOnlyRows;
+  const statusTabNoun = statusTab === "HOLD" ? "on-hold" : "closed";
   const closedTabDepartments = Array.from(
-    new Set(closedCancelledRows.map((row) => row.department).filter(Boolean))
+    new Set(statusTabSourceRows.map((row) => row.department).filter(Boolean))
   ).sort();
 
   const exportClosedCancelled = () =>
     exportToExcel(
-      "closed-cancelled-items",
+      statusTab === "HOLD" ? "on-hold-items" : "closed-items",
       [
         { key: "serial", label: "Serial" },
         { key: "date", label: "Date" },
@@ -1305,11 +1313,20 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
           )}
           {!approvalView && (
           <button
-            className={`dash-tab ${activeClosedTab ? "active" : ""}`}
+            className={`dash-tab ${statusTab === "CLOSE" ? "active" : ""}`}
             onClick={() => { setActiveUrgentTab(false); setItemTab("closed"); }}
           >
-            Closed / Cancelled
-            <span className="dash-tab-badge">{matchingClosedRows.length}</span>
+            Closed
+            <span className="dash-tab-badge">{matchingClosedOnlyRows.length}</span>
+          </button>
+          )}
+          {!approvalView && (
+          <button
+            className={`dash-tab ${statusTab === "HOLD" ? "active" : ""}`}
+            onClick={() => { setActiveUrgentTab(false); setItemTab("hold"); }}
+          >
+            On Hold
+            <span className="dash-tab-badge">{matchingHoldRows.length}</span>
           </button>
           )}
           {!approvalView && (
@@ -1366,15 +1383,15 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
               </div>
 
               <div>
-                {loadingItemTabs && <div className="p-3 text-muted">Loading closed and cancelled items...</div>}
+                {loadingItemTabs && <div className="p-3 text-muted">Loading {statusTabNoun} items...</div>}
                 {!loadingItemTabs && itemTabsError && (
                   <div className="p-3 text-danger" role="alert">{itemTabsError}</div>
                 )}
                 {!loadingItemTabs && !itemTabsError && matchingClosedRows.length === 0 && (
                   <div className="p-3 text-muted">
-                    {closedCancelledRows.length === 0
-                      ? "No closed or cancelled items."
-                      : "No closed or cancelled items match the current filters."}
+                    {statusTabSourceRows.length === 0
+                      ? `No ${statusTabNoun} items.`
+                      : `No ${statusTabNoun} items match the current filters.`}
                   </div>
                 )}
                 {matchingClosedRows.map((row) => (
@@ -1392,7 +1409,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                       </div>
                       <div data-label="Reason">{row.reason ? sanitizeUserInput(row.reason) : <span className="text-muted">—</span>}</div>
                       <div data-label="Status">
-                        <span className={`badge ${getBsStatusBadgeClass(row.status === "CLOSE" ? "close" : "cancel")}`}>
+                        <span className={`badge ${getBsStatusBadgeClass(row.status === "CLOSE" ? "close" : "hold")}`}>
                           {CLOSED_CANCELLED_LABELS[row.status]}
                         </span>
                       </div>
@@ -1401,7 +1418,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                 ))}
               </div>
               <div className="p-2 small text-muted">
-                Close and Cancel are set per item, so each row is one item. Service and Urgent Requests have no Closed or Cancelled status.
+                {statusTab === "HOLD" ? "Hold" : "Close"} is set per item, so each row is one item. Service and Urgent Requests have no {statusTab === "HOLD" ? "On Hold" : "Closed"} status.
               </div>
             </div>
           ) : activePurchaseTab ? (

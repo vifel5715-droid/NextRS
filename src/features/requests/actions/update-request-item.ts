@@ -20,7 +20,7 @@ interface ItemUpdateValues {
   pr_number: string | null;
   date_needed: string | null;
   delivery_status: string | null;
-  /** Required (and only kept) for CANCEL / CLOSE. */
+  /** Required (and only kept) for HOLD / CLOSE. */
   status_reason: string | null;
   pr_status: string | null;
   quantity_delivered?: number;
@@ -73,7 +73,7 @@ function parseInput(value: unknown): ItemUpdateValues {
     "OUT",
     "PURCHASE REQUEST",
     "URGENT",
-    "CANCEL",
+    "HOLD",
     "CLOSE",
     "DELIVERED",
     "PARTIAL DELIVERED",
@@ -125,8 +125,8 @@ function parseInput(value: unknown): ItemUpdateValues {
 /**
  * Only the custodian (and admin) edit item rows. The old HOLD hand-off — where
  * Secretary/Supervisor/Manager or the requesting staff could correct a HOLD
- * item — was retired along with the HOLD status itself (now CANCEL, with a
- * required reason).
+ * item — stays retired; HOLD is now a custodian-only status with a required
+ * reason.
  */
 function assertCanEditItem(user: AuthorizedUser): void {
   if (user.roleKey === "admin") return;

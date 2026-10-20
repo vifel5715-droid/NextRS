@@ -87,14 +87,24 @@ describe("landingPathFor", () => {
   const as = (role: string, permissions: string[]) => landingPathFor({ role, permissions });
 
   it.each([
-    ["staff", ["overview", "create_request"], "/requests/pending"],
+    ["staff", ["overview", "create_request"]],
+    ["custodian", ["overview", "department_requests"]],
+    ["purchaser", ["overview", "purchaser_dashboard"]],
+    ["ap_officer", ["overview", "ap_officer_dashboard"]],
+    ["admin", ["overview", "create_request", "users_management"]],
+    ["director", ["overview", "department_requests"]],
+  ])("sends %s to the Dashboard when it may open it", (role, permissions) => {
+    expect(as(role, permissions)).toBe("/dashboard");
+  });
+
+  it.each([
+    ["staff", ["create_request"], "/requests/pending"],
     ["supervisor", ["create_request", "supervisor_dashboard"], "/requests/pending"],
-    ["custodian", ["overview", "department_requests"], "/approvals/custodian"],
-    ["purchaser", ["overview", "purchaser_dashboard"], "/approvals/purchaser"],
-    ["ap_officer", ["overview", "ap_officer_dashboard"], "/approvals/ap-officer"],
-    ["admin", ["overview", "create_request", "users_management"], "/settings"],
-    ["director", ["overview", "department_requests"], "/dashboard"],
-  ])("sends %s to its usual page", (role, permissions, path) => {
+    ["custodian", ["department_requests"], "/approvals/custodian"],
+    ["purchaser", ["purchaser_dashboard"], "/approvals/purchaser"],
+    ["ap_officer", ["ap_officer_dashboard"], "/approvals/ap-officer"],
+    ["admin", ["create_request", "users_management"], "/settings"],
+  ])("sends %s without the Dashboard to its usual page", (role, permissions, path) => {
     expect(as(role, permissions)).toBe(path);
   });
 
@@ -103,7 +113,7 @@ describe("landingPathFor", () => {
   });
 
   it("falls back to a permitted page when the usual one is not granted", () => {
-    expect(as("staff", ["overview"])).toBe("/dashboard");
+    expect(as("staff", ["department_requests"])).toBe("/approvals/custodian");
   });
 
   it("sends roles without a mapped page to the overview dashboard, as before", () => {

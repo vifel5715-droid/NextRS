@@ -131,13 +131,13 @@ async function backfillLegacyData(pool: Pool): Promise<void> {
     DELETE FROM role_permissions
     WHERE permission_key IN ('pending_items_services', 'delivered_items')
   `);
-  // "ON HOLD" was retired for items in favour of "CANCEL" (with a reason).
+  // The item "CANCEL" status was replaced by "HOLD" (still with a reason).
   await pool.query(`
     UPDATE item_request_items
-    SET delivery_status = 'CANCEL',
-        status_reason = COALESCE(NULLIF(TRIM(status_reason), ''), 'Converted from On Hold'),
+    SET delivery_status = 'HOLD',
+        status_reason = COALESCE(NULLIF(TRIM(status_reason), ''), 'Converted from Cancel'),
         hold_edited = FALSE
-    WHERE delivery_status = 'HOLD'
+    WHERE delivery_status = 'CANCEL'
   `);
   await pool.query(`
     UPDATE item_request_items i

@@ -1,5 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import ListToolbar from "@/components/tables/ListToolbar";
+import ColumnFilterHeader, { type SortDirection } from "@/components/tables/ColumnFilterHeader";
+import styles from "@/features/inventory/components/ItemListPage.module.css";
 import Modal from "@/components/dialogs/Modal";
 import SearchableCombobox from "@/components/forms/SearchableCombobox";
 import { optionListAPI } from "@/lib/api";
@@ -34,6 +36,32 @@ const APPROVAL_LEVEL_LABELS: Record<string, string> = {
   MANAGER_ONLY: "Manager Only",
   SUPERVISOR_OR_MANAGER: "Supervisor or Manager",
 };
+
+type FilterColumn = "item_name" | "uom" | "machine_code" | "item_group" | "approval_level" | "departments" | "created";
+
+const BLANK_LABEL = "(Blanks)";
+
+/**
+ * The values a row offers to each header filter, as displayed. Departments is
+ * multi-valued: a row lists under every department it names.
+ */
+const COLUMN_VALUES: Record<FilterColumn, (entry: ItemCatalogEntry) => string[]> = {
+  item_name: (entry) => [entry.item_name || BLANK_LABEL],
+  uom: (entry) => [entry.uom || BLANK_LABEL],
+  machine_code: (entry) => [entry.machine_code || BLANK_LABEL],
+  item_group: (entry) => [entry.item_group || BLANK_LABEL],
+  approval_level: (entry) => [APPROVAL_LEVEL_LABELS[entry.approval_level] || entry.approval_level || BLANK_LABEL],
+  departments: (entry) =>
+    entry.departments
+      ? entry.departments.split(",").map((d) => d.trim()).filter(Boolean)
+      : ["All Departments"],
+  created: (entry) => [entry.created_at ? formatLocalDate(entry.created_at) : BLANK_LABEL],
+};
+
+const FILTER_COLUMNS = Object.keys(COLUMN_VALUES) as FilterColumn[];
+
+const sortKeyOf = (entry: ItemCatalogEntry, column: FilterColumn): string =>
+  column === "created" ? entry.created_at ?? "" : COLUMN_VALUES[column](entry).join(", ");
 
 const emptyForm = { item_name: "", uom: "", machine_code: "", item_group: "", approval_level: "", departments: [] as string[] };
 type CatalogForm = typeof emptyForm;
@@ -78,6 +106,11 @@ const ItemListPage: React.FC = () => {
   const [historyEntry, setHistoryEntry] = useState<ItemCatalogEntry | null>(null);
   const [page, setPage] = useState(1);
   const [copiedId, setCopiedId] = useState<number | null>(null);
+  const [columnFilters, setColumnFilters] = useState<Partial<Record<FilterColumn, Set<string>>>>({});
+  const [sort, setSort] = useState<{ column: FilterColumn; direction: SortDirection }>({
+    column: "item_name",
+    direction: "asc",
+  });
   const uomOptions = useMemo(() => uomEntries.map((o) => o.value), [uomEntries]);
   const machineCodeOptions = useMachineCodeOptions();
   const itemGroupOptions = useItemGroupOptions();
@@ -135,10 +168,10 @@ const ItemListPage: React.FC = () => {
     [entries]
   );
 
-  const filteredEntries = useMemo(() => {
+  const searchedEntries = useMemo(() => {
     const inRange = filterByDateRange(visibleEntries, startDate, endDate, "created_at");
     const q = searchQuery.trim().toLowerCase();
-    const matched = !q
+    return !q
       ? inRange
       : inRange.filter((entry) =>
           entry.item_name.toLowerCase().includes(q) ||
@@ -147,9 +180,63 @@ const ItemListPage: React.FC = () => {
           (entry.item_group ?? "").toLowerCase().includes(q) ||
           (entry.departments ?? "").toLowerCase().includes(q)
         );
-    // Always alphabetical by Item Name, regardless of insertion/creation order.
-    return [...matched].sort((a, b) => a.item_name.localeCompare(b.item_name));
   }, [visibleEntries, searchQuery, startDate, endDate]);
+
+  const passesColumnFilters = (entry: ItemCatalogEntry, skip?: FilterColumn) =>
+    FILTER_COLUMNS.every((column) => {
+      const selected = columnFilters[column];
+      if (!selected || column === skip) return true;
+      return COLUMN_VALUES[column](entry).some((value) => selected.has(value));
+    });
+
+  // Like Excel, each column's checkbox list only offers values from rows that
+  // the OTHER columns' filters still let through.
+  const columnFilterValues = useMemo(() => {
+    const result = {} as Record<FilterColumn, string[]>;
+    for (const column of FILTER_COLUMNS) {
+      const values = new Set<string>();
+      for (const entry of searchedEntries) {
+        if (passesColumnFilters(entry, column)) COLUMN_VALUES[column](entry).forEach((v) => values.add(v));
+      }
+      // Keep checked values listed even when other filters have hidden every row carrying them.
+      columnFilters[column]?.forEach((v) => values.add(v));
+      result[column] = Array.from(values);
+    }
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchedEntries, columnFilters]);
+
+  const filteredEntries = useMemo(() => {
+    const matched = searchedEntries.filter((entry) => passesColumnFilters(entry));
+    const factor = sort.direction === "asc" ? 1 : -1;
+    return [...matched].sort(
+      (a, b) =>
+        factor *
+        sortKeyOf(a, sort.column).localeCompare(sortKeyOf(b, sort.column), undefined, { numeric: true, sensitivity: "base" })
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchedEntries, columnFilters, sort]);
+
+  const hasColumnFilters = FILTER_COLUMNS.some((column) => columnFilters[column]);
+
+  const setColumnFilter = (column: FilterColumn, selected: Set<string> | null) =>
+    setColumnFilters((prev) => {
+      const next = { ...prev };
+      if (selected) next[column] = selected;
+      else delete next[column];
+      return next;
+    });
+
+  const filterHeader = (column: FilterColumn, label: string) => (
+    <ColumnFilterHeader
+      label={label}
+      values={columnFilterValues[column]}
+      selected={columnFilters[column] ?? null}
+      onFilterChange={(selected) => setColumnFilter(column, selected)}
+      sortDirection={sort.column === column ? sort.direction : null}
+      onSort={(direction) => setSort({ column, direction })}
+    />
+  );
 
   // The catalog can run into the thousands of rows (bulk-imported item
   // lists), and rendering every <tr> at once froze the page — paginate
@@ -159,7 +246,7 @@ const ItemListPage: React.FC = () => {
   const totalPages = Math.max(1, Math.ceil(filteredEntries.length / PAGE_SIZE));
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, startDate, endDate]);
+  }, [searchQuery, startDate, endDate, columnFilters, sort]);
   useEffect(() => {
     setPage((p) => Math.min(p, totalPages));
   }, [totalPages]);
@@ -493,21 +580,28 @@ const ItemListPage: React.FC = () => {
 
         {error && <div className="alert alert-danger py-1 px-2 small">{error}</div>}
 
-        <div className="table-responsive">
+        {hasColumnFilters && (
+          <div className="d-flex justify-content-end mb-2">
+            <button type="button" className="btn btn-sm btn-link p-0" onClick={() => setColumnFilters({})}>
+              Clear all column filters
+            </button>
+          </div>
+        )}
+        <div className={`table-responsive ${styles.scroll}`}>
           {/* simple-list-table collapses each row into a labeled stacked
               card below 768px (see globals.css) instead of letting this wide
               table overflow off the side of a phone screen. */}
-          <table className="table table-sm table-hover mb-0 simple-list-table">
+          <table className={`table table-sm table-hover mb-0 simple-list-table ${styles.table}`}>
             <thead className="table-light">
               <tr>
-                <th>Item Name</th>
-                <th>UoM</th>
-                <th>Machine Code</th>
-                <th>Item Group</th>
-                <th>Approver Level</th>
-                <th>Departments</th>
-                <th>Created</th>
-                {canManage && <th style={{ width: "110px" }}></th>}
+                <th>{filterHeader("item_name", "Item Name")}</th>
+                <th className={styles.colUom}>{filterHeader("uom", "UoM")}</th>
+                <th className={styles.colMachineCode}>{filterHeader("machine_code", "Machine Code")}</th>
+                <th className={styles.colItemGroup}>{filterHeader("item_group", "Item Group")}</th>
+                <th className={styles.colApprover}>{filterHeader("approval_level", "Approver Level")}</th>
+                <th className={styles.colDepartments}>{filterHeader("departments", "Departments")}</th>
+                <th className={styles.colCreated}>{filterHeader("created", "Created")}</th>
+                {canManage && <th className={styles.colActions}>Actions</th>}
               </tr>
             </thead>
             <tbody>

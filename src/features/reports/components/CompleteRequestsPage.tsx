@@ -552,7 +552,7 @@ const CompleteRequestsPage: React.FC = () => {
                                     <option value="OUT">OUT</option>
                                     <option value="PURCHASE REQUEST">PURCHASE REQUEST</option>
                                     <option value="URGENT">URGENT</option>
-                                    <option value="CANCEL">CANCEL</option>
+                                    <option value="HOLD">HOLD</option>
                                     <option value="CLOSE">CLOSE</option>
                                   </select>
                                 </td>

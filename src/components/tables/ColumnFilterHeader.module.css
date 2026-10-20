@@ -1,0 +1,155 @@
+.header {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.trigger {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 2px 4px;
+  margin: -2px -4px;
+  font: inherit;
+  color: inherit;
+  text-transform: inherit;
+  letter-spacing: inherit;
+  background: transparent;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.trigger:hover,
+.trigger:focus-visible,
+.triggerOpen {
+  background: rgba(37, 99, 235, 0.08);
+  outline: none;
+}
+
+.arrowButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 20px;
+  height: 20px;
+  color: #6b7280;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 3px;
+}
+
+.trigger:hover .arrowButton,
+.trigger:focus-visible .arrowButton,
+.triggerOpen .arrowButton {
+  color: #2563eb;
+  border-color: #93c5fd;
+}
+
+.arrowButtonActive {
+  color: #2563eb;
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.menu {
+  position: fixed;
+  z-index: 1060;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 0;
+  overflow: hidden;
+  font-size: 0.85rem;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  color: #212529;
+  background: #ffffff;
+  border: 1px solid #d1d5db;
+  border-radius: 6px;
+  box-shadow: 0 8px 20px rgba(15, 23, 42, 0.15);
+}
+
+.menuItem {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 6px 12px;
+  text-align: left;
+  color: inherit;
+  background: transparent;
+  border: none;
+}
+
+.menuItem:hover:not(:disabled),
+.menuItem:focus-visible {
+  background: #eff6ff;
+  outline: none;
+}
+
+.menuItem:disabled {
+  color: #adb5bd;
+  cursor: default;
+}
+
+.menuItemActive {
+  font-weight: 600;
+  color: #2563eb;
+}
+
+.divider {
+  height: 1px;
+  margin: 4px 0;
+  background: #e5e7eb;
+}
+
+.search {
+  margin: 4px 10px 6px;
+  width: auto;
+}
+
+.valueList {
+  flex: 1 1 auto;
+  min-height: 80px;
+  max-height: 220px;
+  margin: 0 10px;
+  padding: 4px 0;
+  overflow-y: auto;
+  border: 1px solid #d1d5db;
+  border-radius: 4px;
+}
+
+.valueRow {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 3px 8px;
+  margin: 0;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.valueRow:hover {
+  background: #f3f4f6;
+}
+
+.valueRow input {
+  flex-shrink: 0;
+  margin-top: 3px;
+}
+
+.empty {
+  padding: 6px 8px;
+  font-size: 0.8rem;
+  color: #6b7280;
+}
+
+.footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
+  padding: 8px 10px 2px;
+}

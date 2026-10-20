@@ -455,19 +455,41 @@
    light-grey backdrop, and the PR/Delivery "Details" block sits in a
    full-width strip below the row's fields instead of being squeezed into
    the narrowest column of a dense table. */
+/* Height-capped so the horizontal scrollbar sits on screen rather than under
+   the last card; the header row stays pinned while scrolling down. */
 .itemCardsPanel {
+  --item-card-bg: #fff;
   background: #f8fafc;
   border-radius: 12px;
-  padding: 20px;
-  overflow-x: auto;
+  padding: 0 20px 20px;
+  overflow: auto;
+  max-height: calc(100vh - 180px);
+  overscroll-behavior-x: contain;
+}
+
+/* select, #, Item Name, Quantity, UoM, Status, Remarks, Machine Code,
+   Balance, Existence Status, Actions. */
+.itemCardsHeader,
+.itemCardRow {
+  display: grid;
+  grid-template-columns: 32px 28px minmax(220px, 1.6fr) 80px 90px 150px minmax(130px, 1fr) 130px 70px 120px 130px;
+  gap: 12px;
+}
+
+/* Cards (and the header) grow to their full column width instead of letting
+   the last columns spill past the card border. */
+.itemCardsHeader,
+.itemCard {
+  min-width: min-content;
 }
 
 .itemCardsHeader {
-  display: grid;
-  grid-template-columns: 32px 28px minmax(200px, 1.6fr) 90px 90px 110px 130px 70px 130px 190px 110px;
-  min-width: 1200px;
-  gap: 12px;
-  padding: 0 16px 10px;
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  margin: 0 -20px;
+  padding: 20px 36px 10px;
+  background: #f8fafc;
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
@@ -476,7 +498,7 @@
 }
 
 .itemCard {
-  background: #fff;
+  background: var(--item-card-bg);
   border: 1px solid #e2e8f0;
   border-radius: 10px;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
@@ -490,16 +512,56 @@
 }
 
 .itemCardSelected {
+  --item-card-bg: #f0f7ff;
   border-color: #93c5fd;
-  background: #f0f7ff;
 }
 
 .itemCardRow {
-  display: grid;
-  grid-template-columns: 32px 28px minmax(200px, 1.6fr) 90px 90px 110px 130px 70px 130px 190px 110px;
-  min-width: 1200px;
-  gap: 12px;
   align-items: center;
+}
+
+/* Item Name stays in view on the left and Actions on the right while the
+   middle columns scroll sideways. */
+.itemCardsHeader > div:nth-child(3),
+.itemCardRow > div:nth-child(3),
+.itemCardsHeader > div:last-child,
+.itemCardRow > div:last-child {
+  position: sticky;
+  z-index: 1;
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+}
+
+.itemCardsHeader > div:nth-child(3),
+.itemCardRow > div:nth-child(3) {
+  left: 0;
+  padding-right: 8px;
+}
+
+.itemCardsHeader > div:last-child,
+.itemCardRow > div:last-child {
+  right: 0;
+  padding-left: 8px;
+}
+
+.itemCardRow > div:nth-child(3),
+.itemCardRow > div:last-child {
+  background: var(--item-card-bg);
+}
+
+.itemCardsHeader > div:nth-child(3),
+.itemCardsHeader > div:last-child {
+  background: #f8fafc;
+}
+
+.itemCardRow > div:nth-child(3) {
+  word-break: break-word;
+}
+
+.itemCardRow > div:nth-child(3) > * {
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
 .itemCardDetails {
@@ -510,11 +572,17 @@
 
 @media (max-width: 767.98px) {
   .itemCardsPanel {
-    overflow-x: visible;
+    overflow: visible;
+    max-height: none;
+    padding-top: 20px;
   }
 
   .itemCardsHeader {
     display: none;
+  }
+
+  .itemCard {
+    min-width: 0;
   }
 
   .itemCardRow {
@@ -523,6 +591,14 @@
     flex-direction: column;
     align-items: stretch;
     gap: 10px;
+  }
+
+  .itemCardRow > div:nth-child(3),
+  .itemCardRow > div:last-child {
+    position: static;
+    display: block;
+    padding: 0;
+    background: none;
   }
 
   .itemCardRow > div[data-label]::before {

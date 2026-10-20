@@ -42,7 +42,7 @@ const requests: ItemRequest[] = [
     created_at: "2026-10-10T08:00:00.000Z",
     items: [
       item({ id: 21, item_name: "PAPER", delivery_status: "PURCHASE REQUEST", pr_number: "PR-200", pr_status: "DELIVERED PARTIAL", quantity_delivered: 4 }),
-      item({ id: 22, item_name: "PEN", delivery_status: "CANCEL" }),
+      item({ id: 22, item_name: "PEN", delivery_status: "HOLD" }),
       item({ id: 23, item_name: "INK" }),
     ],
   }),

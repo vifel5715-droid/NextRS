@@ -14,7 +14,7 @@ interface ItemStatusReasonRowProps {
 
 /**
  * The required "Reason" input shown in an item's detail table while its
- * status is CANCEL or CLOSE. Renders nothing for any other status.
+ * status is HOLD or CLOSE. Renders nothing for any other status.
  */
 const ItemStatusReasonRow: React.FC<ItemStatusReasonRowProps> = ({
   status,
@@ -25,7 +25,7 @@ const ItemStatusReasonRow: React.FC<ItemStatusReasonRowProps> = ({
   onChange,
 }) => {
   if (!itemStatusNeedsReason(status)) return null;
-  const isCancel = status?.toUpperCase() === "CANCEL";
+  const isHold = status?.toUpperCase() === "HOLD";
   const missing = !reason?.trim();
   const label = (
     <>
@@ -48,14 +48,14 @@ const ItemStatusReasonRow: React.FC<ItemStatusReasonRowProps> = ({
           rows={stacked ? 3 : 2}
           style={{ minWidth: "180px", resize: "vertical" }}
           maxLength={1000}
-          placeholder={isCancel ? "Why is this item being cancelled?" : "Why is this item being closed?"}
+          placeholder={isHold ? "Why is this item being put on hold?" : "Why is this item being closed?"}
           value={reason ?? ""}
           disabled={disabled}
           onChange={(e) => onChange(e.target.value)}
         />
         {missing && !disabled && (
           <div className="invalid-feedback">
-            A reason is required to {isCancel ? "cancel" : "close"} this item.
+            A reason is required to {isHold ? "put this item on hold" : "close this item"}.
           </div>
         )}
       </td>
