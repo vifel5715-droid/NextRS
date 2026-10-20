@@ -1128,6 +1128,11 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
   );
   const visibleItemRequests = byMostRecent(matchingItemRequests).slice(0, 20);
   const visibleServiceRequests = byMostRecent(matchingServiceRequests).slice(0, 20);
+  // Declined requests stay listed but don't count toward the tab badges.
+  const isDeclined = (row: RequestRow) =>
+    getCompositeStatus(row as unknown as Record<string, unknown>).class === "rejected";
+  const itemRequestsBadgeCount = matchingItemRequests.filter((row) => !isDeclined(row)).length;
+  const serviceRequestsBadgeCount = matchingServiceRequests.filter((row) => !isDeclined(row)).length;
 
   // Closed and On Hold tabs: the same search box, department dropdown and date
   // range. Each badge counts its own matching items (one row per item), and
@@ -1291,14 +1296,14 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
             onClick={() => { setActiveUrgentTab(false); setItemTab(null); setActiveTab("item"); }}
           >
             Item Requests
-            <span className="dash-tab-badge">{matchingItemRequests.length}</span>
+            <span className="dash-tab-badge">{itemRequestsBadgeCount}</span>
           </button>
           <button
             className={`dash-tab ${!activeUrgentTab && !itemTab && activeTab === "service" ? "active" : ""}`}
             onClick={() => { setActiveUrgentTab(false); setItemTab(null); setActiveTab("service"); }}
           >
             Service Requests
-            <span className="dash-tab-badge">{matchingServiceRequests.length}</span>
+            <span className="dash-tab-badge">{serviceRequestsBadgeCount}</span>
           </button>
           {!approvalView && (
           <button
