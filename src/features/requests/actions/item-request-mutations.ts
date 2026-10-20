@@ -518,7 +518,7 @@ async function loadRequestItemForClassification(itemId: number, user: Authorized
   const [item] = await db.select().from(itemRequestItems).where(eq(itemRequestItems.id, itemId)).limit(1);
   if (!item) throw new Error("Item not found.");
   const [request] = await db
-    .select({ id: itemRequests.id, department: itemRequests.department })
+    .select({ id: itemRequests.id, serial: itemRequests.serial, department: itemRequests.department })
     .from(itemRequests)
     .where(eq(itemRequests.id, item.request_id))
     .limit(1);
@@ -584,11 +584,31 @@ export async function setItemCatalogLinkAction(itemId: number, value: unknown): 
     assertId(itemId, "item ID");
     const name = optionalString(asRecord(value), "catalog_item_name", 255, "Item Catalog name");
 
-    const { request } = await loadRequestItemForClassification(itemId, user);
-    await getDb()
-      .update(itemRequestItems)
-      .set({ catalog_item_name: name ? name.toUpperCase() : null })
-      .where(eq(itemRequestItems.id, itemId));
+    const { item, request } = await loadRequestItemForClassification(itemId, user);
+    const catalogName = name ? name.toUpperCase() : null;
+    // Registering also renames the IRS line itself to the catalog entry, so
+    // the request (slips, balances, history) tracks it like any catalog item.
+    // Clearing the registration leaves the item's current name alone.
+    const nextItemName = catalogName ?? item.item_name;
+
+    await getDb().transaction(async (tx) => {
+      await tx
+        .update(itemRequestItems)
+        .set({ catalog_item_name: catalogName, item_name: nextItemName })
+        .where(eq(itemRequestItems.id, itemId));
+      if (nextItemName !== item.item_name) {
+        await logAdjustments(tx, {
+          user,
+          requestId: request.id,
+          requestType: "item",
+          requestSerial: request.serial,
+          department: request.department,
+          itemLabel: nextItemName,
+          remarks: "Registered against Item Catalog (Pending Item Entry)",
+          changes: [["Item Name", item.item_name, nextItemName]],
+        });
+      }
+    });
     await publishRequestChanged({ type: "item", action: "updated", id: request.id, department: request.department });
   });
 }
