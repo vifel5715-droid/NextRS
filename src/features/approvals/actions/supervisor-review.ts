@@ -4,7 +4,7 @@ import { and, eq, isNull, or } from "drizzle-orm";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { requireUser, type AuthorizedUser } from "@/lib/auth";
 import { ForbiddenError, NotFoundError, ValidationError } from "@/lib/errors";
-import { requirePermission } from "@/lib/permissions";
+import { requireDepartmentAccess, requirePermission } from "@/lib/permissions";
 import { publishRequestChanged } from "@/lib/realtime";
 import { getDb } from "@/lib/db";
 import {
@@ -112,6 +112,7 @@ async function reviewSupervisorRequest(input: SupervisorReviewInput): Promise<vo
 
   const department = await getDb().transaction(async (tx) => {
     const request = await lockPendingRequest(tx, input);
+    requireDepartmentAccess(user, request.department);
 
     const [creator] = await tx
       .select({ role: users.role })

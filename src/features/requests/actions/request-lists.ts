@@ -12,6 +12,7 @@ import {
 import { getCurrentUser } from "@/lib/session";
 import { getDb } from "@/lib/db";
 import { NotFoundError } from "@/lib/errors";
+import { isUnscopedRole } from "@/lib/permissions";
 import {
   itemIssuanceAudits,
   itemRequestItems,
@@ -27,21 +28,14 @@ export interface RequestListsResult {
 }
 
 type RequestScope = "all" | "own";
-const GLOBAL_REQUEST_ROLES = new Set([
-  "admin",
-  "custodian",
-  "director",
-  "supervisor",
-  "manager",
-  "purchaser",
-  "ap_officer",
-  "operations_manager",
-]);
 
 /**
- * Who may list requests, and which rows they see: global roles every
- * department, everyone else their own department. Shared by the full lists
- * and the dashboard counts so both always cover exactly the same rows.
+ * Who may list requests, and which rows they see: unscoped roles
+ * (lib/permissions.ts — the same rule every approve/edit action enforces)
+ * every department, everyone else their own department. Supervisors and
+ * managers are department reviewers, so they only list their department.
+ * Shared by the full lists and the dashboard counts so both always cover
+ * exactly the same rows.
  */
 async function resolveListAccess(scope: RequestScope, allowOverview: boolean) {
   const user = await getCurrentUser();
@@ -62,7 +56,7 @@ async function resolveListAccess(scope: RequestScope, allowOverview: boolean) {
     throw new Error("Permission denied.");
   }
 
-  const globalScope = scope === "all" && GLOBAL_REQUEST_ROLES.has(role);
+  const globalScope = scope === "all" && isUnscopedRole(role);
   const ownScope = scope === "own" || (!globalScope && !hasBroadListPermission);
   const departmentScope = !globalScope && !ownScope && hasBroadListPermission;
   // Everyone sees every request from their own department, not just the

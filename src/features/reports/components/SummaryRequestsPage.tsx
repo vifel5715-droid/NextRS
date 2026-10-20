@@ -3,6 +3,7 @@ import Layout from "@/components/layout/Layout";
 import ListToolbar from "@/components/tables/ListToolbar";
 import DateRangeFilter from "@/components/forms/DateRangeFilter";
 import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
+import { useAuth } from "@/components/providers/AuthProvider";
 import { fetchRequestLists } from "@/lib/api";
 import { getVisibleSpecialRequestsAction } from "@/features/requests/actions/special-requests";
 import { urgentStatus, reimbursementStatus } from "@/features/requests/utils/specialRequestStatus";
@@ -402,6 +403,10 @@ const RequestDetails: React.FC<{ source: SummaryRow["source"] }> = ({ source }) 
  */
 const SummaryRequestsPage: React.FC = () => {
   const { startDate, endDate } = useDateRangeContext();
+  const { user } = useAuth();
+  const isAdmin = user?.role?.trim().toLowerCase() === "admin";
+  const [downloadingPdf, setDownloadingPdf] = useState(false);
+  const [pdfError, setPdfError] = useState<string | null>(null);
   const [rows, setRows] = useState<SummaryRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -495,6 +500,25 @@ const SummaryRequestsPage: React.FC = () => {
       }))
     );
 
+  // Oldest first, so the PDF reads in serial order like a filed stack of slips.
+  const handleDownloadPdf = async () => {
+    setDownloadingPdf(true);
+    setPdfError(null);
+    try {
+      const { downloadRequestSlipsPdf } = await import("@/features/reports/utils/requestSlipsPdf");
+      const entries = [...visibleRows]
+        .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""))
+        .map((row) => ({ source: row.source, statusText: row.statusText }));
+      const scope = kindFilter === "all" ? "all" : kindFilter;
+      await downloadRequestSlipsPdf(entries, `request-printouts-${scope}-${new Date().toISOString().slice(0, 10)}.pdf`);
+    } catch (err: unknown) {
+      log.error("Failed to build printouts PDF:", err);
+      setPdfError(getErrorMessage(err, "Couldn't create the PDF. Please try again."));
+    } finally {
+      setDownloadingPdf(false);
+    }
+  };
+
   return (
     <Layout>
       <div className="dash-container">
@@ -549,7 +573,26 @@ const SummaryRequestsPage: React.FC = () => {
               ))}
             </select>
           </div>
+          {isAdmin && (
+            <div className="ms-auto">
+              <button
+                type="button"
+                className="btn btn-primary"
+                disabled={downloadingPdf || visibleRows.length === 0}
+                onClick={() => void handleDownloadPdf()}
+                title="Download a printout slip for every request in the list below, as one PDF"
+              >
+                {downloadingPdf
+                  ? "Preparing PDF…"
+                  : `Download Printouts (PDF) — ${visibleRows.length} ${visibleRows.length === 1 ? "request" : "requests"}`}
+              </button>
+            </div>
+          )}
         </div>
+
+        {pdfError && (
+          <div className="alert alert-danger py-2" role="alert">{pdfError}</div>
+        )}
 
         {error && (
           <div className="alert alert-warning d-flex align-items-center gap-2">

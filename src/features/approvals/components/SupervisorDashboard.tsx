@@ -7,7 +7,7 @@ import ItemStatusBadge from "@/features/requests/components/ItemStatusBadge";
 import ReimbursementAttachmentLink from "@/features/requests/components/ReimbursementAttachmentLink";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { sanitizeUserInput } from "@/lib/utils/sanitize";
-import { getBsStatusBadgeClass, formatStatusLabel, getForApprovalLabel, getHeldServiceCount, hasEditedHeldService } from "@/lib/utils/status";
+import { getBsStatusBadgeClass, formatStatusLabel, getCompositeStatus, getForApprovalLabel, getHeldServiceCount, hasEditedHeldService } from "@/lib/utils/status";
 import { useSupervisorRequests } from "@/features/approvals/hooks/useSupervisorRequests";
 import { useUrgentRequests } from "@/features/requests/hooks/useUrgentRequests";
 import { useReimbursementRequests } from "@/features/requests/hooks/useReimbursementRequests";
@@ -267,6 +267,11 @@ const SupervisorDashboard: React.FC = () => {
   const totalCount = rows.length;
   const showRequestTabs = !activeUrgentTab && !activeReimbursementTab;
   const isAdmin = user?.role?.toLowerCase().trim() === "admin";
+  // Declined requests stay listed but don't count toward the tab badges.
+  const notDeclined = (row: object) =>
+    getCompositeStatus(row as Record<string, unknown>).class !== "rejected";
+  const itemBadgeCount = filteredItemRequests.filter(notDeclined).length;
+  const serviceBadgeCount = filteredServiceRequests.filter(notDeclined).length;
 
   useEffect(() => {
     log.info("Mounted — user:", user?.email, `(${user?.role})`);
@@ -286,13 +291,13 @@ const SupervisorDashboard: React.FC = () => {
             className={tabClass(showRequestTabs && isItemTab)}
             onClick={() => { log.info("Tab switched to: item"); setActiveUrgentTab(false); setActiveReimbursementTab(false); setActiveTab("item"); }}
           >
-            Item Requests<span className="dash-tab-badge">{filteredItemRequests.length}</span>
+            Item Requests<span className="dash-tab-badge">{itemBadgeCount}</span>
           </button>
           <button
             className={tabClass(showRequestTabs && !isItemTab)}
             onClick={() => { log.info("Tab switched to: service"); setActiveUrgentTab(false); setActiveReimbursementTab(false); setActiveTab("service"); }}
           >
-            Service Requests<span className="dash-tab-badge">{filteredServiceRequests.length}</span>
+            Service Requests<span className="dash-tab-badge">{serviceBadgeCount}</span>
           </button>
           <button
             className={tabClass(activeUrgentTab)}

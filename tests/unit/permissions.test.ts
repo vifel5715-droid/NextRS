@@ -5,6 +5,7 @@ import {
   canEditRequest,
   isDepartmentScoped,
   isRequestOwner,
+  isUnscopedRole,
   requireDepartmentAccess,
   requirePermission,
   requireRole,
@@ -73,6 +74,28 @@ describe("department access", () => {
 
   it("lets an unscoped role into any department", () => {
     expect(() => requireDepartmentAccess(user({ roleKey: "custodian" }), "ENGG")).not.toThrow();
+  });
+
+  // The request lists (request-lists.ts) and the Supervisor/Manager review
+  // action both go through this rule, so an approver only sees and acts on
+  // what they may review.
+  const DEPARTMENTS = ["ENGG", "HR", "QA", "PRODN", "ACCTG"];
+  it.each(["supervisor", "manager"])("keeps a %s to their own department's requests", (roleKey) => {
+    expect(isUnscopedRole(roleKey)).toBe(false);
+    for (const own of DEPARTMENTS) {
+      const approver = user({ roleKey, department: own });
+      for (const department of DEPARTMENTS) {
+        if (department === own) expect(() => requireDepartmentAccess(approver, department)).not.toThrow();
+        else expect(() => requireDepartmentAccess(approver, department)).toThrow(ForbiddenError);
+      }
+    }
+  });
+
+  it.each(["admin", "operations_manager"])("lets a cross-department approver (%s) review every department", (roleKey) => {
+    expect(isUnscopedRole(roleKey)).toBe(true);
+    for (const department of DEPARTMENTS) {
+      expect(() => requireDepartmentAccess(user({ roleKey, department: "HR" }), department)).not.toThrow();
+    }
   });
 });
 

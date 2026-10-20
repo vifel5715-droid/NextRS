@@ -45,8 +45,13 @@ const UNSCOPED_ROLES = new Set([
   "operations_manager",
 ]);
 
+/** True for a role (normalized: trimmed, lowercase) that sees every department. */
+export function isUnscopedRole(roleKey: string): boolean {
+  return UNSCOPED_ROLES.has(roleKey);
+}
+
 export function isDepartmentScoped(user: AuthorizedUser): boolean {
-  return !UNSCOPED_ROLES.has(user.roleKey);
+  return !isUnscopedRole(user.roleKey);
 }
 
 export const sameText = (a: string | null | undefined, b: string | null | undefined) =>
