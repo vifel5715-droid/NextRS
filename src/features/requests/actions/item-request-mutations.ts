@@ -20,6 +20,7 @@ import {
   requiredReason,
 } from "@/lib/validation";
 import { logAdjustments, nextAdjustmentSerial } from "@/server/audit/adjustments";
+import { loadCatalogUoms } from "@/server/services/catalog-uom";
 import { getDb } from "@/lib/db";
 import { deletionLog, itemRequestItems, itemRequests, serviceRequests } from "@/db/schema";
 import {
@@ -124,6 +125,11 @@ export async function updateItemRequestAction(id: number, value: unknown): Promi
       const existingById = new Map(existingItems.map((item) => [item.id, item]));
       const keptIds = new Set<number>();
       const adjustmentSerial = adjustmentRemarks ? await nextAdjustmentSerial(tx) : undefined;
+      const catalogUom = await loadCatalogUoms(
+        tx,
+        request.department,
+        items.map((incoming) => incoming.item_name ?? existingById.get(incoming.id ?? -1)?.item_name ?? "")
+      );
 
       for (const incoming of items) {
         const existing = incoming.id !== undefined ? existingById.get(incoming.id) : undefined;
@@ -137,6 +143,9 @@ export async function updateItemRequestAction(id: number, value: unknown): Promi
           const patch: Partial<typeof itemRequestItems.$inferInsert> = {};
           if (incoming.item_name !== undefined) patch.item_name = incoming.item_name;
           if (incoming.uom !== undefined) patch.uom = incoming.uom;
+          // Once stock has moved, the UoM is part of what was issued/received.
+          const masterUom = alreadyMoved === 0 ? catalogUom(patch.item_name ?? existing.item_name) : undefined;
+          if (masterUom) patch.uom = masterUom;
           if (incoming.remarks !== undefined) patch.remarks = incoming.remarks || null;
           if (incoming.machine_code !== undefined) patch.machine_code = incoming.machine_code || null;
           if (incoming.quantity !== undefined) {
@@ -188,7 +197,7 @@ export async function updateItemRequestAction(id: number, value: unknown): Promi
               request_id: id,
               item_name: incoming.item_name,
               quantity,
-              uom: incoming.uom,
+              uom: catalogUom(incoming.item_name) ?? incoming.uom,
               remarks: incoming.remarks || null,
               machine_code: incoming.machine_code || null,
               quantity_delivered: 0,

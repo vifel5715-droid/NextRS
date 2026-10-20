@@ -6,6 +6,7 @@ import { getCurrentUser } from "@/lib/session";
 import { publishRequestChanged } from "@/lib/realtime";
 import { getDb } from "@/lib/db";
 import { lockSerialSequence, nextSerial } from "@/server/services/serial-numbers";
+import { loadCatalogUoms } from "@/server/services/catalog-uom";
 import { itemRequestItems, itemRequests } from "@/db/schema";
 
 const MAX_ATTACHMENT_BYTES = 10.5 * 1024 * 1024;
@@ -204,12 +205,13 @@ async function createItemRequest(formData: FormData): Promise<CreatedRequest> {
 
     if (!request) throw new Error("Failed to create item request.");
 
+    const catalogUom = await loadCatalogUoms(tx, department, items.map((item) => item.item_name));
     await tx.insert(itemRequestItems).values(
       items.map((item) => ({
         request_id: request.id,
         item_name: item.item_name,
         quantity: item.quantity,
-        uom: item.uom,
+        uom: catalogUom(item.item_name) ?? item.uom,
         remarks: item.remarks || null,
         machine_code: item.machine_code ?? null,
         qty_balance: item.quantity,

@@ -280,7 +280,7 @@ const ItemCatalogModal: React.FC<ItemCatalogModalProps> = ({ isOpen, onClose }) 
           <label className="form-label small mb-1">ITEM NAME</label>
           <SearchableCombobox
             value={form.item_name}
-            onChange={(value) => setForm({ ...form, item_name: value })}
+            onChange={(value) => setForm({ ...form, item_name: value.toUpperCase() })}
             options={itemNameSuggestions}
             placeholder="Type to search…"
             required
@@ -387,7 +387,7 @@ const ItemCatalogModal: React.FC<ItemCatalogModalProps> = ({ isOpen, onClose }) 
                     <td>
                       <SearchableCombobox
                         value={editForm.item_name}
-                        onChange={(value) => setEditForm({ ...editForm, item_name: value })}
+                        onChange={(value) => setEditForm({ ...editForm, item_name: value.toUpperCase() })}
                         options={itemNameSuggestions}
                         placeholder="Type to search…"
                         required

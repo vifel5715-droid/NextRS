@@ -15,6 +15,7 @@
     "drop-tables": "tsx scripts/drop-tables.ts",
     "debug-db": "tsx scripts/debug-db.ts",
     "seed:requests": "tsx scripts/seed-requests.ts",
+    "sync:catalog-uoms": "tsx scripts/sync-catalog-uoms.ts",
     "db:generate": "drizzle-kit generate --config drizzle.config.ts",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit && tsc --noEmit -p tests",

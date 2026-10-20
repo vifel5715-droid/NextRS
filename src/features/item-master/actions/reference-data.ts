@@ -1,12 +1,14 @@
 "use server";
 
-import { eq } from "drizzle-orm";
-import type { ApprovalLevel, ItemCatalogEntry, OptionListEntry } from "@/types";
+import { and, eq, isNull, sql } from "drizzle-orm";
+import type { ApprovalLevel, ItemCatalogEntry, OptionListEntry, User } from "@/types";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { getCurrentUser } from "@/lib/session";
 import { publishRequestChanged } from "@/lib/realtime";
 import { getDb } from "@/lib/db";
-import { itemCatalog, optionLists } from "@/db/schema";
+import { itemCatalog, itemRequestItems, itemRequests, optionLists } from "@/db/schema";
+import { logAdjustments } from "@/server/audit/adjustments";
+import { loadCatalogUoms } from "@/server/services/catalog-uom";
 
 export type OptionListKind = OptionListEntry["kind"];
 
@@ -49,7 +51,7 @@ async function requireItemCatalogManagementPermission() {
 
 function validateItemCatalogInput(input: SaveItemCatalogInput) {
   if (!input || typeof input !== "object") throw new Error("Invalid item details.");
-  const item_name = typeof input.item_name === "string" ? input.item_name.trim() : "";
+  const item_name = typeof input.item_name === "string" ? input.item_name.trim().toUpperCase() : "";
   const uom = typeof input.uom === "string" ? input.uom.trim() : "";
   const machine_code = typeof input.machine_code === "string" ? input.machine_code.trim() : "";
   const item_group = typeof input.item_group === "string" ? input.item_group.trim() : "";
@@ -144,7 +146,63 @@ async function createItemCatalogEntry(input: SaveItemCatalogInput): Promise<Item
     .returning();
   if (!row) throw new Error("Failed to add item to the catalog.");
   await publishRequestChanged({ type: "catalog", action: "created", id: row.id, department: null });
+  await syncPendingRequestItemsToCatalog(user, row);
   return toItemCatalogEntry(row);
+}
+
+/**
+ * Brings IRS lines requested under this catalog name (case-insensitive) in
+ * line with the catalog entry: name, UoM and, when the catalog has one,
+ * machine code. Only lines with no delivery status yet — once an item is in
+ * PR/OUT/DELIVERED/etc. its UoM is part of what was bought or issued and must
+ * not shift underneath it. The UoM follows the same department/duplicate
+ * rules as saving a request (see loadCatalogUoms).
+ */
+async function syncPendingRequestItemsToCatalog(user: User, entry: typeof itemCatalog.$inferSelect) {
+  const db = getDb();
+  const matches = await db
+    .select({ item: itemRequestItems, serial: itemRequests.serial, department: itemRequests.department })
+    .from(itemRequestItems)
+    .innerJoin(itemRequests, eq(itemRequests.id, itemRequestItems.request_id))
+    .where(
+      and(
+        eq(sql`upper(trim(${itemRequestItems.item_name}))`, entry.item_name.trim().toUpperCase()),
+        isNull(itemRequestItems.delivery_status)
+      )
+    );
+
+  const changedRequests = new Map<number, string>();
+  await db.transaction(async (tx) => {
+    for (const { item, serial, department } of matches) {
+      const catalogUom = await loadCatalogUoms(tx, department, [item.item_name]);
+      const next = {
+        item_name: entry.item_name,
+        uom: catalogUom(item.item_name) ?? item.uom,
+        machine_code: entry.machine_code ?? item.machine_code,
+      };
+      if (next.item_name === item.item_name && next.uom === item.uom && next.machine_code === item.machine_code) continue;
+      await tx.update(itemRequestItems).set(next).where(eq(itemRequestItems.id, item.id));
+      await logAdjustments(tx, {
+        user: { ...user, roleKey: user.role.trim().toLowerCase() },
+        requestId: item.request_id,
+        requestType: "item",
+        requestSerial: serial,
+        department,
+        itemLabel: entry.item_name,
+        remarks: "Updated from Item List",
+        changes: [
+          ["Item Name", item.item_name, next.item_name],
+          ["UoM", item.uom, next.uom],
+          ["Machine Code", item.machine_code ?? "", next.machine_code ?? ""],
+        ],
+      });
+      changedRequests.set(item.request_id, department);
+    }
+  });
+
+  for (const [id, department] of changedRequests) {
+    await publishRequestChanged({ type: "item", action: "updated", id, department });
+  }
 }
 
 export async function updateItemCatalogEntryAction(id: number, input: SaveItemCatalogInput): Promise<ActionResult<ItemCatalogEntry>> {
@@ -152,7 +210,7 @@ export async function updateItemCatalogEntryAction(id: number, input: SaveItemCa
 }
 
 async function updateItemCatalogEntry(id: number, input: SaveItemCatalogInput): Promise<ItemCatalogEntry> {
-  await requireItemCatalogManagementPermission();
+  const user = await requireItemCatalogManagementPermission();
   if (!Number.isSafeInteger(id) || id < 1) throw new Error("Invalid item ID.");
   const values = validateItemCatalogInput(input);
   const [row] = await getDb()
@@ -162,6 +220,7 @@ async function updateItemCatalogEntry(id: number, input: SaveItemCatalogInput): 
     .returning();
   if (!row) throw new Error("Item not found.");
   await publishRequestChanged({ type: "catalog", action: "updated", id, department: null });
+  await syncPendingRequestItemsToCatalog(user, row);
   return toItemCatalogEntry(row);
 }
 

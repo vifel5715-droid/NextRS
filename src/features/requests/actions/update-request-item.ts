@@ -6,6 +6,7 @@ import { requireUser, type AuthorizedUser } from "@/lib/auth";
 import { requirePermission } from "@/lib/permissions";
 import { getItemStatusText, itemStatusNeedsReason } from "@/lib/utils/status";
 import { logAdjustments } from "@/server/audit/adjustments";
+import { loadCatalogUoms } from "@/server/services/catalog-uom";
 import { getDb } from "@/lib/db";
 import { publishRequestChanged } from "@/lib/realtime";
 import { itemIssuanceAudits, itemRequestItems, itemRequests } from "@/db/schema";
@@ -196,6 +197,12 @@ export async function updateRequestItemAction(itemId: number, value: unknown): P
       }
       if (releasedNow > 0 && !input.issuance_number) {
         throw new Error("Issuance Number is required when recording an OUT quantity.");
+      }
+
+      // Once stock has moved, the UoM is part of what was issued/received.
+      if (oldDelivered === 0 && oldOut === 0) {
+        const catalogUom = await loadCatalogUoms(tx, request.department, [input.item_name]);
+        input.uom = catalogUom(input.item_name) ?? input.uom;
       }
 
       const updatedDelivered = oldDelivered + deliveredNow;
