@@ -1750,9 +1750,11 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
         )}
       </div>
 
-      <div className="mb-4">
-        <DateRangeFilter />
-      </div>
+      {viewMode === "pending" && (
+        <div className="mb-4">
+          <DateRangeFilter />
+        </div>
+      )}
 
       {showAllPending ? (
         <div className={styles.requestListFrame}>
