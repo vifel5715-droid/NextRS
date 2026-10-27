@@ -101,15 +101,18 @@ const MainDashboardPage: React.FC = () => {
     awaitingSupervisorApprovalCount,
     awaitingCustodianApprovalCount,
   });
-  const summaryCards: SummaryCard[] = [
-    {
+  const summaryCards: SummaryCard[] = [];
+  if (role !== "custodian") {
+    summaryCards.push({
       key: "total",
       label: "Total Requests",
       hint: "Every request you can see",
       icon: "🗂️",
       value: allRequestsCount + (special.urgentCount ?? 0) + (special.reimbursementCount ?? 0),
       variant: "primary",
-    },
+    });
+  }
+  summaryCards.push(
     {
       key: "pending",
       label: "Pending Requests",
@@ -137,7 +140,7 @@ const MainDashboardPage: React.FC = () => {
       variant: "success",
       path: permissions.includes("complete_requests") ? "/reports" : undefined,
     },
-  ];
+  );
   if (special.urgentCount !== null) {
     summaryCards.push({
       key: "urgent",
