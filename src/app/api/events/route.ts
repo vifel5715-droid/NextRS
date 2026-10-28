@@ -9,16 +9,14 @@ const HEARTBEAT_MS = 25_000;
 // check below — a logged-out or expired session stops receiving events.
 const MAX_CONNECTION_MS = 15 * 60_000;
 
-// Roles whose request lists span every department (see request-lists.ts's
-// GLOBAL_REQUEST_ROLES); everyone else only receives their own department's
+// Roles whose request lists span every department (see lib/permissions.ts's
+// UNSCOPED_ROLES); everyone else only receives their own department's
 // events. Events only carry ids, so this is noise reduction, not the
 // security boundary — the refetch that follows is separately authorized.
 const ALL_DEPARTMENT_ROLES = new Set([
   "admin",
   "custodian",
   "director",
-  "supervisor",
-  "manager",
   "purchaser",
   "ap_officer",
   "operations_manager",

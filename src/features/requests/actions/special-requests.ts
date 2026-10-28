@@ -1,9 +1,10 @@
 "use server";
 
-import { desc, eq, getTableColumns, inArray } from "drizzle-orm";
+import { desc, eq, getTableColumns, inArray, sql } from "drizzle-orm";
 import type { ReimbursementRequest, UrgentRequest } from "@/types";
 import { getCurrentUser } from "@/lib/session";
 import { getDb } from "@/lib/db";
+import { isUnscopedRole } from "@/lib/permissions";
 import {
   reimbursementItems,
   reimbursementRequests,
@@ -11,8 +12,6 @@ import {
   urgentRequests,
   users,
 } from "@/db/schema";
-
-const GLOBAL_REQUEST_ROLES = new Set(["admin", "operations_manager", "purchaser", "ap_officer"]);
 
 function canViewRequests(
   permissions: string[],
@@ -27,7 +26,7 @@ const URGENT_VIEW_PERMISSIONS = ["create_request", "urgent_items", "supervisor_d
 const REIMBURSEMENT_VIEW_PERMISSIONS = ["create_request", "supervisor_dashboard", "purchaser_dashboard", "ap_officer_dashboard"] as const;
 
 function isGlobalRequestUser(role: string): boolean {
-  return GLOBAL_REQUEST_ROLES.has(role.toLowerCase());
+  return isUnscopedRole(role.trim().toLowerCase());
 }
 
 export async function getUrgentRequestsAction(): Promise<UrgentRequest[]> {
@@ -41,7 +40,7 @@ export async function getUrgentRequestsAction(): Promise<UrgentRequest[]> {
 
   const db = getDb();
   // Every request from the user's own department; global roles see all.
-  const scope = isGlobalRequestUser(user.role) ? undefined : eq(urgentRequests.department, user.department);
+  const scope = isGlobalRequestUser(user.role) ? undefined : eq(sql`upper(trim(${urgentRequests.department}))`, user.department.trim().toUpperCase());
 
   const headers = await db
     .select()
@@ -142,7 +141,7 @@ export async function getReimbursementRequestsAction(): Promise<ReimbursementReq
 
   const db = getDb();
   // Every request from the user's own department; global roles see all.
-  const scope = isGlobalRequestUser(user.role) ? undefined : eq(reimbursementRequests.department, user.department);
+  const scope = isGlobalRequestUser(user.role) ? undefined : eq(sql`upper(trim(${reimbursementRequests.department}))`, user.department.trim().toUpperCase());
 
   const { attachment_data: _attachmentData, ...headerColumns } =
     getTableColumns(reimbursementRequests);

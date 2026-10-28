@@ -1,11 +1,12 @@
 "use server";
 
-import { desc, eq, inArray } from "drizzle-orm";
+import { desc, eq, inArray, sql } from "drizzle-orm";
 import type { ItemRequest, ServiceRequest } from "@/types";
 import { getItemBalance } from "@/lib/utils/itemBalance";
 import { isItemServedOrClosed } from "@/lib/utils/status";
 import { getCurrentUser } from "@/lib/session";
 import { getDb } from "@/lib/db";
+import { isUnscopedRole } from "@/lib/permissions";
 import {
   itemRequestItems,
   itemRequests,
@@ -25,7 +26,15 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
   if (!user.permissions.includes("create_request")) throw new Error("Permission denied.");
 
   const role = user.role.trim().toLowerCase();
-  const canViewAllRequests = role === "supervisor" || role === "manager";
+  // Supervisors and managers review their own department only; just the
+  // unscoped roles (custodian, admin, ...) see every department.
+  const department = user.department.trim().toUpperCase();
+  const itemScope = isUnscopedRole(role)
+    ? undefined
+    : eq(sql`upper(trim(${itemRequests.department}))`, department);
+  const serviceScope = isUnscopedRole(role)
+    ? undefined
+    : eq(sql`upper(trim(${serviceRequests.department}))`, department);
   const db = getDb();
   const [itemHeaders, serviceHeaders] = await Promise.all([
     db
@@ -51,10 +60,8 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
         attachment_name: itemRequests.attachment_name,
       })
       .from(itemRequests)
-      .where(
-        // Whole department, not just the user's own requests.
-        canViewAllRequests ? undefined : eq(itemRequests.department, user.department)
-      )
+      // Whole department, not just the user's own requests.
+      .where(itemScope)
       .orderBy(desc(itemRequests.created_at)),
     db
       .select({
@@ -78,9 +85,7 @@ export async function getStaffRequestsAction(): Promise<StaffRequestsResult> {
         pr_status: serviceRequests.pr_status,
       })
       .from(serviceRequests)
-      .where(
-        canViewAllRequests ? undefined : eq(serviceRequests.department, user.department)
-      )
+      .where(serviceScope)
       .orderBy(desc(serviceRequests.created_at)),
   ]);
 
