@@ -1,4 +1,4 @@
-import React, { useRef, useState } from "react";
+import React, { useId, useRef, useState } from "react";
 import { formatBytes } from "@/lib/utils/formatBytes";
 import styles from "@/features/requests/components/AttachmentDropzone.module.css";
 
@@ -22,6 +22,9 @@ const AttachmentDropzone: React.FC<AttachmentDropzoneProps> = ({
   onFileSelected,
 }) => {
   const inputRef = useRef<HTMLInputElement>(null);
+  // The same form can be mounted twice (e.g. /requests and /requests/new are
+  // both kept alive by ClientApp), so the caller's id alone isn't unique.
+  const inputId = `${id}${useId()}`;
   const [isDragOver, setIsDragOver] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -71,7 +74,8 @@ const AttachmentDropzone: React.FC<AttachmentDropzoneProps> = ({
         </button>
         <input
           ref={inputRef}
-          id={id}
+          id={inputId}
+          name={id}
           type="file"
           accept={accept}
           className={styles.hiddenInput}

@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
 import { getTodayDateString } from "@/lib/utils/dateRange";
 
@@ -13,15 +13,21 @@ import { getTodayDateString } from "@/lib/utils/dateRange";
 const DateRangeFilter: React.FC = () => {
   const { startDate, endDate, setStartDate, setEndDate, reset } = useDateRangeContext();
   const isDefault = startDate === "" && endDate === getTodayDateString();
+  // Every list screen renders this filter, and ClientApp keeps several
+  // visited screens mounted (hidden) at once, so fixed ids would repeat.
+  const idPrefix = useId();
+  const startId = `${idPrefix}-start`;
+  const endId = `${idPrefix}-end`;
 
   return (
     <div className="d-flex align-items-end gap-2 flex-wrap">
       <div>
-        <label htmlFor="date-range-start" className="form-label small mb-1">
+        <label htmlFor={startId} className="form-label small mb-1">
           Start Date
         </label>
         <input
-          id="date-range-start"
+          id={startId}
+          name="start_date"
           type="date"
           className="form-control form-control-sm"
           value={startDate}
@@ -30,11 +36,12 @@ const DateRangeFilter: React.FC = () => {
         />
       </div>
       <div>
-        <label htmlFor="date-range-end" className="form-label small mb-1">
+        <label htmlFor={endId} className="form-label small mb-1">
           End Date
         </label>
         <input
-          id="date-range-end"
+          id={endId}
+          name="end_date"
           type="date"
           className="form-control form-control-sm"
           value={endDate}

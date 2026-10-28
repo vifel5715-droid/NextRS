@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { urgentRequestAPI } from "@/lib/api";
 import { getUrgentRequestsAction } from "@/features/requests/actions/special-requests";
@@ -38,6 +38,10 @@ export function useUrgentRequests() {
   const [urgentFormData, setUrgentFormData] = useState({ department: "", requested_by: "", purpose: "", remarks: "", date_needed: "" });
   const [urgentItems, setUrgentItems] = useState<UrgentRequestItem[]>([{ ...emptyUrgentItem }]);
   const [isSubmittingUrgent, setIsSubmittingUrgent] = useState(false);
+  // Shared by the Urgent and Payment forms (both create an urgent request).
+  // Unlike the state flags, it blocks a second submit before the disabled
+  // button has re-rendered (e.g. a fast double Enter).
+  const submittingRef = useRef(false);
 
   const resetUrgentForm = useCallback(() => {
     setUrgentFormData({ department: user?.department || "", requested_by: user?.name || "", purpose: "", remarks: "", date_needed: "" });
@@ -80,6 +84,8 @@ export function useUrgentRequests() {
       return false;
     }
 
+    if (submittingRef.current) return false;
+    submittingRef.current = true;
     setIsSubmittingUrgent(true);
     try {
       log.info("Submitting urgent request — department:", urgentFormData.department, "items:", items.length);
@@ -107,6 +113,7 @@ export function useUrgentRequests() {
       alert("Error submitting urgent request: " + reason);
       return false;
     } finally {
+      submittingRef.current = false;
       setIsSubmittingUrgent(false);
     }
   }, [urgentFormData, urgentItems, resetUrgentForm]);
@@ -161,6 +168,8 @@ export function useUrgentRequests() {
       return false;
     }
 
+    if (submittingRef.current) return false;
+    submittingRef.current = true;
     setIsSubmittingPayment(true);
     try {
       log.info("Submitting payment request — department:", paymentFormData.department, "items:", items.length);
@@ -184,6 +193,7 @@ export function useUrgentRequests() {
       alert("Error submitting payment request: " + reason);
       return false;
     } finally {
+      submittingRef.current = false;
       setIsSubmittingPayment(false);
     }
   }, [paymentFormData, paymentItems, resetPaymentForm]);

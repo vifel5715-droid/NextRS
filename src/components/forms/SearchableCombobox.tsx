@@ -1,4 +1,4 @@
-import React, { useEffect, useLayoutEffect, useRef, useState } from "react";
+import React, { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import styles from "@/components/forms/SearchableCombobox.module.css";
 
@@ -55,6 +55,7 @@ const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
   noResultsText,
   descriptions,
 }) => {
+  const generatedId = useId();
   const [isOpen, setIsOpen] = useState(false);
   const [editingOption, setEditingOption] = useState<string | null>(null);
   const [editingValue, setEditingValue] = useState("");
@@ -136,7 +137,7 @@ const SearchableCombobox: React.FC<SearchableComboboxProps> = ({
     <div ref={wrapperRef} className={styles.wrapper}>
       <input
         ref={inputRef}
-        id={id}
+        id={id ?? generatedId}
         type="text"
         className={className}
         value={value}

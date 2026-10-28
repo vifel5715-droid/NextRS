@@ -400,13 +400,16 @@ export const useStaffRequests = () => {
 
   // Submit handlers. A submit already in flight ignores further clicks; the
   // server separately rejects a repeat of the same request (see
-  // create-item-request.ts / create-service-request.ts).
+  // create-item-request.ts / create-service-request.ts). The ref blocks a
+  // second submit synchronously; the state only drives the disabled button.
   const submittingRef = useRef(false);
+  const [isSubmittingRequest, setIsSubmittingRequest] = useState(false);
 
   const handleItemSubmit = async (e: React.FormEvent, attachment?: File | null) => {
     e.preventDefault();
     if (submittingRef.current) return;
     submittingRef.current = true;
+    setIsSubmittingRequest(true);
     log.info("Submitting item request — department:", itemFormData.department, "items:", itemTableData.length);
     try {
       const items = itemTableData.map(row => ({
@@ -440,6 +443,7 @@ Serial No.: ${created.serial}`);
       alert('Error submitting request: ' + reason);
     } finally {
       submittingRef.current = false;
+      setIsSubmittingRequest(false);
       setItemAttachmentUploadProgress(null);
     }
   };
@@ -448,6 +452,7 @@ Serial No.: ${created.serial}`);
     e.preventDefault();
     if (submittingRef.current) return;
     submittingRef.current = true;
+    setIsSubmittingRequest(true);
     log.info("Submitting service request — department:", serviceFormData.department, "services:", serviceTableData.length);
     try {
       const created = await createServiceRequestAction({
@@ -472,6 +477,7 @@ Serial No.: ${created.serial}`);
       alert('Error submitting request: ' + reason);
     } finally {
       submittingRef.current = false;
+      setIsSubmittingRequest(false);
     }
   };
 
@@ -770,6 +776,7 @@ Serial No.: ${created.serial}`);
     setServiceFormData,
     serviceTableData,
     itemAttachmentUploadProgress,
+    isSubmittingRequest,
 
     // Actions
     loadRequests,

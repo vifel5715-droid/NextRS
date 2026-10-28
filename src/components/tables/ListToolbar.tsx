@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useId } from "react";
 
 interface ListToolbarProps {
   searchQuery: string;
@@ -19,14 +19,19 @@ const ListToolbar: React.FC<ListToolbarProps> = ({
   searchPlaceholder,
   onExport,
   exportDisabled,
-}) => (
+}) => {
+  const searchId = useId();
+  return (
   <div className="d-flex justify-content-between align-items-center gap-2 mb-3 flex-wrap">
     <div className="input-group" style={{ maxWidth: "420px" }}>
       <span className="input-group-text bg-white border-end-0">
         <i className="bi bi-search text-muted"></i>
       </span>
       <input
+        id={searchId}
+        name="search"
         type="text"
+        aria-label={searchPlaceholder}
         className="form-control border-start-0 ps-0"
         placeholder={searchPlaceholder}
         value={searchQuery}
@@ -43,6 +48,7 @@ const ListToolbar: React.FC<ListToolbarProps> = ({
       <i className="bi bi-file-earmark-excel me-1"></i>Convert to Excel
     </button>
   </div>
-);
+  );
+};
 
 export default ListToolbar;

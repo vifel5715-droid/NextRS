@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useRef } from "react";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { reimbursementRequestAPI } from "@/lib/api";
 import { getReimbursementRequestsAction } from "@/features/requests/actions/special-requests";
@@ -30,6 +30,8 @@ export function useReimbursementRequests() {
   const [reimbursementItems, setReimbursementItems] = useState<ReimbursementRequestItem[]>([{ ...emptyReimbursementItem }]);
   const [reimbursementAttachment, setReimbursementAttachment] = useState<File | null>(null);
   const [isSubmittingReimbursement, setIsSubmittingReimbursement] = useState(false);
+  // Blocks a second submit before the disabled button has re-rendered.
+  const submittingRef = useRef(false);
 
   const resetReimbursementForm = useCallback(() => {
     setReimbursementFormData({ department: user?.department || "", requested_by: user?.name || "", purpose: "", remarks: "", date_needed: "", supplier: "" });
@@ -105,6 +107,8 @@ export function useReimbursementRequests() {
       return false;
     }
 
+    if (submittingRef.current) return false;
+    submittingRef.current = true;
     setIsSubmittingReimbursement(true);
     try {
       log.info("Submitting reimbursement request — department:", reimbursementFormData.department, "items:", items.length);
@@ -133,6 +137,7 @@ export function useReimbursementRequests() {
       alert("Error submitting reimbursement request: " + reason);
       return false;
     } finally {
+      submittingRef.current = false;
       setIsSubmittingReimbursement(false);
     }
   }, [reimbursementFormData, reimbursementItems, reimbursementAttachment, loadReimbursementRequests, resetReimbursementForm]);

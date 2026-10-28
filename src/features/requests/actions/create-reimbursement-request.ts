@@ -1,6 +1,6 @@
 "use server";
 
-import { like } from "drizzle-orm";
+import { and, desc, eq, gte, like } from "drizzle-orm";
 import { runAction, type ActionResult } from "@/lib/action-result";
 import { getCurrentUser } from "@/lib/session";
 import { publishRequestChanged } from "@/lib/realtime";
@@ -9,6 +9,10 @@ import { lockSerialSequence, nextSerial } from "@/server/services/serial-numbers
 import { reimbursementItems, reimbursementRequests } from "@/db/schema";
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+// A repeat of the same submission inside this window is treated as an
+// accidental double submit rather than a second request (same rule as
+// item, service and urgent requests).
+const DUPLICATE_WINDOW_MS = 30_000;
 
 interface ReimbursementItemInput {
   item_description: string;
@@ -141,6 +145,23 @@ async function createReimbursementRequest(formData: FormData): Promise<void> {
 
   const createdId = await db.transaction(async (tx) => {
     await lockSerialSequence(tx, serialLockKey);
+
+    // The lock above serializes concurrent submits, so a double click sees
+    // the first request here instead of creating a second one.
+    const [recent] = await tx
+      .select({ serial: reimbursementRequests.serial })
+      .from(reimbursementRequests)
+      .where(
+        and(
+          eq(reimbursementRequests.created_by, user.id),
+          eq(reimbursementRequests.purpose, purpose),
+          eq(reimbursementRequests.supplier, supplier),
+          gte(reimbursementRequests.created_at, new Date(Date.now() - DUPLICATE_WINDOW_MS).toISOString())
+        )
+      )
+      .orderBy(desc(reimbursementRequests.created_at))
+      .limit(1);
+    if (recent) throw new Error(`This reimbursement request was already submitted as ${recent.serial}.`);
 
     const existingSerials = await tx
       .select({ serial: reimbursementRequests.serial })

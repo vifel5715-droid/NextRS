@@ -133,6 +133,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
     setServiceFormData,
     serviceTableData,
     itemAttachmentUploadProgress,
+    isSubmittingRequest,
     loadRequests,
     handleItemSubmit,
     handleServiceSubmit,
@@ -978,9 +979,9 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
       <button
         type="submit"
         className="btn btn-primary"
-        disabled={itemAttachmentUploadProgress !== null}
+        disabled={isSubmittingRequest}
       >
-        {itemAttachmentUploadProgress !== null ? "Uploading…" : "Submit Request"}
+        {itemAttachmentUploadProgress !== null ? "Uploading…" : isSubmittingRequest ? "Submitting…" : "Submit Request"}
       </button>
     </form>
   );
@@ -1581,8 +1582,8 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
           </table>
         </div>
       </div>
-      <button type="submit" className="btn btn-primary">
-        Submit Request
+      <button type="submit" className="btn btn-primary" disabled={isSubmittingRequest}>
+        {isSubmittingRequest ? "Submitting…" : "Submit Request"}
       </button>
     </form>
   );
