@@ -46,6 +46,20 @@ export const formatStatusLabel = (status?: string | null): string => {
 };
 
 /**
+ * The request's status for a list badge. A Supervisor/Manager decline only
+ * sets supervisor_status (the overall `status` stays "pending"), so a
+ * rejection at either stage wins over `status`.
+ */
+export const getEffectiveRequestStatus = (row: {
+  status?: string | null;
+  supervisor_status?: string | null;
+  custodian_status?: string | null;
+}): string =>
+  normalize(row.supervisor_status) === 'rejected' || normalize(row.custodian_status) === 'rejected'
+    ? 'rejected'
+    : row.status ?? '';
+
+/**
  * Which approval stage a still-pending request is waiting on — the
  * Supervisor/Manager stage until supervisor_status is approved, then the
  * Custodian stage.

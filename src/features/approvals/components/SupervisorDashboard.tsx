@@ -7,7 +7,7 @@ import ItemStatusBadge from "@/features/requests/components/ItemStatusBadge";
 import ReimbursementAttachmentLink from "@/features/requests/components/ReimbursementAttachmentLink";
 import { useAuth } from "@/components/providers/AuthProvider";
 import { sanitizeUserInput } from "@/lib/utils/sanitize";
-import { getBsStatusBadgeClass, formatStatusLabel, getCompositeStatus, getForApprovalLabel, getHeldServiceCount, hasEditedHeldService } from "@/lib/utils/status";
+import { getBsStatusBadgeClass, formatStatusLabel, getCompositeStatus, getEffectiveRequestStatus, getForApprovalLabel, getHeldServiceCount, hasEditedHeldService } from "@/lib/utils/status";
 import { useSupervisorRequests } from "@/features/approvals/hooks/useSupervisorRequests";
 import { useUrgentRequests } from "@/features/requests/hooks/useUrgentRequests";
 import { useReimbursementRequests } from "@/features/requests/hooks/useReimbursementRequests";
@@ -62,7 +62,12 @@ interface HoldStatusBadgeProps {
 // overlays "ON HOLD"/"RELEASE ON HOLD" without disturbing the real
 // supervisor/custodian approval shown once expanded. A rejected request stays
 // "rejected" even with a stale HOLD item.
-const HoldStatusBadge: React.FC<HoldStatusBadgeProps> = ({ status, hasHeldItem, heldItemEdited, heldItemCount, services, supervisorStatus, custodianStatus }) => {
+const HoldStatusBadge: React.FC<HoldStatusBadgeProps> = ({ status: overallStatus, hasHeldItem, heldItemEdited, heldItemCount, services, supervisorStatus, custodianStatus }) => {
+  const status = getEffectiveRequestStatus({
+    status: overallStatus,
+    supervisor_status: supervisorStatus,
+    custodian_status: custodianStatus,
+  });
   if (status !== "rejected") {
     if (hasHeldItem) {
       return (

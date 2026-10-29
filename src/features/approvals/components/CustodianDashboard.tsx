@@ -14,7 +14,7 @@ import AdjustmentHistoryModal from "@/features/reports/components/AdjustmentHist
 const ItemCatalogModal = React.lazy(() => import("@/features/item-master/components/ItemCatalogModal"));
 import SearchableCombobox from "@/components/forms/SearchableCombobox";
 import { sanitizeUserInput } from "@/lib/utils/sanitize";
-import { getBsStatusBadgeClass, getStatusBadgeClass, formatStatusLabel, getForApprovalLabel, isFullyApproved, getHeldServiceCount, hasEditedHeldService, canFinishServiceRequest, SERVICE_FINISH_BLOCKED_MESSAGE } from "@/lib/utils/status";
+import { getBsStatusBadgeClass, getStatusBadgeClass, formatStatusLabel, getForApprovalLabel, getEffectiveRequestStatus, isFullyApproved, getHeldServiceCount, hasEditedHeldService, canFinishServiceRequest, SERVICE_FINISH_BLOCKED_MESSAGE } from "@/lib/utils/status";
 import { useCustodianRequests } from "@/features/approvals/hooks/useCustodianRequests";
 import { useUrgentRequests } from "@/features/requests/hooks/useUrgentRequests";
 import { useMachineCodeOptions } from "@/features/item-master/hooks/useMachineCodeOptions";
@@ -316,7 +316,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
       <div>
         {row.all_items_served ? (
           <span className={`${styles.statusText} ${styles.approved}`}>Complete</span>
-        ) : row.has_held_item && row.status !== "rejected" ? (
+        ) : row.has_held_item && getEffectiveRequestStatus(row) !== "rejected" ? (
           // Display-only — does not touch the underlying `status`/custodian_status
           // fields, so an already-approved request keeps its real approval intact
           // (Approval Status / Custodian Action panels below) while a Hold is in
@@ -325,15 +325,15 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
           <span className={`${styles.statusText} ${styles.held}`}>
             {row.has_edited_held_item ? "RELEASE ON HOLD" : "ON HOLD"}{row.held_item_count ? ` (${row.held_item_count})` : ""}
           </span>
-        ) : getHeldServiceCount(row as { services?: ServiceRow[] }) > 0 && row.status !== "rejected" ? (
+        ) : getHeldServiceCount(row as { services?: ServiceRow[] }) > 0 && getEffectiveRequestStatus(row) !== "rejected" ? (
           // Service equivalent — see HeldItemsPage.tsx's ARCH comment for the
           // hand-off workflow hold_edited is tracking.
           <span className={`${styles.statusText} ${styles.held}`}>
             {hasEditedHeldService(row as { services?: ServiceRow[] }) ? "RELEASE ON HOLD" : "ON HOLD"} ({getHeldServiceCount(row as { services?: ServiceRow[] })})
           </span>
         ) : (
-          <span className={`${styles.statusText} ${styles[getStatusBadgeClass(row.status)]}`}>
-            {row.status === "pending" ? getForApprovalLabel(row) : formatStatusLabel(row.status)}
+          <span className={`${styles.statusText} ${styles[getStatusBadgeClass(getEffectiveRequestStatus(row))]}`}>
+            {getEffectiveRequestStatus(row) === "pending" ? getForApprovalLabel(row) : formatStatusLabel(getEffectiveRequestStatus(row))}
           </span>
         )}
       </div>
