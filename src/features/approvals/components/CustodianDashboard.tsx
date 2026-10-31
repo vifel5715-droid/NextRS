@@ -344,6 +344,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
     const details = requestDetails.get(makeRequestKey("item", row.id));
     if (!details) return null;
     const isApproved = (details.custodian_status === "approved" || isAdmin) && !isReadOnlyRole;
+    const isRequestDeclined = getEffectiveRequestStatus(details) === "rejected";
     const items: ItemRow[] = details.items ?? [];
     // Selection is keyed by item id; rows without one cannot be selected.
     const itemIds = items.map((i) => i.id).filter((id): id is number => id !== undefined);
@@ -599,7 +600,8 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                   // touched. The lock only re-applies once the row goes back to
                   // "saved" (not dirty) and that saved name is an exact catalog match.
                   const isItemNameDirty = item.id !== undefined && itemNameDirtyIds.has(item.id);
-                  const canEditItemName = !isReadOnlyRole && (isAdmin || isItemNameDirty || existenceStatus === "not_found" || !item.item_name?.trim());
+                  // A declined request's item names are locked for the custodian.
+                  const canEditItemName = !isReadOnlyRole && (isAdmin || (!isRequestDeclined && (isItemNameDirty || existenceStatus === "not_found" || !item.item_name?.trim())));
                   return (
                   <div key={index} className={`${styles.itemCard} ${isSelected ? styles.itemCardSelected : ""}`}>
                     <div className={styles.itemCardRow}>

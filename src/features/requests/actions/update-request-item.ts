@@ -161,6 +161,7 @@ export async function updateRequestItemAction(itemId: number, value: unknown): P
           serial: itemRequests.serial,
           department: itemRequests.department,
           supervisor_status: itemRequests.supervisor_status,
+          custodian_status: itemRequests.custodian_status,
           created_by: itemRequests.created_by,
           requested_by: itemRequests.requested_by,
         })
@@ -172,6 +173,13 @@ export async function updateRequestItemAction(itemId: number, value: unknown): P
       assertCanEditItem(user);
       if (request.supervisor_status !== "approved") {
         throw new Error("Only supervisor-approved requests can be updated by the custodian.");
+      }
+      if (
+        user.roleKey !== "admin" &&
+        request.custodian_status === "rejected" &&
+        input.item_name.trim().toUpperCase() !== item.item_name.trim().toUpperCase()
+      ) {
+        throw new Error("This request was declined — its item names can no longer be changed.");
       }
       if (input.delivery_status === "PURCHASE REQUEST" && !input.pr_number) {
         throw new Error("PR Number is required.");
