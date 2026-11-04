@@ -3,6 +3,7 @@ import { getSpecialRequestCountsAction, type SpecialRequestCounts } from "@/feat
 import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
 import { useRequestsChanged } from "@/hooks/useRequestsChanged";
 import { debounce } from "@/lib/utils/debounce";
+import { phtDayEndIso, phtDayStartIso } from "@/lib/utils/timezone";
 
 /**
  * Urgent + reimbursement counts for the Dashboard's All Requests Summary,
@@ -18,8 +19,8 @@ export const useSpecialRequestCounts = () => {
 
   const fetchCounts = useCallback(async () => {
     try {
-      const startAt = startDate ? new Date(`${startDate}T00:00:00`).toISOString() : undefined;
-      const endAt = endDate ? new Date(`${endDate}T23:59:59.999`).toISOString() : undefined;
+      const startAt = startDate ? phtDayStartIso(startDate) : undefined;
+      const endAt = endDate ? phtDayEndIso(endDate) : undefined;
       setCounts(await getSpecialRequestCountsAction(startAt, endAt));
       setError(false);
     } catch {

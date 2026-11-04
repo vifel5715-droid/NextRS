@@ -12,6 +12,7 @@ import { filterByDateRange } from "@/lib/utils/dateRange";
 import { exportToExcel } from "@/lib/utils/exportExcel";
 import AdjustmentHistoryModal from "@/features/reports/components/AdjustmentHistoryModal";
 import type { PettyCashTransaction } from "@/types";
+import { formatPhtDate } from "@/lib/utils/timezone";
 
 type CashPurchaseView = "pending" | "delivered";
 
@@ -162,7 +163,7 @@ const PettyCashPage: React.FC<{ view?: CashPurchaseView }> = ({ view = "pending"
         created_by: row.created_by_name || "",
         total_amount: Number(row.total_amount).toFixed(2),
         cash_received: row.cash_received != null ? Number(row.cash_received).toFixed(2) : "",
-        cash_received_at: row.cash_received_at ? new Date(row.cash_received_at).toLocaleDateString() : "",
+        cash_received_at: row.cash_received_at ? formatPhtDate(row.cash_received_at) : "",
         receiver_name: row.receiver_name || "",
         cash_status: row.cash_confirmed_at ? "Received" : "Not Received",
         item_status: row.delivered_at ? "Delivered" : "Pending",
@@ -447,7 +448,7 @@ const PettyCashPage: React.FC<{ view?: CashPurchaseView }> = ({ view = "pending"
                           {row.cash_received != null ? peso(row.cash_received) : <span className="text-muted">Not yet recorded</span>}
                         </td>
                         <td style={{ ...td, whiteSpace: "nowrap" }}>
-                          {row.cash_received_at ? new Date(row.cash_received_at).toLocaleDateString() : <span className="text-muted">—</span>}
+                          {row.cash_received_at ? formatPhtDate(row.cash_received_at) : <span className="text-muted">—</span>}
                         </td>
                         <td style={td}>{row.receiver_name || <span className="text-muted">—</span>}</td>
                         <td style={td}>

@@ -18,6 +18,7 @@ import { getDb } from "@/lib/db";
 import { lockSerialSequence, nextSerial } from "@/server/services/serial-numbers";
 import { adjustmentLog, pettyCashTransactions, users } from "@/db/schema";
 import { publishRequestChanged } from "@/lib/realtime";
+import { getPhtYear, toPhtDateString } from "@/lib/utils/timezone";
 
 /**
  * ARCH: Petty Cash ledger — the Cash Purchase Based on P.O. pages. The
@@ -160,8 +161,8 @@ export async function setPettyCashCustodianStatusAction(id: number, value: unkno
         patch.cash_confirmed_at = now;
         patch.cash_confirmed_by = user.id;
         // Filled in automatically, once — never overwritten later. Today in
-        // the server's time zone, as YYYY-MM-DD.
-        patch.cash_received_at = new Date().toLocaleDateString("en-CA");
+        // Philippine Time, as YYYY-MM-DD.
+        patch.cash_received_at = toPhtDateString();
         patch.receiver_name = user.name.toUpperCase();
       }
       if (delivered !== (row.delivered_at != null)) {
@@ -194,7 +195,7 @@ export async function createPettyCashTransactionAction(value: unknown): Promise<
     const totalAmount = moneyString(input.total_amount, "Total Amount");
 
     const now = new Date();
-    const year = now.getFullYear();
+    const year = getPhtYear(now);
     const created = await getDb().transaction(async (tx) => {
       await lockSerialSequence(tx, `petty-cash-serial-${year}`);
       const [duplicate] = await tx

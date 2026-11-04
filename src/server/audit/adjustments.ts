@@ -5,11 +5,12 @@ import { type AuthorizedUser } from "@/lib/auth";
 import type { getDb } from "@/lib/db";
 import { lockSerialSequence, nextSerial } from "@/server/services/serial-numbers";
 import { adjustmentLog } from "@/db/schema";
+import { getPhtYear } from "@/lib/utils/timezone";
 
 export type Transaction = Parameters<Parameters<ReturnType<typeof getDb>["transaction"]>[0]>[0];
 
 /** Next "ADJ-<year>-NNNNNN" reference, serialized per year with an advisory lock. */
-export async function nextAdjustmentSerial(tx: Transaction, year = new Date().getFullYear()): Promise<string> {
+export async function nextAdjustmentSerial(tx: Transaction, year = getPhtYear()): Promise<string> {
   await lockSerialSequence(tx, `adjustment-serial-${year}`);
   const prefix = `ADJ-${year}-`;
   const rows = await tx

@@ -1,5 +1,6 @@
 import logo from '@/assets/svg.svg'; // Ensure this resolves to a string URL, or pass a public path '/STPL.sv
 import { escapeHTML } from '@/lib/utils/escapeHTML';
+import { formatPhtDate } from "@/lib/utils/timezone";
 
 interface PrintableItem {
   item_name?: string;
@@ -90,7 +91,7 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
       }).join('')
     : `<tr><td colspan="${headers.length}" style="${tdStyle}text-align:center;color:#666;">No records found</td></tr>`;
 
-  const createdDate = details.created_at ? new Date(details.created_at).toLocaleDateString() : 'N/A';
+  const createdDate = details.created_at ? formatPhtDate(details.created_at) : 'N/A';
 
   const logoSrc = typeof logo === 'string' ? logo : (logo as { src?: string }).src || '';
 
@@ -212,7 +213,7 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
           <div class="detail-row">
             <div class="detail-col">
               <span class="detail-label">Date Entered:</span>
-              <span class="detail-value">${details.pr_number_updated_at ? new Date(details.pr_number_updated_at).toLocaleDateString() : 'N/A'}</span>
+              <span class="detail-value">${details.pr_number_updated_at ? formatPhtDate(details.pr_number_updated_at) : 'N/A'}</span>
             </div>
           </div>
           ` : ''}

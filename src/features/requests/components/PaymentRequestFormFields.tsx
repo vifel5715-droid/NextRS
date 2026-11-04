@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { formatPhtDateTime } from "@/lib/utils/timezone";
 
 export type FormFields = {
   payee: string;
@@ -85,7 +86,7 @@ const PaymentRequestFormFields: React.FC<{
           <i className="bi bi-check-circle-fill"></i>
           <span>
             Submitted{form.submitted_by_name ? ` by ${form.submitted_by_name}` : ""}
-            {form.submitted_at ? ` on ${new Date(form.submitted_at).toLocaleString()}` : ""}.
+            {form.submitted_at ? ` on ${formatPhtDateTime(form.submitted_at, "", true)}` : ""}.
             {readOnly ? " This form can no longer be edited — only AP Officer can." : " You can still edit this submitted form."}
           </span>
         </div>

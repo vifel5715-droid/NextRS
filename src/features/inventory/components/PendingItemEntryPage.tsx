@@ -12,6 +12,7 @@ import { exportToExcel } from "@/lib/utils/exportExcel";
 import { formatDate } from "@/lib/utils/format";
 import { itemRequestAPI } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils/errorMessage";
+import { formatPhtDate } from "@/lib/utils/timezone";
 
 /**
  * "Pending Item Entry" — Item Request System items already classified both
@@ -124,7 +125,7 @@ const PendingItemEntryPage: React.FC = () => {
       filteredRows.map((row) => ({
         ...row,
         amount: row.amount ? `₱${Number(row.amount).toFixed(2)}` : "N/A",
-        date_needed: row.date_needed ? new Date(row.date_needed).toLocaleDateString() : "N/A",
+        date_needed: row.date_needed ? formatPhtDate(row.date_needed) : "N/A",
         catalog_item_name: row.catalog_item_name || "Not Registered",
         created_at: formatDate(row.created_at),
       }))
@@ -224,7 +225,7 @@ const PendingItemEntryPage: React.FC = () => {
                         <td data-label="Purpose" style={{ padding: "11px 16px", color: "#6b7280" }}>{row.purpose}</td>
                         <td data-label="Machine Code" style={{ padding: "11px 16px", fontFamily: "monospace", color: "#374151" }}>{row.machine_code || "—"}</td>
                         <td data-label="Amount" style={{ padding: "11px 16px", fontWeight: 600, color: "#5b21b6" }}>{row.amount ? `₱${Number(row.amount).toFixed(2)}` : "—"}</td>
-                        <td data-label="Date Needed" style={{ padding: "11px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{row.date_needed ? new Date(row.date_needed).toLocaleDateString() : "—"}</td>
+                        <td data-label="Date Needed" style={{ padding: "11px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{row.date_needed ? formatPhtDate(row.date_needed) : "—"}</td>
                         <td data-label="Registered Catalog Item" style={{ padding: "11px 16px" }}>
                           {isEditing ? (
                             <div className="d-flex flex-wrap gap-2 align-items-center">

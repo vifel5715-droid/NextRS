@@ -6,6 +6,7 @@ import { useRequestsChanged } from "@/hooks/useRequestsChanged";
 import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
 import { filterByDateRange } from "@/lib/utils/dateRange";
 import { debounce } from "@/lib/utils/debounce";
+import { phtDayEndIso, phtDayStartIso } from "@/lib/utils/timezone";
 
 /**
  * Counts for the sidebar sections that don't already have their own
@@ -37,8 +38,8 @@ export const useDashboardSummary = (canSeeDeleted = true) => {
 
   const fetchSummary = useCallback(async () => {
     try {
-      const startAt = startDate ? new Date(`${startDate}T00:00:00`).toISOString() : undefined;
-      const endAt = endDate ? new Date(`${endDate}T23:59:59.999`).toISOString() : undefined;
+      const startAt = startDate ? phtDayStartIso(startDate) : undefined;
+      const endAt = endDate ? phtDayEndIso(endDate) : undefined;
       const [requestCounts, deletedEntries, catalogCount] = await Promise.all([
         getDashboardRequestCountsAction(startAt, endAt),
         canSeeDeleted ? getDeletionLogAction() : Promise.resolve([]),

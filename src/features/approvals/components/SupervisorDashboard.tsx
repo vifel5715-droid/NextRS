@@ -26,13 +26,14 @@ import { formatMilitaryTime, formatMilitaryDateTime } from "@/lib/utils/format";
 import DateRangeFilter from "@/components/forms/DateRangeFilter";
 import type { ItemRow, ServiceRow } from "@/types";
 import styles from "@/styles/Dashboard.module.css";
+import { formatPhtDate, toPhtDateString } from "@/lib/utils/timezone";
 
 const log = createLogger("SupervisorDashboard");
 
 const tabClass = (active: boolean) => `dash-tab ${active ? "active" : ""}`;
 
 const formatDateOrNull = (date?: string | null): string | null =>
-  date ? new Date(date).toLocaleDateString() : null;
+  date ? formatPhtDate(date) : null;
 
 /** Makes a clickable row div keyboard-accessible (Enter/Space toggles it). */
 const toggleRowProps = (expanded: boolean, onToggle: () => void) => ({
@@ -377,7 +378,7 @@ const SupervisorDashboard: React.FC = () => {
                   <i className={`bi bi-chevron-${expanded ? "down" : "right"}`}></i>
                 </div>
                 <div className="fw-medium" data-label="Serial">{row.serial}</div>
-                <div className="text-muted" data-label="Date">{row.created_at ? new Date(row.created_at).toISOString().split("T")[0] : ""}</div>
+                <div className="text-muted" data-label="Date">{row.created_at ? toPhtDateString(row.created_at) : ""}</div>
                 <div className="hide-sm" data-label="By">{row.created_by}</div>
                 <div className="hide-sm" data-label="Dept">{row.department}</div>
                 <div data-label="Purpose">{row.purpose}</div>
@@ -685,7 +686,7 @@ const SupervisorDashboard: React.FC = () => {
                               <div className="mb-2 small text-muted">Requested by: {row.requested_by}</div>
                             )}
                             {row.date_needed && (
-                              <div className="mb-2 small text-muted">Date Needed: {new Date(row.date_needed).toLocaleDateString()}</div>
+                              <div className="mb-2 small text-muted">Date Needed: {formatPhtDate(row.date_needed)}</div>
                             )}
                             {row.remarks && (
                               <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
@@ -718,7 +719,7 @@ const SupervisorDashboard: React.FC = () => {
                                           {item.delivered_by_name && (
                                             <div className="small text-muted mt-1">
                                               {item.delivered_by_name}
-                                              {item.delivered_at ? ` — ${new Date(item.delivered_at).toLocaleDateString()}` : ""}
+                                              {item.delivered_at ? ` — ${formatPhtDate(item.delivered_at)}` : ""}
                                             </div>
                                           )}
                                         </>
@@ -819,7 +820,7 @@ const SupervisorDashboard: React.FC = () => {
                               <div className="mb-2 small text-muted">Requested by: {row.requested_by}</div>
                             )}
                             {row.date_needed && (
-                              <div className="mb-2 small text-muted">Date Needed: {new Date(row.date_needed).toLocaleDateString()}</div>
+                              <div className="mb-2 small text-muted">Date Needed: {formatPhtDate(row.date_needed)}</div>
                             )}
                             {row.remarks && (
                               <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>

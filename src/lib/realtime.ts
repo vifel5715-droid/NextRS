@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import { Client } from "pg";
 import { env } from "@/lib/env";
 import { getDb } from "@/lib/db";
+import { POSTGRES_TIME_ZONE_OPTION } from "@/lib/utils/timezone";
 
 /**
  * ARCH: realtime dashboard sync.
@@ -112,7 +113,7 @@ function drop(client: Client): void {
 async function connect(): Promise<void> {
   if (state.client || state.connecting || state.listeners.size === 0) return;
   state.connecting = true;
-  const client = new Client({ connectionString: env.DATABASE_URL });
+  const client = new Client({ connectionString: env.DATABASE_URL, options: POSTGRES_TIME_ZONE_OPTION });
   try {
     client.on("notification", (message) => {
       if (message.channel !== CHANNEL || !message.payload) return;

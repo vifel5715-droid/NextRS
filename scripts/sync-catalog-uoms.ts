@@ -13,6 +13,7 @@ import { Pool } from "pg";
 import { env } from "../src/lib/env";
 import { catalogUomLookup, type CatalogUomRow } from "../src/lib/utils/catalogUom";
 import { nextSerial } from "../src/server/services/serial-numbers";
+import { getPhtYear } from "@/lib/utils/timezone";
 
 const apply = process.argv.includes("--apply");
 const byUsername = process.argv.find((arg) => arg.startsWith("--by="))?.slice("--by=".length);
@@ -56,7 +57,7 @@ async function main() {
     if (!user) throw new Error(`No user named "${byUsername}".`);
 
     await client.query("BEGIN");
-    const year = new Date().getFullYear();
+    const year = getPhtYear();
     await client.query("SELECT pg_advisory_xact_lock(hashtext($1))", [`adjustment-serial-${year}`]);
     const existing = (
       await client.query<{ adjustment_serial: string }>("SELECT adjustment_serial FROM adjustment_log WHERE adjustment_serial LIKE $1", [`ADJ-${year}-%`])

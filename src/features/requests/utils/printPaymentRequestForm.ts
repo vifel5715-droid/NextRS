@@ -1,6 +1,7 @@
 import logo from '@/assets/svg.svg';
 import { escapeHTML } from '@/lib/utils/escapeHTML';
 import type { PaymentRequestFormLike } from '@/features/requests/components/PaymentRequestFormFields';
+import { getPhtParts } from "@/lib/utils/timezone";
 
 export const printPaymentRequestForm = (form: PaymentRequestFormLike, requestSerial: string): void => {
   const printWindow = window.open('', '_blank');
@@ -10,16 +11,10 @@ export const printPaymentRequestForm = (form: PaymentRequestFormLike, requestSer
 
   const formatDate = (value?: string | null): string => {
     if (!value) return '';
-    try {
-      const date = new Date(value);
-      if (isNaN(date.getTime())) return '';
-      const day = String(date.getDate()).padStart(2, '0');
-      const month = String(date.getMonth() + 1).padStart(2, '0');
-      const year = date.getFullYear();
-      return `${day}/${month}/${year}`;
-    } catch {
-      return '';
-    }
+    // DD/MM/YYYY in Philippine Time.
+    const p = getPhtParts(value);
+    if (!p) return '';
+    return `${String(p.day).padStart(2, '0')}/${String(p.month).padStart(2, '0')}/${p.year}`;
   };
 
   const formatAmount = (value?: string | number | null) => Number(value || 0).toFixed(2);

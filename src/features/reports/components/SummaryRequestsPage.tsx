@@ -20,6 +20,7 @@ import { getItemBalance } from "@/lib/utils/itemBalance";
 import ApprovalStatusPanel from "@/features/requests/components/ApprovalStatusPanel";
 import ItemStatusBadge from "@/features/requests/components/ItemStatusBadge";
 import type { ItemRequest, ReimbursementRequest, ServiceRequest, UrgentRequest } from "@/types";
+import { formatPhtDate, toPhtDateString } from "@/lib/utils/timezone";
 
 const log = createLogger("SummaryRequestsPage");
 
@@ -135,7 +136,7 @@ const fromReimbursement = (row: ReimbursementRequest): SummaryRow => {
 const peso = (value: string | number | null | undefined) =>
   value == null || value === "" ? "—" : `₱${Number(value).toFixed(2)}`;
 const dash = (value: React.ReactNode) => (value === undefined || value === null || value === "" ? "—" : value);
-const shortDate = (value?: string | null) => (value ? new Date(value).toLocaleDateString() : "");
+const shortDate = (value?: string | null) => (value ? formatPhtDate(value) : "");
 
 /** Header facts shown above a request's lines table. */
 const Facts: React.FC<{ facts: Array<[string, React.ReactNode]> }> = ({ facts }) => (
@@ -510,7 +511,7 @@ const SummaryRequestsPage: React.FC = () => {
         .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""))
         .map((row) => ({ source: row.source, statusText: row.statusText }));
       const scope = kindFilter === "all" ? "all" : kindFilter;
-      await downloadRequestSlipsPdf(entries, `request-printouts-${scope}-${new Date().toISOString().slice(0, 10)}.pdf`);
+      await downloadRequestSlipsPdf(entries, `request-printouts-${scope}-${toPhtDateString()}.pdf`);
     } catch (err: unknown) {
       log.error("Failed to build printouts PDF:", err);
       setPdfError(getErrorMessage(err, "Couldn't create the PDF. Please try again."));

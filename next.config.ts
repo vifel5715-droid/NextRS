@@ -1,10 +1,16 @@
 import type { NextConfig } from "next";
 import legacyRoutes from "./src/constants/legacy-routes.json";
+import { SYSTEM_TIME_ZONE } from "./src/lib/utils/timezone";
 
 // Pages get a per-request nonce Content-Security-Policy from proxy.ts. API
 // routes only ever return JSON, PDFs, or an event stream — nothing that
 // should execute — so they get a deny-everything policy instead.
 const apiContentSecurityPolicy = "default-src 'none'; frame-ancestors 'none'";
+
+// Official system time zone: Philippine Standard Time. Pins the Node
+// process zone so any Date logic on the server agrees with PHT; all
+// user-facing dates also go through src/lib/utils/timezone.ts explicitly.
+process.env.TZ = SYSTEM_TIME_ZONE;
 
 const nextConfig: NextConfig = {
   outputFileTracingRoot: process.cwd(),

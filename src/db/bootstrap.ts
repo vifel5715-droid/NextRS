@@ -1,6 +1,7 @@
 import type { Pool } from "pg";
 import { INDEX_STATEMENTS } from "./indexes";
 import { TABLE_STATEMENTS } from "./tables";
+import { getPhtYear } from "@/lib/utils/timezone";
 
 const COLUMN_STATEMENTS = [
   "ALTER TABLE item_requests ADD COLUMN IF NOT EXISTS requested_by TEXT",
@@ -223,7 +224,7 @@ async function backfillPettyCashSerials(pool: Pool): Promise<void> {
         if (Number.isNaN(date.getTime())) {
           throw new Error(`Cannot generate a petty-cash serial for row ${id}: invalid created_at.`);
         }
-        const year = date.getFullYear();
+        const year = getPhtYear(date);
         const next = (sequenceByYear.get(year) ?? 0) + 1;
         sequenceByYear.set(year, next);
         await client.query(

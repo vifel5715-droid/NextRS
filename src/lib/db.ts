@@ -5,13 +5,14 @@ import { drizzle } from "drizzle-orm/node-postgres";
 import { env } from "@/lib/env";
 import { logger } from "@/lib/logger";
 import * as schema from "@/db/schema";
+import { POSTGRES_TIME_ZONE_OPTION } from "@/lib/utils/timezone";
 
 const globalPools = globalThis as typeof globalThis & { requestSystemPgPool?: Pool };
 
 function getPool(): Pool {
   if (globalPools.requestSystemPgPool) return globalPools.requestSystemPgPool;
 
-  const pool = new Pool({ connectionString: env.DATABASE_URL });
+  const pool = new Pool({ connectionString: env.DATABASE_URL, options: POSTGRES_TIME_ZONE_OPTION });
   pool.on("error", (error) => {
     logger.error("Unexpected error on an idle PostgreSQL client", { error });
   });

@@ -13,6 +13,7 @@ import { formatDate } from "@/lib/utils/format";
 import { itemRequestAPI } from "@/lib/api";
 import { getErrorMessage } from "@/lib/utils/errorMessage";
 import type { ItemPaymentRequestForm } from "@/types";
+import { formatPhtDate } from "@/lib/utils/timezone";
 
 const DELIVERED_STATUSES = ["DELIVERED", "PARTIAL DELIVERED"];
 
@@ -228,7 +229,7 @@ const UrgentItemsPage: React.FC = () => {
       ],
       filteredRows.map((row) => ({
         ...row,
-        date_needed: row.date_needed ? new Date(row.date_needed).toLocaleDateString() : "N/A",
+        date_needed: row.date_needed ? formatPhtDate(row.date_needed) : "N/A",
         created_at: formatDate(row.created_at),
         transaction_type_label:
           row.purchasing_transaction === "payment_request" ? `Payment Request (₱${Number(row.amount || 0).toFixed(2)})`
@@ -329,7 +330,7 @@ const UrgentItemsPage: React.FC = () => {
                       style={{ borderBottom: "1px solid #fca5a5", background: i % 2 === 0 ? "#fff5f5" : "#fff" }}
                     >
                       <td data-label="Item Name" style={{ padding: "11px 16px", fontWeight: 500 }}>{row.item_name}</td>
-                      <td data-label="Date Needed" style={{ padding: "11px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{row.date_needed ? new Date(row.date_needed).toLocaleDateString() : "—"}</td>
+                      <td data-label="Date Needed" style={{ padding: "11px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{row.date_needed ? formatPhtDate(row.date_needed) : "—"}</td>
                       <td data-label="Date Created" style={{ padding: "11px 16px", color: "#6b7280", whiteSpace: "nowrap" }}>{formatDate(row.created_at)}</td>
                       <td data-label="Serial" style={{ padding: "11px 16px", fontFamily: "monospace", color: "#374151" }}>{row.serial}</td>
                       <td data-label="Qty" style={{ padding: "11px 16px", fontWeight: 600, color: "#92400e" }}>{row.qty}</td>

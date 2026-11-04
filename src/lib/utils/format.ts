@@ -1,35 +1,30 @@
-/** MM/DD/YY — written out explicitly (not toLocaleDateString) so the format
- * stays fixed regardless of the browser's locale/system settings. */
+import {
+  formatPhtDate,
+  formatPhtDateTime,
+  formatPhtTime,
+  getPhtParts,
+} from '@/lib/utils/timezone';
+
+/** MM/DD/YY in Philippine Time — written out explicitly so the format stays
+ * fixed regardless of the browser's locale and time zone. */
 export const formatDate = (dateString: string): string => {
-  if (!dateString) return '';
-  const date = new Date(dateString);
-  const mm = String(date.getMonth() + 1).padStart(2, '0');
-  const dd = String(date.getDate()).padStart(2, '0');
-  const yy = String(date.getFullYear()).slice(-2);
+  const p = getPhtParts(dateString);
+  if (!p) return '';
+  const mm = String(p.month).padStart(2, '0');
+  const dd = String(p.day).padStart(2, '0');
+  const yy = String(p.year).slice(-2);
   return `${mm}/${dd}/${yy}`;
 };
 
-export const formatLocalDate = (dateString: string): string => {
-  if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleDateString();
-};
+/** M/D/YYYY in Philippine Time. */
+export const formatLocalDate = (dateString: string): string => formatPhtDate(dateString, 'N/A');
 
-/** 24-hour "military time" (HH:MM) — used anywhere a timestamp's time-of-day
- * is shown, e.g. a request's Created Time next to its Serial. */
-export const formatMilitaryTime = (dateString: string | undefined | null): string => {
-  if (!dateString) return 'N/A';
-  return new Date(dateString).toLocaleTimeString('en-GB', {
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false,
-  });
-};
+/** 24-hour "military time" (HH:MM) in Philippine Time — used anywhere a
+ * timestamp's time-of-day is shown, e.g. a request's Created Time. */
+export const formatMilitaryTime = (dateString: string | undefined | null): string =>
+  formatPhtTime(dateString, 'N/A');
 
-/** Date + 24-hour "military time" (HH:MM:SS) for a full timestamp — e.g.
- * Adjustment History's Date & Time column, which previously used the
- * browser's default 12-hour AM/PM formatting via toLocaleString(). */
-export const formatMilitaryDateTime = (dateString: string | undefined | null): string => {
-  if (!dateString) return 'N/A';
-  const date = new Date(dateString);
-  return `${date.toLocaleDateString()}, ${date.toLocaleTimeString('en-GB', { hour12: false })}`;
-};
+/** Date + 24-hour time (HH:MM:SS) in Philippine Time for a full timestamp,
+ * e.g. Adjustment History's Date & Time column. */
+export const formatMilitaryDateTime = (dateString: string | undefined | null): string =>
+  formatPhtDateTime(dateString, 'N/A');

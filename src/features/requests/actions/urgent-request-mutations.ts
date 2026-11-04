@@ -23,6 +23,7 @@ import {
   submitPaymentRequestForm,
 } from "@/server/services/payment-request-forms";
 import { publishRequestChanged } from "@/lib/realtime";
+import { getPhtYear } from "@/lib/utils/timezone";
 
 // A repeat of the exact same submission inside this window is treated as an
 // accidental double submit rather than a second request.
@@ -82,7 +83,7 @@ export async function createUrgentRequestAction(value: unknown): Promise<ActionR
 
     const db = getDb();
     const now = new Date();
-    const year = now.getFullYear();
+    const year = getPhtYear(now);
     const created = await db.transaction(async (tx) => {
       await lockSerialSequence(tx, `urgent-request-serial-${year}`);
 

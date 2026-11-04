@@ -1,5 +1,6 @@
 import { Pool } from "pg";
 import { env } from "../src/lib/env";
+import { getPhtYear } from "@/lib/utils/timezone";
 
 const pool = new Pool({ connectionString: env.DATABASE_URL });
 
@@ -36,7 +37,7 @@ async function insertItemRequests(startIndex: number, count: number, staffUsers:
   const params: unknown[] = [];
 
   for (let i = 0; i < count; i += 1) {
-    const serial = `IRS-${new Date().getFullYear()}-${padNumber(startIndex + i, 6)}`;
+    const serial = `IRS-${getPhtYear()}-${padNumber(startIndex + i, 6)}`;
     const createdBy = pick(staffUsers).id;
     const department = ENGINEERING_DEPARTMENT;
     const purpose = `Auto-generated item request ${serial}`;
@@ -101,7 +102,7 @@ async function insertServiceRequests(startIndex: number, count: number, staffUse
   const params: unknown[] = [];
 
   for (let i = 0; i < count; i += 1) {
-    const serial = `SRS-${new Date().getFullYear()}-${padNumber(startIndex + i, 6)}`;
+    const serial = `SRS-${getPhtYear()}-${padNumber(startIndex + i, 6)}`;
     const createdBy = pick(staffUsers).id;
     const department = ENGINEERING_DEPARTMENT;
     const purpose = `Auto-generated service request ${serial}`;

@@ -8,6 +8,7 @@ import { publishRequestChanged } from "@/lib/realtime";
 import { getDb } from "@/lib/db";
 import { lockSerialSequence, nextSerial } from "@/server/services/serial-numbers";
 import { serviceItems, serviceRequests } from "@/db/schema";
+import { getPhtYear } from "@/lib/utils/timezone";
 
 // A repeat of the same submission inside this window is treated as an
 // accidental double submit rather than a second request (same rule as
@@ -81,7 +82,7 @@ async function createServiceRequest(input: CreateServiceRequestInput): Promise<C
 
   const db = getDb();
   const now = new Date().toISOString();
-  const year = new Date().getFullYear();
+  const year = getPhtYear();
   const serialPrefix = `SRS-${year}-`;
 
   const created = await db.transaction(async (tx) => {

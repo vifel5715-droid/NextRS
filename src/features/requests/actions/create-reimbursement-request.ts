@@ -7,6 +7,7 @@ import { publishRequestChanged } from "@/lib/realtime";
 import { getDb } from "@/lib/db";
 import { lockSerialSequence, nextSerial } from "@/server/services/serial-numbers";
 import { reimbursementItems, reimbursementRequests } from "@/db/schema";
+import { getPhtYear } from "@/lib/utils/timezone";
 
 const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
 // A repeat of the same submission inside this window is treated as an
@@ -139,7 +140,7 @@ async function createReimbursementRequest(formData: FormData): Promise<void> {
 
   const db = getDb();
   const now = new Date().toISOString();
-  const year = new Date().getFullYear();
+  const year = getPhtYear();
   const serialPrefix = `RMB-${year}-`;
   const serialLockKey = `reimbursement-request-serial-${year}`;
 

@@ -3,6 +3,7 @@ import { autoTable, type RowInput } from "jspdf-autotable";
 import logo from "@/assets/svg.svg";
 import { getItemStatusText } from "@/lib/utils/status";
 import type { ItemRequest, ReimbursementRequest, ServiceRequest, UrgentRequest } from "@/types";
+import { formatPhtDate, formatPhtDateTime } from "@/lib/utils/timezone";
 
 export type SlipSource =
   | { kind: "item"; request: ItemRequest }
@@ -28,7 +29,7 @@ const text = (value: unknown, fallback = "N/A"): string => {
   return s || fallback;
 };
 const blank = (value: unknown): string => text(value, "");
-const date = (value?: string | null): string => (value ? new Date(value).toLocaleDateString() : "N/A");
+const date = (value?: string | null): string => (value ? formatPhtDate(value) : "N/A");
 // The built-in PDF fonts have no peso sign, so amounts are written "PHP 1,234.50".
 const amount = (value?: string | number | null): string =>
   value === null || value === undefined || value === ""
@@ -309,7 +310,7 @@ function drawSlip(doc: jsPDF, layout: SlipLayout, logoPng: { data: string; ratio
 export async function downloadRequestSlipsPdf(entries: SlipEntry[], fileName: string): Promise<void> {
   const doc = new jsPDF({ unit: "mm", format: "a4", orientation: "portrait" });
   const logoPng = await loadLogoPng();
-  const generatedAt = new Date().toLocaleString();
+  const generatedAt = formatPhtDateTime(new Date(), "", true);
 
   entries.forEach((entry, index) => {
     if (index > 0) doc.addPage();

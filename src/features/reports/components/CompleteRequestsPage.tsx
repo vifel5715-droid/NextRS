@@ -29,6 +29,7 @@ import { exportToExcel } from "@/lib/utils/exportExcel";
 import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
 import type { UrgentRequest, ReimbursementRequest } from "@/types";
 import styles from "@/styles/Dashboard.module.css";
+import { formatPhtDate, toPhtDateString } from "@/lib/utils/timezone";
 
 const CompleteRequestsPage: React.FC = () => {
   const { user } = useAuth();
@@ -140,7 +141,7 @@ const CompleteRequestsPage: React.FC = () => {
           ],
           sortByDate(filteredUrgentRequests).map((req) => ({
             serial: req.serial || "",
-            date: req.created_at ? new Date(req.created_at).toISOString().split("T")[0] : "",
+            date: req.created_at ? toPhtDateString(req.created_at) : "",
             requested_by: req.requested_by || req.created_by || "",
             department: req.department || "",
             purpose: req.purpose || "",
@@ -160,7 +161,7 @@ const CompleteRequestsPage: React.FC = () => {
           ],
           sortByDate(filteredReimbursementRequests).map((req) => ({
             serial: req.serial || "",
-            date: req.created_at ? new Date(req.created_at).toISOString().split("T")[0] : "",
+            date: req.created_at ? toPhtDateString(req.created_at) : "",
             requested_by: req.requested_by || req.created_by || "",
             department: req.department || "",
             supplier: req.supplier || "",
@@ -184,7 +185,7 @@ const CompleteRequestsPage: React.FC = () => {
           ],
           sortByDate(filteredItemRequests).map((req) => ({
             serial: req.serial || "",
-            date: req.created_at ? new Date(req.created_at).toISOString().split("T")[0] : "",
+            date: req.created_at ? toPhtDateString(req.created_at) : "",
             created_by: req.created_by || "",
             department: req.department || "",
             purpose: req.purpose || "",
@@ -203,7 +204,7 @@ const CompleteRequestsPage: React.FC = () => {
           ],
           sortByDate(filteredServiceRequests).map((req) => ({
             serial: req.serial || "",
-            date: req.created_at ? new Date(req.created_at).toISOString().split("T")[0] : "",
+            date: req.created_at ? toPhtDateString(req.created_at) : "",
             created_by: req.created_by || "",
             department: req.department || "",
             purpose: req.purpose || "",
@@ -338,7 +339,7 @@ const CompleteRequestsPage: React.FC = () => {
           </div>
           <div className="fw-medium" data-label="Serial">{req.serial}</div>
           <div className="text-muted" data-label="Date">
-            {req.created_at ? new Date(req.created_at).toISOString().split("T")[0] : ""}
+            {req.created_at ? toPhtDateString(req.created_at) : ""}
           </div>
           <div className="hide-sm" data-label="By">{req.created_by}</div>
           <div className="hide-sm" data-label="Dept">{req.department}</div>
@@ -623,7 +624,7 @@ const CompleteRequestsPage: React.FC = () => {
                                           {audits.length > 0 && (
                                             <tr>
                                               <td colSpan={2} style={{ padding: "0", border: "none" }}>
-                                                <IssuanceHistory audits={audits} prNumber={(item.pr_type || item.delivery_status) === "URGENT" ? (item.date_needed ? new Date(item.date_needed).toLocaleDateString() : null) : item.pr_number} prNumberLabel={(item.pr_type || item.delivery_status) === "URGENT" ? "Date Needed" : "PR Number"} showPrNumber={isCustodian} onDelete={(auditId) => setDeleteTarget({ requestId: req.id, entityId: auditId, type: "audit" })} />
+                                                <IssuanceHistory audits={audits} prNumber={(item.pr_type || item.delivery_status) === "URGENT" ? (item.date_needed ? formatPhtDate(item.date_needed) : null) : item.pr_number} prNumberLabel={(item.pr_type || item.delivery_status) === "URGENT" ? "Date Needed" : "PR Number"} showPrNumber={isCustodian} onDelete={(auditId) => setDeleteTarget({ requestId: req.id, entityId: auditId, type: "audit" })} />
                                               </td>
                                             </tr>
                                           )}
@@ -691,7 +692,7 @@ const CompleteRequestsPage: React.FC = () => {
                                 <ItemStatusBadge item={item} />
                               </td>
                               <td style={{ padding: "12px", border: "none" }}>
-                                {item.audits && item.audits.length > 0 ? <IssuanceHistory audits={item.audits} prNumber={(item.pr_type || item.delivery_status) === "URGENT" ? (item.date_needed ? new Date(item.date_needed).toLocaleDateString() : null) : item.pr_number} prNumberLabel={(item.pr_type || item.delivery_status) === "URGENT" ? "Date Needed" : "PR Number"} showPrNumber={isCustodian} /> : <span className="text-muted">-</span>}
+                                {item.audits && item.audits.length > 0 ? <IssuanceHistory audits={item.audits} prNumber={(item.pr_type || item.delivery_status) === "URGENT" ? (item.date_needed ? formatPhtDate(item.date_needed) : null) : item.pr_number} prNumberLabel={(item.pr_type || item.delivery_status) === "URGENT" ? "Date Needed" : "PR Number"} showPrNumber={isCustodian} /> : <span className="text-muted">-</span>}
                               </td>
                             </tr>
                           ))}
@@ -726,7 +727,7 @@ const CompleteRequestsPage: React.FC = () => {
           </div>
           <div className="fw-medium" data-label="Serial">{req.serial}</div>
           <div className="text-muted" data-label="Date">
-            {req.created_at ? new Date(req.created_at).toISOString().split("T")[0] : ""}
+            {req.created_at ? toPhtDateString(req.created_at) : ""}
           </div>
           <div className="hide-sm" data-label="By">{req.created_by}</div>
           <div className="hide-sm" data-label="Dept">{req.department}</div>
@@ -823,7 +824,7 @@ const CompleteRequestsPage: React.FC = () => {
                           </div>
                           <div className="col-12 col-sm-6">
                             <label className="text-muted d-block mb-1" style={{ fontSize: "0.75rem" }}>Date Entered</label>
-                            <div>{detail.pr_number_updated_at ? new Date(detail.pr_number_updated_at).toISOString().split("T")[0] : "—"}</div>
+                            <div>{detail.pr_number_updated_at ? toPhtDateString(detail.pr_number_updated_at) : "—"}</div>
                           </div>
                         </>
                       )}
@@ -898,7 +899,7 @@ const CompleteRequestsPage: React.FC = () => {
                                       <div className="text-muted mt-1 d-flex align-items-center gap-1" style={{ fontSize: "0.72rem" }}>
                                         <span>
                                           By {service.receiving_report_no_updated_by_name}
-                                          {service.receiving_report_no_updated_at && ` · ${new Date(service.receiving_report_no_updated_at).toISOString().split("T")[0]}`}
+                                          {service.receiving_report_no_updated_at && ` · ${toPhtDateString(service.receiving_report_no_updated_at)}`}
                                         </span>
                                         {isApproved && service.id !== undefined && (
                                           <button
@@ -969,7 +970,7 @@ const CompleteRequestsPage: React.FC = () => {
           </div>
           <div className="fw-medium" data-label="Serial">{req.serial}</div>
           <div className="text-muted" data-label="Date">
-            {req.created_at ? new Date(req.created_at).toISOString().split("T")[0] : ""}
+            {req.created_at ? toPhtDateString(req.created_at) : ""}
           </div>
           <div className="hide-sm" data-label="By">{req.requested_by || req.created_by}</div>
           <div className="hide-sm" data-label="Dept">{req.department}</div>

@@ -1,16 +1,14 @@
 import React from "react";
 import { getBsStatusBadgeClass, formatStatusLabel } from "@/lib/utils/status";
 import { sanitizeUserInput } from "@/lib/utils/sanitize";
+import { formatPhtTime, toPhtDateString } from "@/lib/utils/timezone";
 
-// Local date (YYYY-MM-DD), so it always agrees with the local time shown
-// beside it — toISOString() would roll back a day for early-morning approvals.
+// Philippine Time date (YYYY-MM-DD), matching the PHT time shown beside it.
 const formatIsoDateOnly = (value?: string | null): string =>
-  value ? new Date(value).toLocaleDateString("en-CA") : "—";
+  toPhtDateString(value) || "—";
 
 const formatTimeOnly = (value?: string | null): string =>
-  value
-    ? new Date(value).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false })
-    : "—";
+  formatPhtTime(value, "—");
 
 interface ApprovalTierProps {
   status?: string | null;

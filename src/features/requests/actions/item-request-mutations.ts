@@ -30,6 +30,7 @@ import {
   submitPaymentRequestForm,
 } from "@/server/services/payment-request-forms";
 import { publishRequestChanged } from "@/lib/realtime";
+import { phtDayEndIso, phtDayStartIso } from "@/lib/utils/timezone";
 
 const MAX_ATTACHMENT_BYTES = 10.5 * 1024 * 1024;
 
@@ -318,8 +319,9 @@ export async function getPendingCountAction(
     } else {
       conditions.push(eq(table.status, "pending"), inDepartment);
     }
-    if (startDate) conditions.push(gte(table.created_at, startDate));
-    if (endDate) conditions.push(lte(table.created_at, `${endDate}T23:59:59.999Z`));
+    // Day bounds are Philippine Time calendar days.
+    if (startDate) conditions.push(gte(table.created_at, phtDayStartIso(startDate)));
+    if (endDate) conditions.push(lte(table.created_at, phtDayEndIso(endDate)));
 
     const [row] = await getDb()
       .select({ count: sql<number>`cast(count(*) as int)` })

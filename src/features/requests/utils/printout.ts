@@ -1,5 +1,6 @@
 import logo from '@/assets/svg.svg'; // Ensure this resolves to a string URL, or pass a public path '/STPL.svg'
 import { escapeHTML } from '@/lib/utils/escapeHTML';
+import { formatPhtDate } from "@/lib/utils/timezone";
 
 interface PrintableItem {
   item_name?: string;
@@ -89,7 +90,7 @@ export const printoutslip = (
       : `<tr><td colspan="${headers.length}" style="${tdStyle}text-align:center;color:#666;">No records found</td></tr>`;
 
   const createdDate = details.created_at
-    ? new Date(details.created_at).toLocaleDateString()
+    ? formatPhtDate(details.created_at)
     : 'N/A';
 
   // Fallback check: if Vite/Webpack imports the SVG as an object, extract its string source
@@ -243,7 +244,7 @@ export const printoutslip = (
           <div class="detail-row">
             <div class="detail-col">
               <span class="detail-label">Date Entered:</span>
-              <span class="detail-value">${escapeHTML(details.pr_number_updated_at ? new Date(details.pr_number_updated_at).toLocaleDateString() : 'N/A')}</span>
+              <span class="detail-value">${escapeHTML(details.pr_number_updated_at ? formatPhtDate(details.pr_number_updated_at) : 'N/A')}</span>
             </div>
           </div>
           ` : ''}

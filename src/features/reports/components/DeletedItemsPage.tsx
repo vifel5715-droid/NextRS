@@ -7,6 +7,7 @@ import DateRangeFilter from "@/components/forms/DateRangeFilter";
 import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
 import { filterByDateRange } from "@/lib/utils/dateRange";
 import { exportToExcel } from "@/lib/utils/exportExcel";
+import { toPhtDateString } from "@/lib/utils/timezone";
 
 interface DeletedExportRow {
   request_serial: string;
@@ -83,7 +84,7 @@ const DeletedItemsPage: React.FC = () => {
         issued_by_name: entry.issued_by_name ?? "",
         reason: entry.reason || "",
         deleted_by_name: entry.deleted_by_name || "",
-        deleted_at_formatted: entry.deleted_at ? new Date(entry.deleted_at).toISOString().split("T")[0] : "",
+        deleted_at_formatted: entry.deleted_at ? toPhtDateString(entry.deleted_at) : "",
       }))
     );
 
@@ -194,7 +195,7 @@ const DeletedItemsPage: React.FC = () => {
                       <td data-label="Reason" style={{ padding: "11px 16px", color: "#6b7280" }}>{entry.reason}</td>
                       <td data-label="Deleted By" style={{ padding: "11px 16px" }}>{entry.deleted_by_name ?? "—"}</td>
                       <td data-label="Deleted At" style={{ padding: "11px 16px", color: "#6b7280" }}>
-                        {entry.deleted_at ? new Date(entry.deleted_at).toISOString().split("T")[0] : ""}
+                        {entry.deleted_at ? toPhtDateString(entry.deleted_at) : ""}
                       </td>
                     </tr>
                   ))}

@@ -5,6 +5,7 @@ import Modal from "@/components/dialogs/Modal";
 import DeleteReasonModal from "@/components/dialogs/DeleteReasonModal";
 import ApprovalStatusPanel from "@/features/requests/components/ApprovalStatusPanel";
 import AdjustmentHistoryModal from "@/features/reports/components/AdjustmentHistoryModal";
+import { formatPhtDate, toPhtDateString } from "@/lib/utils/timezone";
 // Lazy-loaded — Item List is opened far less often than the dashboard itself
 // is viewed, and its ~500-line implementation (catalog CRUD form + table)
 // doesn't need to be in the initial bundle for every custodian who never
@@ -309,7 +310,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
         <i className={`bi bi-chevron-${expandedRows.has(makeRequestKey(activeTab, row.id)) ? "down" : "right"}`}></i>
       </div>
       <div className={styles.serialLink} data-label="Serial">{row.serial}</div>
-      <div className="text-muted" data-label="Date">{row.created_at ? new Date(row.created_at).toISOString().split("T")[0] : ""}</div>
+      <div className="text-muted" data-label="Date">{row.created_at ? toPhtDateString(row.created_at) : ""}</div>
       <div className="hide-sm" data-label="By">{row.created_by}</div>
       <div className="hide-sm" data-label="Dept">{row.department}</div>
       <div data-label="Purpose">{row.purpose}</div>
@@ -812,7 +813,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                             {audits.length > 0 && (
                               <tr>
                                 <td colSpan={2} style={{ padding: "0", border: "none" }}>
-                                  <IssuanceHistory audits={audits} prNumber={(item.pr_type || item.delivery_status) === "URGENT" ? (item.date_needed ? new Date(item.date_needed).toLocaleDateString() : null) : item.pr_number} prNumberLabel={(item.pr_type || item.delivery_status) === "URGENT" ? "Date Needed" : "PR Number"} onDelete={isReadOnlyRole ? undefined : (auditId) => setDeleteTarget({ requestId: row.id, entityId: auditId, type: "audit" })} />
+                                  <IssuanceHistory audits={audits} prNumber={(item.pr_type || item.delivery_status) === "URGENT" ? (item.date_needed ? formatPhtDate(item.date_needed) : null) : item.pr_number} prNumberLabel={(item.pr_type || item.delivery_status) === "URGENT" ? "Date Needed" : "PR Number"} onDelete={isReadOnlyRole ? undefined : (auditId) => setDeleteTarget({ requestId: row.id, entityId: auditId, type: "audit" })} />
                                 </td>
                               </tr>
                             )}
@@ -950,7 +951,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                 </div>
                 <div className="col-12 col-sm-6">
                   <label className="text-muted d-block mb-1" style={{ fontSize: "0.75rem" }}>Date Entered</label>
-                  <div>{details.pr_number_updated_at ? new Date(details.pr_number_updated_at).toISOString().split("T")[0] : "—"}</div>
+                  <div>{details.pr_number_updated_at ? toPhtDateString(details.pr_number_updated_at) : "—"}</div>
                 </div>
               </>
             )}
@@ -1073,7 +1074,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                           <div className="text-muted mt-1 d-flex align-items-center gap-1" style={{ fontSize: "0.72rem" }}>
                             <span>
                               By {service.receiving_report_no_updated_by_name}
-                              {service.receiving_report_no_updated_at && ` · ${new Date(service.receiving_report_no_updated_at).toISOString().split("T")[0]}`}
+                              {service.receiving_report_no_updated_at && ` · ${toPhtDateString(service.receiving_report_no_updated_at)}`}
                             </span>
                             {isApproved && service.id !== undefined && (
                               <button
@@ -1169,7 +1170,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
       ],
       matchingClosedRows.map((row) => ({
         serial: row.serial,
-        date: row.created_at ? new Date(row.created_at).toISOString().split("T")[0] : "",
+        date: row.created_at ? toPhtDateString(row.created_at) : "",
         created_by: row.created_by,
         department: row.department,
         purpose: row.purpose,
@@ -1213,7 +1214,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
       ],
       matchingPurchaseRows.map((row) => ({
         serial: row.serial,
-        date: row.created_at ? new Date(row.created_at).toISOString().split("T")[0] : "",
+        date: row.created_at ? toPhtDateString(row.created_at) : "",
         created_by: row.created_by,
         department: row.department,
         purpose: row.purpose,
@@ -1255,7 +1256,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
           ],
           matchingItemRequests.map((row) => ({
             serial: row.serial || "",
-            date: row.created_at ? new Date(row.created_at).toISOString().split("T")[0] : "",
+            date: row.created_at ? toPhtDateString(row.created_at) : "",
             created_by: row.created_by || "",
             department: row.department || "",
             purpose: row.purpose || "",
@@ -1274,7 +1275,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
           ],
           matchingServiceRequests.map((row) => ({
             serial: row.serial || "",
-            date: row.created_at ? new Date(row.created_at).toISOString().split("T")[0] : "",
+            date: row.created_at ? toPhtDateString(row.created_at) : "",
             created_by: row.created_by || "",
             department: row.department || "",
             purpose: row.purpose || "",
@@ -1574,7 +1575,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                               <div className="mb-2 small text-muted">Requested by: {row.requested_by}</div>
                             )}
                             {row.date_needed && (
-                              <div className="mb-2 small text-muted">Date Needed: {new Date(row.date_needed).toLocaleDateString()}</div>
+                              <div className="mb-2 small text-muted">Date Needed: {formatPhtDate(row.date_needed)}</div>
                             )}
                             {row.remarks && (
                               <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
@@ -1618,7 +1619,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
                                           {item.delivered_by_name && (
                                             <div className="small text-muted mt-1">
                                               {item.delivered_by_name}
-                                              {item.delivered_at ? ` — ${new Date(item.delivered_at).toLocaleDateString()}` : ""}
+                                              {item.delivered_at ? ` — ${formatPhtDate(item.delivered_at)}` : ""}
                                             </div>
                                           )}
                                         </>

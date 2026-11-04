@@ -8,6 +8,7 @@ import { getDb } from "@/lib/db";
 import { lockSerialSequence, nextSerial } from "@/server/services/serial-numbers";
 import { loadCatalogUoms } from "@/server/services/catalog-uom";
 import { itemRequestItems, itemRequests } from "@/db/schema";
+import { getPhtYear } from "@/lib/utils/timezone";
 
 const MAX_ATTACHMENT_BYTES = 10.5 * 1024 * 1024;
 // A repeat of the same submission inside this window is treated as an
@@ -150,7 +151,7 @@ async function createItemRequest(formData: FormData): Promise<CreatedRequest> {
 
   const db = getDb();
   const now = new Date().toISOString();
-  const year = new Date().getFullYear();
+  const year = getPhtYear();
   const serialPrefix = `IRS-${year}-`;
 
   const created = await db.transaction(async (tx) => {

@@ -13,6 +13,7 @@
  *
  * Client code uses lib/client-logger.ts (dev-only console output) instead.
  */
+import { toPhtIsoString } from "@/lib/utils/timezone";
 type Level = "debug" | "info" | "warn" | "error";
 
 const SENSITIVE_KEY = /pass(word)?|secret|token|cookie|authorization|session|hash|attachment_data|credential/i;
@@ -69,7 +70,7 @@ function write(level: Level, message: string, context?: Record<string, unknown>)
   const safeContext = context ? (redact(context) as Record<string, unknown>) : undefined;
   const sink = level === "error" ? console.error : level === "warn" ? console.warn : console.log;
   if (isProduction) {
-    sink(JSON.stringify({ time: new Date().toISOString(), level, message, ...safeContext }));
+    sink(JSON.stringify({ time: toPhtIsoString(), level, message, ...safeContext }));
   } else {
     sink(`[${level}] ${message}`, ...(safeContext ? [safeContext] : []));
   }

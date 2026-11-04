@@ -1,5 +1,6 @@
 import { formatMilitaryTime } from "@/lib/utils/format";
 import type { ItemAudit } from "@/types";
+import { toPhtDateString } from "@/lib/utils/timezone";
 
 /**
  * Issuance history for a request item, split into the three transaction types
@@ -33,7 +34,7 @@ const thStyle: React.CSSProperties = { padding: "12px 16px", border: "none", fon
 const tdStyle: React.CSSProperties = { padding: "12px 16px", border: "none", color: "#212529" };
 const dateTdStyle: React.CSSProperties = { ...tdStyle, whiteSpace: "nowrap" };
 
-const formatDate = (value: string) => new Date(value).toISOString().split("T")[0];
+const formatDate = (value: string) => toPhtDateString(value);
 
 /** Small × that removes one issuance record. Only rendered when a handler is given. */
 const DeleteCell = ({ auditId, onDelete }: { auditId: number; onDelete: (id: number) => void }) => (

@@ -37,6 +37,7 @@ import { exportToExcel } from "@/lib/utils/exportExcel";
 import type { RequestDetail, ItemRow } from "@/types";
 import { urgentStatus, reimbursementStatus } from "@/features/requests/utils/specialRequestStatus";
 import styles from "@/styles/Dashboard.module.css";
+import { formatPhtDate, toPhtDateString } from "@/lib/utils/timezone";
 
 const log = createLogger("StaffDashboard");
 
@@ -469,7 +470,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
           ],
           filteredItemRequests.map((row) => ({
             serial: row.serial || "",
-            date: row.created_at ? new Date(row.created_at).toISOString().split("T")[0] : "",
+            date: row.created_at ? toPhtDateString(row.created_at) : "",
             created_by: row.created_by || "",
             department: row.department || "",
             purpose: row.purpose || "",
@@ -488,7 +489,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
           ],
           filteredServiceRequests.map((row) => ({
             serial: row.serial || "",
-            date: row.created_at ? new Date(row.created_at as string).toISOString().split("T")[0] : "",
+            date: row.created_at ? toPhtDateString(row.created_at as string) : "",
             created_by: row.created_by || "",
             department: row.department || "",
             purpose: row.purpose || "",
@@ -510,7 +511,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
       ],
       allPendingRows.map((row) => ({
         serial: row.serial,
-        date: row.createdAt ? new Date(row.createdAt).toISOString().split("T")[0] : "",
+        date: row.createdAt ? toPhtDateString(row.createdAt) : "",
         type: pendingCategoryLabels[row.category],
         requested_by: row.requestedBy,
         department: row.department,
@@ -1848,7 +1849,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
                               <div className="mb-2 small text-muted">Requested by: {row.requested_by}</div>
                             )}
                             {row.date_needed && (
-                              <div className="mb-2 small text-muted">Date Needed: {new Date(row.date_needed).toLocaleDateString()}</div>
+                              <div className="mb-2 small text-muted">Date Needed: {formatPhtDate(row.date_needed)}</div>
                             )}
                             {row.remarks && (
                               <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
@@ -1934,7 +1935,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
                                         {!item.is_inventoriable && item.delivered_by_name && (
                                           <div className="small text-muted mt-1">
                                             {item.delivered_by_name}
-                                            {item.delivered_at ? ` — ${new Date(item.delivered_at).toLocaleDateString()}` : ""}
+                                            {item.delivered_at ? ` — ${formatPhtDate(item.delivered_at)}` : ""}
                                           </div>
                                         )}
                                       </td>
@@ -2037,7 +2038,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
                               <div className="mb-2 small text-muted">Requested by: {row.requested_by}</div>
                             )}
                             {row.date_needed && (
-                              <div className="mb-2 small text-muted">Date Needed: {new Date(row.date_needed).toLocaleDateString()}</div>
+                              <div className="mb-2 small text-muted">Date Needed: {formatPhtDate(row.date_needed)}</div>
                             )}
                             {row.remarks && (
                               <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
@@ -2192,7 +2193,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
                   </div>
                   <div className="text-muted" data-label="Date">
                     {row.created_at
-                      ? new Date(row.created_at).toISOString().split("T")[0]
+                      ? toPhtDateString(row.created_at)
                       : ""}
                   </div>
                   <div className="hide-sm" data-label="By">
@@ -2496,7 +2497,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
                                                       {item.delivery_status === "URGENT" ? "Date Needed" : "PR Number"}
                                                     </td>
                                                     <td style={{ padding: "8px 12px", border: "none", color: "#212529" }}>
-                                                      {item.delivery_status === "URGENT" ? (item.date_needed ? new Date(item.date_needed).toLocaleDateString() : "N/A") : (item.pr_number || "N/A")}
+                                                      {item.delivery_status === "URGENT" ? (item.date_needed ? formatPhtDate(item.date_needed) : "N/A") : (item.pr_number || "N/A")}
                                                     </td>
                                                   </tr>
                                                 )}
@@ -2527,7 +2528,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
                                                 {item.audits && item.audits.length > 0 && (
                                                   <tr>
                                                     <td colSpan={2} style={{ padding: "0", border: "none" }}>
-                                                      <IssuanceHistory audits={item.audits} prNumber={(item.pr_type || item.delivery_status) === "URGENT" ? (item.date_needed ? new Date(item.date_needed).toLocaleDateString() : null) : item.pr_number} prNumberLabel={(item.pr_type || item.delivery_status) === "URGENT" ? "Date Needed" : "PR Number"} showPrNumber={user?.role?.toLowerCase().trim() === "admin"} />
+                                                      <IssuanceHistory audits={item.audits} prNumber={(item.pr_type || item.delivery_status) === "URGENT" ? (item.date_needed ? formatPhtDate(item.date_needed) : null) : item.pr_number} prNumberLabel={(item.pr_type || item.delivery_status) === "URGENT" ? "Date Needed" : "PR Number"} showPrNumber={user?.role?.toLowerCase().trim() === "admin"} />
                                                     </td>
                                                   </tr>
                                                 )}
@@ -2629,7 +2630,7 @@ const StaffDashboard: React.FC<StaffDashboardProps> = ({ approvalView = false, p
                   </div>
                   <div className="text-muted" data-label="Date">
                     {row.created_at
-                      ? new Date(row.created_at).toISOString().split("T")[0]
+                      ? toPhtDateString(row.created_at)
                       : ""}
                   </div>
                   <div className="hide-sm" data-label="By">

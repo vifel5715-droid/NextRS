@@ -15,6 +15,7 @@ import { useReimbursementRequests } from "@/features/requests/hooks/useReimburse
 import { createLogger } from "@/lib/client-logger";
 import { formatMilitaryDateTime } from "@/lib/utils/format";
 import styles from "@/styles/Dashboard.module.css";
+import { formatPhtDate } from "@/lib/utils/timezone";
 
 const log = createLogger("APOfficerDashboard");
 
@@ -164,7 +165,7 @@ const APOfficerDashboard: React.FC = () => {
                             <div className="mb-2 small text-muted">Requested by: {row.requested_by}</div>
                           )}
                           {row.date_needed && (
-                            <div className="mb-2 small text-muted">Date Needed: {new Date(row.date_needed).toLocaleDateString()}</div>
+                            <div className="mb-2 small text-muted">Date Needed: {formatPhtDate(row.date_needed)}</div>
                           )}
                           {row.remarks && (
                             <div className="mb-2 small text-muted">Remarks: {sanitizeUserInput(row.remarks)}</div>
