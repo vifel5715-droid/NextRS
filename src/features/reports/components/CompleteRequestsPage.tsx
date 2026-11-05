@@ -68,16 +68,16 @@ const CompleteRequestsPage: React.FC = () => {
     handleClearReceivingReport,
   } = useCompleteRequestsManagement();
 
-  // Capped to 20 — mirrors CustodianDashboard's Pending Requests list, so
-  // this page stays readable as completed requests pile up. The tab badge is
-  // just this capped list's length, so it never claims a bigger number than
-  // what's actually shown below.
+  // Not capped — every completed request in the selected date range is
+  // listed. A 20-row cap used to hide older completed requests (e.g. one
+  // completed by closing its items). The Start/End Date filter keeps the
+  // list manageable, and the tab badge is this list's length.
   //
   // Sorted by Created Date, most recent first — the API's own order (most-
   // recent-ACTIVITY-first, see item-request.controller.ts) is overridden here
   // so the list always matches the visible "Created Date" column.
   const byMostRecent = <T extends { created_at: string },>(rows: T[]): T[] =>
-    [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at)).slice(0, 20);
+    [...rows].sort((a, b) => b.created_at.localeCompare(a.created_at));
   const visibleItemRequests = byMostRecent(filteredItemRequests);
   const visibleServiceRequests = byMostRecent(filteredServiceRequests);
   const visibleUrgentRequests = byMostRecent(filteredUrgentRequests);
