@@ -17,7 +17,15 @@ interface ApprovalTierProps {
   approvedAt?: string | null;
 }
 
-const ApprovalTier: React.FC<ApprovalTierProps> = ({ status, approvedByName, approvedByRole, approvedAt }) => (
+// Tier statuses meaning this approver has actually acted. "closed" is the AP
+// Officer's post-approval state, so its approval timestamp still applies.
+// Anything else (pending, null, not_required) has no approval moment yet, so
+// Date/Time stay blank even if a stale timestamp is present on the row.
+const DECIDED_STATUSES = new Set(["approved", "rejected", "closed"]);
+
+const ApprovalTier: React.FC<ApprovalTierProps> = ({ status, approvedByName, approvedByRole, approvedAt }) => {
+  const decidedAt = status && DECIDED_STATUSES.has(status.trim().toLowerCase()) ? approvedAt : null;
+  return (
   <div className="row g-2">
     <div className="col-12 col-sm-3">
       <div className="text-muted" style={{ fontSize: "0.72rem" }}>Status</div>
@@ -38,14 +46,15 @@ const ApprovalTier: React.FC<ApprovalTierProps> = ({ status, approvedByName, app
     </div>
     <div className="col-12 col-sm-3">
       <div className="text-muted" style={{ fontSize: "0.72rem" }}>Date</div>
-      <div>{formatIsoDateOnly(approvedAt)}</div>
+      <div>{formatIsoDateOnly(decidedAt)}</div>
     </div>
     <div className="col-12 col-sm-3">
       <div className="text-muted" style={{ fontSize: "0.72rem" }}>Time</div>
-      <div>{formatTimeOnly(approvedAt)}</div>
+      <div>{formatTimeOnly(decidedAt)}</div>
     </div>
   </div>
-);
+  );
+};
 
 export interface ApprovalStatusPanelProps {
   /** Defaults to "Supervisor" — pass "Supervisor And Manager" to match the
