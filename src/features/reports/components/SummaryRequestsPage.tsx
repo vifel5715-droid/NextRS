@@ -19,6 +19,9 @@ import { sanitizeUserInput } from "@/lib/utils/sanitize";
 import { getItemBalance } from "@/lib/utils/itemBalance";
 import ApprovalStatusPanel from "@/features/requests/components/ApprovalStatusPanel";
 import ItemStatusBadge from "@/features/requests/components/ItemStatusBadge";
+import Modal from "@/components/dialogs/Modal";
+import { deleteSelectedRequestsAction } from "@/features/requests/actions/admin-request-deletions";
+import { unwrapAction } from "@/lib/utils/actionResult";
 import type { ItemRequest, ReimbursementRequest, ServiceRequest, UrgentRequest } from "@/types";
 import { formatPhtDate, toPhtDateString } from "@/lib/utils/timezone";
 
@@ -401,6 +404,10 @@ const RequestDetails: React.FC<{ source: SummaryRow["source"] }> = ({ source }) 
  * its own page. Item/service rows come from the same action as Completed
  * Requests, urgent/reimbursement rows from the same actions as their tabs,
  * so the server applies the usual role/department scoping.
+ *
+ * Admins also get a checkbox column and "Delete Selected": the chosen
+ * requests are permanently deleted on the server (admin-only, re-validated
+ * there). Only rows currently in the filtered list can be selected.
  */
 const SummaryRequestsPage: React.FC = () => {
   const { startDate, endDate } = useDateRangeContext();
@@ -416,6 +423,12 @@ const SummaryRequestsPage: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState("");
   // Rows whose details are dropped down, keyed "<kind>-<id>".
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
+  // Admin bulk delete: selected rows keyed "<kind>-<id>", the confirm dialog, and the outcome notice.
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const [notice, setNotice] = useState<{ kind: "success" | "danger"; text: string } | null>(null);
+  const selectAllRef = useRef<HTMLInputElement>(null);
   const toggleRow = (key: string) =>
     setExpanded((prev) => {
       const next = new Set(prev);
@@ -475,6 +488,61 @@ const SummaryRequestsPage: React.FC = () => {
     [searchedRows, kindFilter]
   );
   const countFor = (kind: RequestKind) => searchedRows.filter((row) => row.kind === kind).length;
+
+  // Only rows still in the filtered list count as selected, so a search,
+  // tab, stage or date change can never delete a row the admin can't see.
+  const selectedRows = useMemo(
+    () => visibleRows.filter((row) => selected.has(`${row.kind}-${row.id}`)),
+    [visibleRows, selected]
+  );
+  const allVisibleSelected = visibleRows.length > 0 && selectedRows.length === visibleRows.length;
+  useEffect(() => {
+    if (selectAllRef.current) {
+      selectAllRef.current.indeterminate = selectedRows.length > 0 && !allVisibleSelected;
+    }
+  }, [selectedRows.length, allVisibleSelected]);
+  // Success notices clear on their own; errors stay until dismissed.
+  useEffect(() => {
+    if (notice?.kind !== "success") return;
+    const timer = setTimeout(() => setNotice(null), 6000);
+    return () => clearTimeout(timer);
+  }, [notice]);
+
+  const toggleSelected = (key: string) =>
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  const toggleSelectAll = () =>
+    setSelected(allVisibleSelected ? new Set() : new Set(visibleRows.map((row) => `${row.kind}-${row.id}`)));
+
+  const handleDeleteSelected = async () => {
+    if (selectedRows.length === 0) return;
+    setDeleting(true);
+    try {
+      const { deleted, notFound } = unwrapAction(
+        await deleteSelectedRequestsAction(selectedRows.map((row) => ({ type: row.kind, id: row.id })))
+      );
+      setSelected(new Set());
+      setConfirmOpen(false);
+      setNotice({
+        kind: "success",
+        text:
+          `${deleted} ${deleted === 1 ? "request" : "requests"} deleted.` +
+          (notFound > 0 ? ` ${notFound} had already been removed.` : ""),
+      });
+      await loadRows();
+    } catch (err: unknown) {
+      log.error("Failed to delete selected requests:", err);
+      setConfirmOpen(false);
+      setNotice({ kind: "danger", text: getErrorMessage(err, "Couldn't delete the selected requests. Please try again.") });
+    } finally {
+      setDeleting(false);
+    }
+  };
+  const colCount = isAdmin ? 10 : 9;
 
   const handleExport = () =>
     exportToExcel(
@@ -575,7 +643,16 @@ const SummaryRequestsPage: React.FC = () => {
             </select>
           </div>
           {isAdmin && (
-            <div className="ms-auto">
+            <div className="ms-auto d-flex flex-wrap gap-2">
+              <button
+                type="button"
+                className="btn btn-danger"
+                disabled={selectedRows.length === 0 || deleting}
+                onClick={() => setConfirmOpen(true)}
+                title={selectedRows.length === 0 ? "Select requests in the list below to delete them" : "Permanently delete the selected requests"}
+              >
+                Delete Selected ({selectedRows.length})
+              </button>
               <button
                 type="button"
                 className="btn btn-primary"
@@ -590,6 +667,16 @@ const SummaryRequestsPage: React.FC = () => {
             </div>
           )}
         </div>
+
+        {notice && (
+          <div
+            className={`alert alert-${notice.kind} py-2 d-flex align-items-center justify-content-between gap-2`}
+            role={notice.kind === "danger" ? "alert" : "status"}
+          >
+            <span>{notice.text}</span>
+            <button type="button" className="btn-close" aria-label="Dismiss" onClick={() => setNotice(null)}></button>
+          </div>
+        )}
 
         {pdfError && (
           <div className="alert alert-danger py-2" role="alert">{pdfError}</div>
@@ -608,6 +695,19 @@ const SummaryRequestsPage: React.FC = () => {
           <table className="table table-sm table-hover mb-0 simple-list-table">
             <thead className="table-light">
               <tr>
+                {isAdmin && (
+                  <th style={{ width: "40px" }} className="text-center">
+                    <input
+                      ref={selectAllRef}
+                      type="checkbox"
+                      className="form-check-input"
+                      aria-label="Select all requests in the list"
+                      checked={allVisibleSelected}
+                      disabled={visibleRows.length === 0 || deleting}
+                      onChange={toggleSelectAll}
+                    />
+                  </th>
+                )}
                 <th style={{ width: "36px" }}></th>
                 <th>Serial</th>
                 <th>Date &amp; Time</th>
@@ -621,10 +721,10 @@ const SummaryRequestsPage: React.FC = () => {
             </thead>
             <tbody>
               {loading && rows.length === 0 ? (
-                <tr><td colSpan={9} className="text-center text-muted py-3">Loading…</td></tr>
+                <tr><td colSpan={colCount} className="text-center text-muted py-3">Loading…</td></tr>
               ) : visibleRows.length === 0 ? (
                 <tr>
-                  <td colSpan={9} className="text-center text-muted py-3">
+                  <td colSpan={colCount} className="text-center text-muted py-3">
                     {rows.length === 0 ? "No requests yet." : "No requests match your filters."}
                   </td>
                 </tr>
@@ -632,6 +732,7 @@ const SummaryRequestsPage: React.FC = () => {
                 visibleRows.map((row) => {
                   const key = `${row.kind}-${row.id}`;
                   const isOpen = expanded.has(key);
+                  const isSelected = selected.has(key);
                   return (
                     <React.Fragment key={key}>
                   <tr
@@ -639,7 +740,25 @@ const SummaryRequestsPage: React.FC = () => {
                     style={{ cursor: "pointer" }}
                     aria-expanded={isOpen}
                     title={isOpen ? "Hide details" : "Show details"}
+                    className={isSelected ? "table-active" : undefined}
                   >
+                    {isAdmin && (
+                      <td
+                        data-label="Select"
+                        className="text-center"
+                        onClick={(e) => e.stopPropagation()}
+                        style={{ cursor: "default" }}
+                      >
+                        <input
+                          type="checkbox"
+                          className="form-check-input"
+                          aria-label={`Select ${row.serial}`}
+                          checked={isSelected}
+                          disabled={deleting}
+                          onChange={() => toggleSelected(key)}
+                        />
+                      </td>
+                    )}
                     <td className="text-center text-muted">
                       <i className={`bi bi-chevron-${isOpen ? "down" : "right"}`}></i>
                     </td>
@@ -658,7 +777,7 @@ const SummaryRequestsPage: React.FC = () => {
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={9} style={{ background: "#f8fafc", padding: "16px 20px" }}>
+                      <td colSpan={colCount} style={{ background: "#f8fafc", padding: "16px 20px" }}>
                         <RequestDetails source={row.source} />
                       </td>
                     </tr>
@@ -671,6 +790,33 @@ const SummaryRequestsPage: React.FC = () => {
           </table>
         </div>
       </div>
+
+      {isAdmin && (
+        <Modal
+          isOpen={confirmOpen}
+          onClose={() => !deleting && setConfirmOpen(false)}
+          title="Delete Selected Requests"
+        >
+          <p className="mb-2">Are you sure you want to permanently delete the selected requests?</p>
+          <p className="mb-3">
+            <strong>{selectedRows.length}</strong> {selectedRows.length === 1 ? "request" : "requests"} will be
+            deleted, together with their items, services, approvals and attachments. This cannot be undone.
+          </p>
+          <div className="modal-actions">
+            <button type="button" className="btn btn-secondary" disabled={deleting} onClick={() => setConfirmOpen(false)}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={deleting || selectedRows.length === 0}
+              onClick={() => void handleDeleteSelected()}
+            >
+              {deleting ? "Deleting…" : "Confirm Delete"}
+            </button>
+          </div>
+        </Modal>
+      )}
     </Layout>
   );
 };

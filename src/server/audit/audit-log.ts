@@ -17,6 +17,7 @@ export type AuditAction =
   | "auth.logout"
   | "request.supervisor_review"
   | "request.custodian_review"
+  | "request.deleted"
   | "user.created"
   | "user.updated"
   | "user.password_changed"
