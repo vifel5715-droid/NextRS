@@ -569,16 +569,21 @@ const SummaryRequestsPage: React.FC = () => {
       }))
     );
 
+  // Printouts follow the checkboxes: the selected rows when any are ticked,
+  // otherwise every row in the filtered list.
+  const hasSelection = selectedRows.length > 0;
+  const pdfRows = hasSelection ? selectedRows : visibleRows;
+
   // Oldest first, so the PDF reads in serial order like a filed stack of slips.
   const handleDownloadPdf = async () => {
     setDownloadingPdf(true);
     setPdfError(null);
     try {
       const { downloadRequestSlipsPdf } = await import("@/features/reports/utils/requestSlipsPdf");
-      const entries = [...visibleRows]
+      const entries = [...pdfRows]
         .sort((a, b) => (a.createdAt || "").localeCompare(b.createdAt || ""))
         .map((row) => ({ source: row.source, statusText: row.statusText }));
-      const scope = kindFilter === "all" ? "all" : kindFilter;
+      const scope = hasSelection ? "selected" : kindFilter === "all" ? "all" : kindFilter;
       await downloadRequestSlipsPdf(entries, `request-printouts-${scope}-${toPhtDateString()}.pdf`);
     } catch (err: unknown) {
       log.error("Failed to build printouts PDF:", err);
@@ -656,13 +661,17 @@ const SummaryRequestsPage: React.FC = () => {
               <button
                 type="button"
                 className="btn btn-primary"
-                disabled={downloadingPdf || visibleRows.length === 0}
+                disabled={downloadingPdf || pdfRows.length === 0}
                 onClick={() => void handleDownloadPdf()}
-                title="Download a printout slip for every request in the list below, as one PDF"
+                title={
+                  hasSelection
+                    ? "Download a printout slip for each selected request, as one PDF"
+                    : "Download a printout slip for every request in the list below, as one PDF"
+                }
               >
                 {downloadingPdf
                   ? "Preparing PDF…"
-                  : `Download Printouts (PDF) — ${visibleRows.length} ${visibleRows.length === 1 ? "request" : "requests"}`}
+                  : `Download ${hasSelection ? "Selected " : ""}Printouts (PDF) — ${pdfRows.length} ${pdfRows.length === 1 ? "request" : "requests"}`}
               </button>
             </div>
           )}
