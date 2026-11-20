@@ -1,7 +1,5 @@
 import "server-only";
 
-import { promisify } from "node:util";
-import { constants as zlibConstants, gzip } from "node:zlib";
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { AppError, ForbiddenError, RateLimitError } from "@/lib/errors";
@@ -82,27 +80,18 @@ export async function readJsonBody(request: Request): Promise<unknown> {
   }
 }
 
-const gzipAsync = promisify(gzip);
-/** Below this, gzip's overhead isn't worth it (a single request's detail is ~2 KB). */
-const COMPRESS_MIN_BYTES = 8 * 1024;
-
 /**
- * PERF: JSON response that is gzip-compressed when the client accepts it.
- * Next.js compresses pages but not Route Handler responses, so the request
- * lists (several MB of JSON once there are thousands of requests) went out
- * raw. Compression runs on libuv's thread pool (zlib's async API), not the
- * request thread; level 1 trades a little size for speed (6.8 MB: 19 ms → 382 KB).
+ * JSON response for the large request lists.
+ *
+ * Compression is deliberately NOT done here. `next start` already gzips
+ * responses (next.config `compress`, on by default) and does not detect a
+ * Content-Encoding set by a Route Handler, so encoding here too produced a
+ * double-gzipped body: the browser undid one layer, response.json() failed on
+ * the rest, and the client saw a null body with HTTP 200. `next dev` never
+ * compresses, which is why localhost worked.
  */
-export async function compressedJson(request: Request, body: unknown, init?: ResponseInit): Promise<Response> {
-  const json = JSON.stringify(body);
+export async function compressedJson(_request: Request, body: unknown, init?: ResponseInit): Promise<Response> {
   const headers = new Headers(init?.headers);
   headers.set("Content-Type", "application/json");
-  headers.append("Vary", "Accept-Encoding");
-  const acceptsGzip = /\bgzip\b/i.test(request.headers.get("accept-encoding") ?? "");
-  if (!acceptsGzip || Buffer.byteLength(json) < COMPRESS_MIN_BYTES) {
-    return new Response(json, { ...init, headers });
-  }
-  const compressed = await gzipAsync(json, { level: 1, strategy: zlibConstants.Z_DEFAULT_STRATEGY });
-  headers.set("Content-Encoding", "gzip");
-  return new Response(new Uint8Array(compressed), { ...init, headers });
+  return new Response(JSON.stringify(body), { ...init, headers });
 }
