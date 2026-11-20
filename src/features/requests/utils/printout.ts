@@ -263,7 +263,7 @@ export const printoutslip = (
         <div class="details" style="margin-top: 40px;">
           <div class="detail-row">
             <div class="detail-col" style="margin-right: 60px;">
-              <span class="detail-label" style="width: 130px;">Approved By In Online:</span>
+              <span class="detail-label" style="width: 130px;">Approved In Online By:</span>
               <span class="detail-value">${escapeHTML(details.supervisor_name || details.supervisor_approved_by_name)}</span>
             </div>
             <div class="detail-col">

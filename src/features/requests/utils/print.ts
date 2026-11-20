@@ -359,7 +359,7 @@ export const printRequestSlip = (
         <!-- Sign-off Section -->
         <div class="signoff">
           <div class="signoff-col">
-            <span class="signoff-label">Approved By In Online:</span>
+            <span class="signoff-label">Approved In Online By:</span>
             <span class="signoff-value">${escapeHTML(details.supervisor_name || details.supervisor_approved_by_name)}</span>
           </div>
           <div class="signoff-col">
