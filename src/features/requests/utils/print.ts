@@ -1,6 +1,6 @@
-import logo from '@/assets/svg.svg'; // Ensure this resolves to a string URL, or pass a public path '/STPL.sv
+import logo from '@/assets/svg.svg'; // Ensure this resolves to a string URL, or pass a public path '/STPL.svg'
 import { escapeHTML } from '@/lib/utils/escapeHTML';
-import { formatPhtDate } from "@/lib/utils/timezone";
+import { formatPhtDate } from '@/lib/utils/timezone';
 
 interface PrintableItem {
   item_name?: string;
@@ -38,32 +38,26 @@ interface PrintableRequest {
   pr_number_updated_at?: string;
 }
 
-export const printRequestSlip = (details: PrintableRequest, requestType: 'item' | 'service'): void => {
-  // BINAGO: Tinanggal ang 'width=800,height=600' para magbukas bilang NEW TAB sa browser
+export const printRequestSlip = (
+  details: PrintableRequest,
+  requestType: 'item' | 'service'
+): void => {
   const printWindow = window.open('', '_blank');
   if (!printWindow) return;
 
   const isItem = requestType === 'item';
   const typeLabel = isItem ? 'Item Request Slip (IRS)' : 'Service Request Slip (SRS)';
   const fieldsLabel = isItem ? 'Items' : 'Services';
-  
-  let rows: (PrintableItem | PrintableService)[] = [];
-  if (isItem) {
-    rows = details.items || [];
-  } else {
-    rows = details.services || [];
-  }
-  
-  // The IRS purchase slip prints what is still outstanding — the item's
-  // remaining balance (requested minus already released), not the original
-  // requested quantity — and drops rows with nothing left to purchase.
-  // qty_balance comes from the server; the fallback recomputes the same
-  // figure for any caller that hands in a row without it. Printing never
-  // writes anything back.
+
+  const rows: (PrintableItem | PrintableService)[] = isItem
+    ? details.items || []
+    : details.services || [];
+
   const remainingBalance = (item: PrintableItem) => {
     if (typeof item.qty_balance === 'number') return Math.max(0, item.qty_balance);
     return Math.max(0, Number(item.quantity ?? 0) - Number(item.quantity_out ?? 0));
   };
+
   const printableRows = isItem
     ? (rows as PrintableItem[])
         .filter((item: PrintableItem) => !['OUT', 'HOLD', 'CLOSE'].includes(item.delivery_status ?? ''))
@@ -79,77 +73,208 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
     ? ['item_name', 'quantity', 'uom', 'remarks', 'machine_code']
     : ['description'];
 
-  const thStyle = 'border:1px solid #dee2e6;padding:5px 8px;text-align:left;background-color:#f8f9fa;';
-  const tdStyle = 'border:1px solid #dee2e6;padding:5px 8px;';
-  const numTdStyle = `${tdStyle}text-align:center;width:30px;`;
+  const columnWidths = isItem
+    ? ['36px', '30%', '85px', '85px', '24%', '16%']
+    : ['36px', 'auto'];
 
-  const tableHeadersHTML = headers.map(h => `<th style="${thStyle}">${h}</th>`).join('');
-  const tableRowsHTML = printableRows.length > 0
-    ? printableRows.map((item, index: number) => {
-        const record = item as unknown as Record<string, unknown>;
-        return `<tr><td style="${numTdStyle}">${index + 1}</td>${dataKeys.map(k => `<td style="${tdStyle}">${escapeHTML(String(record[k] ?? ''))}</td>`).join('')}</tr>`;
-      }).join('')
-    : `<tr><td colspan="${headers.length}" style="${tdStyle}text-align:center;color:#666;">No records found</td></tr>`;
+  const thStyle =
+    'border:1px solid #d0d5dd;padding:6px 8px;text-align:left;background-color:#ffffff;color:#111;font-weight:700;word-break:break-word;';
+  const tdStyle =
+    'border:1px solid #d0d5dd;padding:6px 8px;color:#222;vertical-align:top;word-break:break-word;';
+  const numCellStyle = 'text-align:center;';
+
+  const tableHeadersHTML = headers
+    .map((h, idx) => {
+      const widthAttr = columnWidths[idx] ? `width:${columnWidths[idx]};` : '';
+      const alignClass = idx === 0 ? numCellStyle : '';
+      return `<th style="${thStyle}${widthAttr}${alignClass}">${h}</th>`;
+    })
+    .join('');
+
+  const tableRowsHTML =
+    printableRows.length > 0
+      ? printableRows
+          .map((item, index: number) => {
+            const record = item as unknown as Record<string, unknown>;
+            const cells = dataKeys
+              .map((k, colIdx) => {
+                const extraAlign = isItem && colIdx === 1 ? 'text-align:left;' : '';
+                return `<td style="${tdStyle}${extraAlign}">${escapeHTML(String(record[k] ?? ''))}</td>`;
+              })
+              .join('');
+            return `<tr><td style="${tdStyle}${numCellStyle}">${index + 1}</td>${cells}</tr>`;
+          })
+          .join('')
+      : `<tr><td colspan="${headers.length}" style="${tdStyle}text-align:center;color:#666;">No records found</td></tr>`;
 
   const createdDate = details.created_at ? formatPhtDate(details.created_at) : 'N/A';
-
   const logoSrc = typeof logo === 'string' ? logo : (logo as { src?: string }).src || '';
 
   const printContent = `
     <!DOCTYPE html>
     <html>
       <head>
+        <meta charset="utf-8" />
         <title>${typeLabel} - ${escapeHTML(details.serial) || 'N/A'}</title>
         <style>
-          @page { size: auto; margin: 0mm; }
-          body { font-family: Arial, sans-serif; margin: 15px 25px; color: #333; font-size: 12px; }
-          
-          /* Compact Header Box */
-          .header-box { 
-            display: flex; 
-            align-items: center; 
+          * { box-sizing: border-box; }
+          @page { size: auto; margin: 10mm; }
+          body {
+            font-family: Arial, Helvetica, sans-serif;
+            margin: 12px 20px;
+            color: #222;
+            font-size: 12px;
+          }
+
+          /* Header Box */
+          .header-box {
+            display: flex;
+            align-items: center;
             justify-content: space-between;
-            border: 1.5px solid #333; 
-            padding: 8px 12px; 
-            margin-bottom: 12px;
-            border-radius: 4px;
+            border: 1.5px solid #222;
+            padding: 8px 14px;
+            margin-bottom: 14px;
+            border-radius: 5px;
+            background: #fff;
           }
           .logo-container {
-            flex: 0 0 120px;
+            flex: 0 0 140px;
             display: flex;
             justify-content: flex-start;
             align-items: center;
           }
-          .logo { max-height: 45px; width: auto; object-fit: contain; }
-          
-          .header-center { 
-            flex: 1; 
-            text-align: center; 
-            padding: 0 5px;
+          .logo {
+            max-height: 48px;
+            max-width: 135px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
           }
-          .header-center h2 { margin: 0; color: #111; font-size: 16px; text-transform: uppercase; letter-spacing: 0.5px; }
-          .company-address { margin: 2px 0 0 0; font-size: 10px; color: #666; line-height: 1.2; }
-          
+
+          .header-center {
+            flex: 1;
+            text-align: center;
+            padding: 0 10px;
+          }
+          .header-center h2 {
+            margin: 0;
+            color: #111;
+            font-size: 16px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.4px;
+          }
+          .company-address {
+            margin: 3px 0 0 0;
+            font-size: 10.5px;
+            color: #555;
+            line-height: 1.25;
+          }
+
           .header-right {
-            flex: 0 0 150px;
+            flex: 0 0 165px;
             text-align: right;
             display: flex;
             flex-direction: column;
             justify-content: center;
           }
-          .serial-label { font-size: 10px; text-transform: uppercase; color: #777; font-weight: bold; }
-          .serial-number { font-size: 15px; font-weight: bold; color: hsl(0, 0%, 0%); letter-spacing: 0.5px; margin-top: 1px; }
-          
-          /* Compressed 2-Column Details Layout */
-          .details { margin: 10px 0; line-height: 1.4; }
-          .detail-row { display: flex; margin: 3px 0; }
-          .detail-col { flex: 1; display: flex; }
-          .detail-label { font-weight: bold; width: 100px; color: #555; }
-          .detail-value { flex: 1; color: #111; }
-          
-          /* Compact Table Styling */
-          h3 { margin: 15px 0 5px 0; border-bottom: 1.5px solid #333; padding-bottom: 3px; font-size: 13px; text-transform: uppercase; }
-          table { width: 100%; border-collapse: collapse; font-size: 11px; }
+          .serial-label {
+            font-size: 10px;
+            text-transform: uppercase;
+            color: #333;
+            font-weight: 700;
+            letter-spacing: 0.3px;
+          }
+          .serial-number {
+            font-size: 15px;
+            font-weight: 700;
+            color: #000;
+            letter-spacing: 0.4px;
+            margin-top: 2px;
+          }
+
+          /* 2-Column Metadata Grid */
+          .details {
+            margin: 8px 0 14px 0;
+            line-height: 1.4;
+          }
+          .detail-row {
+            display: flex;
+            align-items: flex-start;
+            margin-bottom: 6px;
+          }
+          .detail-col {
+            flex: 1;
+            display: flex;
+            align-items: flex-start;
+            padding-right: 16px;
+          }
+          .detail-col:last-child {
+            padding-right: 0;
+          }
+          .detail-label {
+            font-weight: 700;
+            width: 115px;
+            flex-shrink: 0;
+            color: #333;
+          }
+          .detail-value {
+            flex: 1;
+            color: #111;
+            word-break: break-word;
+          }
+
+          /* Section Heading & Table */
+          h3 {
+            margin: 14px 0 6px 0;
+            border-bottom: 1.5px solid #222;
+            padding-bottom: 4px;
+            font-size: 13px;
+            font-weight: 700;
+            color: #111;
+            text-transform: uppercase;
+            letter-spacing: 0.3px;
+          }
+          table {
+            width: 100%;
+            border-collapse: collapse;
+            table-layout: fixed;
+            font-size: 11.5px;
+          }
+
+          /* Sign-off Footer */
+          .signoff {
+            margin-top: 36px;
+            display: flex;
+            align-items: flex-start;
+          }
+          .signoff-col {
+            flex: 1;
+            display: flex;
+            align-items: flex-start;
+            padding-right: 36px;
+          }
+          .signoff-col:last-child {
+            padding-right: 0;
+          }
+          .signoff-label {
+            font-weight: 700;
+            color: #333;
+            margin-right: 12px;
+            white-space: nowrap;
+          }
+          .signoff-value {
+            flex: 1;
+            color: #111;
+            font-weight: 500;
+            min-height: 18px;
+          }
+
+          @media print {
+            body {
+              margin: 0;
+            }
+          }
         </style>
       </head>
       <body>
@@ -167,8 +292,8 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
             <div class="serial-number">${escapeHTML(details.serial) || 'N/A'}</div>
           </div>
         </div>
-        
-        <!-- Combined & Compressed Details -->
+
+        <!-- Request Metadata -->
         <div class="details">
           <div class="detail-row">
             <div class="detail-col">
@@ -180,7 +305,7 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
               <span class="detail-value">${createdDate}</span>
             </div>
           </div>
-          
+
           <div class="detail-row">
             <div class="detail-col">
               <span class="detail-label">Requested By:</span>
@@ -191,15 +316,18 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
               <span class="detail-value">${escapeHTML(details.purpose) || 'N/A'}</span>
             </div>
           </div>
-          
+
           <div class="detail-row">
             <div class="detail-col">
               <span class="detail-label">Remarks:</span>
               <span class="detail-value">${escapeHTML(details.remarks) || 'N/A'}</span>
             </div>
+            <div class="detail-col"></div>
           </div>
 
-          ${!isItem ? `
+          ${
+            !isItem
+              ? `
           <div class="detail-row">
             <div class="detail-col">
               <span class="detail-label">PR Number:</span>
@@ -215,8 +343,11 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
               <span class="detail-label">Date Entered:</span>
               <span class="detail-value">${details.pr_number_updated_at ? formatPhtDate(details.pr_number_updated_at) : 'N/A'}</span>
             </div>
+            <div class="detail-col"></div>
           </div>
-          ` : ''}
+          `
+              : ''
+          }
         </div>
 
         <h3>${fieldsLabel} Details</h3>
@@ -225,20 +356,15 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
           <tbody>${tableRowsHTML}</tbody>
         </table>
 
-        <!-- Approved By — moved below the ${fieldsLabel} Details table so it
-             reads as a sign-off on the finished slip rather than a header field.
-             Left blank (no "N/A" fallback) so there's a real line to sign, with
-             extra spacing so the two signature blocks don't crowd each other. -->
-        <div class="details" style="margin-top: 40px;">
-          <div class="detail-row">
-            <div class="detail-col" style="margin-right: 60px;">
-              <span class="detail-label" style="width: 130px;">Approved By In Online:</span>
-              <span class="detail-value">${escapeHTML(details.supervisor_name || details.supervisor_approved_by_name)}</span>
-            </div>
-            <div class="detail-col">
-              <span class="detail-label" style="width: 150px;">Custodian Approved By:</span>
-              <span class="detail-value">${escapeHTML(details.custodian_name || details.custodian_approved_by_name)}</span>
-            </div>
+        <!-- Sign-off Section -->
+        <div class="signoff">
+          <div class="signoff-col">
+            <span class="signoff-label">Approved By In Online:</span>
+            <span class="signoff-value">${escapeHTML(details.supervisor_name || details.supervisor_approved_by_name)}</span>
+          </div>
+          <div class="signoff-col">
+            <span class="signoff-label">Custodian Approved By:</span>
+            <span class="signoff-value">${escapeHTML(details.custodian_name || details.custodian_approved_by_name)}</span>
           </div>
         </div>
       </body>
@@ -247,8 +373,7 @@ export const printRequestSlip = (details: PrintableRequest, requestType: 'item' 
 
   printWindow.document.write(printContent);
   printWindow.document.close();
-  
-  // BINAGO: Ginamit ang .onload kaysa setTimeout para siguradong loaded ang SVG logo bago mag-print
+
   printWindow.onload = () => {
     printWindow.print();
   };
