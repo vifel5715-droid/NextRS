@@ -79,7 +79,9 @@ const MainDashboardPage: React.FC = () => {
   if (showPendingSection) {
     tiles.push({ key: "item-list", label: "Item List", icon: "📚", value: itemListCount, variant: "primary", path: "/inventory" });
   }
-
+  //if (showPendingSection) {
+   // tiles.push({ key: "deleted", label: "Deleted", icon: "🗑️", value: deletedCount, variant: "danger", path: "/reports/deleted" });
+ // }
 
   const totalTracked = tiles.reduce((sum, tile) => sum + tile.value, 0);
 
