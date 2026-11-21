@@ -37,6 +37,7 @@ import { useDateRangeContext } from "@/components/providers/DateRangeProvider";
 import { filterByDateRange } from "@/lib/utils/dateRange";
 import DateRangeFilter from "@/components/forms/DateRangeFilter";
 import ListToolbar from "@/components/tables/ListToolbar";
+import ColumnFilterHeader, { type SortDirection } from "@/components/tables/ColumnFilterHeader";
 import { exportToExcel } from "@/lib/utils/exportExcel";
 import { getCompositeStatus } from "@/lib/utils/status";
 import { useItemTabRows } from "@/features/approvals/hooks/useItemTabRows";
@@ -67,6 +68,9 @@ const PR_STATUS_STYLES: Record<string, React.CSSProperties> = {
   DELIVERED: { backgroundColor: "#f0fdf4", color: "#15803d", borderColor: "#86efac", fontWeight: 600 },
   "DELIVERED PARTIAL": { backgroundColor: "#eff6ff", color: "#1d4ed8", borderColor: "#93c5fd", fontWeight: 600 },
 };
+
+type RequestFilterColumn = "serial" | "created" | "created_by" | "department" | "purpose" | "status";
+const REQUEST_BLANK_LABEL = "(Blanks)";
 
 interface CustodianDashboardProps {
   /** "Approval Requests" mode — only requests still waiting on the Custodian
@@ -174,6 +178,11 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
   const [historyRequestId, setHistoryRequestId] = React.useState<number | null>(null);
 
   const [showItemCatalogModal, setShowItemCatalogModal] = React.useState(false);
+  const [requestColumnFilters, setRequestColumnFilters] = React.useState<Partial<Record<RequestFilterColumn, Set<string>>>>({});
+  const [requestSort, setRequestSort] = React.useState<{ column: RequestFilterColumn | null; direction: SortDirection }>({
+    column: null,
+    direction: "asc",
+  });
 
   // Bulk selection, kept per request so two expanded requests never share a
   // selection. Checking rows makes them edit together — see updateSelectedItemField.
@@ -1129,8 +1138,90 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
   const matchingServiceRequests = filterByDateRange(
     filterByDepartment(filteredServiceRequests.filter(inThisView), selectedDepartment), startDate, endDate, "created_at"
   );
-  const visibleItemRequests = byMostRecent(matchingItemRequests).slice(0, 20);
-  const visibleServiceRequests = byMostRecent(matchingServiceRequests).slice(0, 20);
+  const requestFilterColumns: RequestFilterColumn[] = ["serial", "created", "created_by", "department", "purpose", "status"];
+
+  const requestStatusLabel = (row: RequestRow) => {
+    if (row.all_items_served) return "Complete";
+    if (row.has_held_item && getEffectiveRequestStatus(row) !== "rejected") {
+      return row.has_edited_held_item ? "RELEASE ON HOLD" : "ON HOLD";
+    }
+    if (getHeldServiceCount(row as { services?: ServiceRow[] }) > 0 && getEffectiveRequestStatus(row) !== "rejected") {
+      return hasEditedHeldService(row as { services?: ServiceRow[] }) ? "RELEASE ON HOLD" : "ON HOLD";
+    }
+    const effective = getEffectiveRequestStatus(row);
+    return effective === "pending" ? getForApprovalLabel(row) : formatStatusLabel(effective);
+  };
+
+  const requestColumnValues: Record<RequestFilterColumn, (row: RequestRow) => string[]> = {
+    serial: (row) => [row.serial || REQUEST_BLANK_LABEL],
+    created: (row) => [row.created_at ? toPhtDateString(row.created_at) : REQUEST_BLANK_LABEL],
+    created_by: (row) => [row.created_by || REQUEST_BLANK_LABEL],
+    department: (row) => [row.department || REQUEST_BLANK_LABEL],
+    purpose: (row) => [row.purpose || REQUEST_BLANK_LABEL],
+    status: (row) => [requestStatusLabel(row) || REQUEST_BLANK_LABEL],
+  };
+
+  const requestSortValue = (row: RequestRow, column: RequestFilterColumn): string => {
+    if (column === "created") return row.created_at || "";
+    return requestColumnValues[column](row).join(", ");
+  };
+
+  const passesRequestFilters = (row: RequestRow, skip?: RequestFilterColumn) =>
+    requestFilterColumns.every((column) => {
+      const selected = requestColumnFilters[column];
+      if (!selected || column === skip) return true;
+      return requestColumnValues[column](row).some((value) => selected.has(value));
+    });
+
+  const activeRequestRows = activeTab === "item" ? matchingItemRequests : matchingServiceRequests;
+  const requestColumnFilterValues = React.useMemo(() => {
+    const result = {} as Record<RequestFilterColumn, string[]>;
+    for (const column of requestFilterColumns) {
+      const values = new Set<string>();
+      for (const row of activeRequestRows) {
+        if (passesRequestFilters(row, column)) requestColumnValues[column](row).forEach((value) => values.add(value));
+      }
+      requestColumnFilters[column]?.forEach((value) => values.add(value));
+      result[column] = Array.from(values).sort((a, b) => a.localeCompare(b, undefined, { numeric: true, sensitivity: "base" }));
+    }
+    return result;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeRequestRows, activeTab, requestColumnFilters]);
+
+  const setRequestColumnFilter = (column: RequestFilterColumn, selected: Set<string> | null) =>
+    setRequestColumnFilters((prev) => {
+      const next = { ...prev };
+      if (selected) next[column] = selected;
+      else delete next[column];
+      return next;
+    });
+
+  const requestFilterHeader = (column: RequestFilterColumn, label: string) => (
+    <ColumnFilterHeader
+      label={label}
+      values={requestColumnFilterValues[column]}
+      selected={requestColumnFilters[column] ?? null}
+      onFilterChange={(selected) => setRequestColumnFilter(column, selected)}
+      sortDirection={requestSort.column === column ? requestSort.direction : null}
+      onSort={(direction) => setRequestSort({ column, direction })}
+    />
+  );
+
+  const applyRequestSortAndFilter = (rows: RequestRow[]) => {
+    const matched = rows.filter((row) => passesRequestFilters(row));
+    if (!requestSort.column) return byMostRecent(matched);
+    const factor = requestSort.direction === "asc" ? 1 : -1;
+    return [...matched].sort((a, b) =>
+      factor * requestSortValue(a, requestSort.column as RequestFilterColumn).localeCompare(
+        requestSortValue(b, requestSort.column as RequestFilterColumn),
+        undefined,
+        { numeric: true, sensitivity: "base" }
+      )
+    );
+  };
+
+  const visibleItemRequests = applyRequestSortAndFilter(matchingItemRequests).slice(0, 20);
+  const visibleServiceRequests = applyRequestSortAndFilter(matchingServiceRequests).slice(0, 20);
   // Declined requests stay listed but don't count toward the tab badges.
   const isDeclined = (row: RequestRow) =>
     getCompositeStatus(row as unknown as Record<string, unknown>).class === "rejected";
@@ -1233,8 +1324,8 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
     : activePurchaseTab
       ? matchingPurchaseRows
       : activeTab === "item"
-        ? matchingItemRequests
-        : matchingServiceRequests;
+        ? applyRequestSortAndFilter(matchingItemRequests)
+        : applyRequestSortAndFilter(matchingServiceRequests);
 
   // Exports the full filtered set for the active tab, not just the 20 rows
   // rendered below it — mirrors HeldItemsPage's export.
@@ -1254,7 +1345,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
             { key: "purpose", label: "Purpose" },
             { key: "status", label: "Status" },
           ],
-          matchingItemRequests.map((row) => ({
+          applyRequestSortAndFilter(matchingItemRequests).map((row) => ({
             serial: row.serial || "",
             date: row.created_at ? toPhtDateString(row.created_at) : "",
             created_by: row.created_by || "",
@@ -1273,7 +1364,7 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
             { key: "purpose", label: "Purpose" },
             { key: "status", label: "Status" },
           ],
-          matchingServiceRequests.map((row) => ({
+          applyRequestSortAndFilter(matchingServiceRequests).map((row) => ({
             serial: row.serial || "",
             date: row.created_at ? toPhtDateString(row.created_at) : "",
             created_by: row.created_by || "",
@@ -1375,6 +1466,15 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
               </select>
             </div>
             <DateRangeFilter />
+            {Object.keys(requestColumnFilters).length > 0 && (
+              <button
+                type="button"
+                className="btn btn-sm btn-link p-0 align-self-end mb-2"
+                onClick={() => setRequestColumnFilters({})}
+              >
+                Clear all column filters
+              </button>
+            )}
           </div>
 
           {activeClosedTab ? (
@@ -1486,12 +1586,12 @@ const CustodianDashboard: React.FC<CustodianDashboardProps> = ({ approvalView = 
             {/* Column header bar */}
             <div className={styles.requestListHeader}>
               <div></div>
-              <div>Serial Number</div>
-              <div>Created Date</div>
-              <div>Created By</div>
-              <div>Department</div>
-              <div>Purpose</div>
-              <div>Status</div>
+              <div>{requestFilterHeader("serial", "Serial Number")}</div>
+              <div>{requestFilterHeader("created", "Created Date")}</div>
+              <div>{requestFilterHeader("created_by", "Created By")}</div>
+              <div>{requestFilterHeader("department", "Department")}</div>
+              <div>{requestFilterHeader("purpose", "Purpose")}</div>
+              <div>{requestFilterHeader("status", "Status")}</div>
             </div>
 
             {activeTab === "item" ? (
